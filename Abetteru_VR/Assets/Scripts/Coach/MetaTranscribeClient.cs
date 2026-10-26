@@ -1,6 +1,6 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -10,8 +10,13 @@ namespace ABetterU.Coach
     /// Speech-to-text via Muse Voice Transcribe (HTTP file upload, push-to-talk mode).
     /// The realtime WebSocket (wss://api.meta.ai/v1/asr/realtime, ENDPOINTING mode) is the
     /// lower-latency upgrade if round-trip time needs to come down.
+    ///
+    /// The multipart body is built by hand: UnityWebRequest's own multipart form was rejected by
+    /// the API with "Malformed multipart body" (verified on Quest), while this exact layout is accepted.
     public class MetaTranscribeClient
     {
+        const string Boundary = "----ABetterUBoundary7d1f2c";
+
         readonly ModelApiConfig config;
 
         public MetaTranscribeClient(ModelApiConfig config) => this.config = config;
@@ -22,15 +27,16 @@ namespace ABetterU.Coach
         public IEnumerator Transcribe(byte[] wav, Action<string> onText, Action<string> onError)
         {
             var requestJson = JsonUtility.ToJson(new AsrRequest { model = config.transcribeModel });
-            var form = new List<IMultipartFormSection>
-            {
-                new MultipartFormDataSection("request", requestJson, Encoding.UTF8, "application/json"),
-                new MultipartFormFileSection("audio", wav, "speech.wav", "audio/wav"),
-            };
+            var body = BuildMultipart(requestJson, wav);
 
-            using var req = UnityWebRequest.Post(config.transcribeEndpoint, form);
+            using var req = new UnityWebRequest(config.transcribeEndpoint, "POST")
+            {
+                uploadHandler = new UploadHandlerRaw(body),
+                downloadHandler = new DownloadHandlerBuffer(),
+            };
             req.SetRequestHeader("Authorization", "Bearer " + config.apiKey);
             req.SetRequestHeader("Accept", "application/json");
+            req.SetRequestHeader("Content-Type", "multipart/form-data; boundary=" + Boundary);
 
             yield return req.SendWebRequest();
 
@@ -42,6 +48,22 @@ namespace ABetterU.Coach
 
             var parsed = JsonUtility.FromJson<AsrResponse>(req.downloadHandler.text);
             onText?.Invoke(parsed?.transcript?.Trim() ?? "");
+        }
+
+        static byte[] BuildMultipart(string requestJson, byte[] wav)
+        {
+            var utf8 = new UTF8Encoding(false);
+            using var ms = new MemoryStream(wav.Length + 1024);
+
+            void Text(string s) { var b = utf8.GetBytes(s); ms.Write(b, 0, b.Length); }
+
+            Text($"--{Boundary}\r\nContent-Disposition: form-data; name=\"request\"\r\nContent-Type: application/json\r\n\r\n");
+            Text(requestJson);
+            Text($"\r\n--{Boundary}\r\nContent-Disposition: form-data; name=\"audio\"; filename=\"speech.wav\"\r\nContent-Type: audio/wav\r\n\r\n");
+            ms.Write(wav, 0, wav.Length);
+            Text($"\r\n--{Boundary}--\r\n");
+
+            return ms.ToArray();
         }
     }
 }

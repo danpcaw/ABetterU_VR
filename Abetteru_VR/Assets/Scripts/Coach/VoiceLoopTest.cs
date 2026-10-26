@@ -59,11 +59,21 @@ namespace ABetterU.Coach
             float t0 = Time.realtimeSinceStartup;
             board.Show("Transcribing...");
 
+            // Debug aid: keep the last recording so it can be pulled with adb and replayed with curl.
+            try { System.IO.File.WriteAllBytes(System.IO.Path.Combine(Application.persistentDataPath, "last.wav"), wav); }
+            catch (System.Exception ex) { Debug.LogWarning("[VoiceLoop] Could not save last.wav: " + ex.Message); }
+
             string heard = null, error = null;
             yield return asr.Transcribe(wav, t => heard = t, e => error = e);
             float tAsr = Time.realtimeSinceStartup - t0;
 
-            if (error != null) { board.Show("Transcribe failed:\n" + Short(error)); busy = false; yield break; }
+            if (error != null)
+            {
+                Debug.LogError("[VoiceLoop] FULL ERROR: " + error);
+                board.Show("Transcribe failed:\n" + Wrap(Short(error, 160)));
+                busy = false;
+                yield break;
+            }
             if (string.IsNullOrWhiteSpace(heard)) { board.Show("Didn't catch that.\nTry again."); busy = false; yield break; }
 
             board.Show($"You: {Wrap(heard)}\n\nThinking...");
@@ -79,7 +89,7 @@ namespace ABetterU.Coach
             busy = false;
         }
 
-        static string Short(string s) => s.Length > 120 ? s.Substring(0, 120) + "..." : s;
+        static string Short(string s, int max = 120) => s.Length > max ? s.Substring(0, max) + "..." : s;
 
         // Wraps long lines at ~32 chars so the TextMesh stays readable.
         static string Wrap(string s, int width = 32)

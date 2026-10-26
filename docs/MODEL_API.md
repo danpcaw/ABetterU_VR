@@ -71,3 +71,10 @@ Test: a 3.8 s clip transcribed correctly in ~2.1 s.
 Realtime option: `wss://api.meta.ai/v1/asr/realtime` (auth in the first JSON frame, not the header;
 raw PCM16 binary frames; `mode: ENDPOINTING` gives automatic end-of-speech). Use it if HTTP latency is too high.
 No text-to-speech in the API: use Android TTS on the headset.
+
+### Gotcha: Unity's built-in multipart form is rejected
+
+`UnityWebRequest.Post(url, List<IMultipartFormSection>)` returned `400 invalid_request_error: "Malformed multipart body"`
+on Quest, while curl and a hand-built body (boundary, `\r\n` line endings, `Content-Type` per part) returned 200.
+`MetaTranscribeClient` builds the body itself. Also: the Quest mic gave a native 16 kHz mono clip, so no resampling was
+needed (the resampler is kept as a safety net).
