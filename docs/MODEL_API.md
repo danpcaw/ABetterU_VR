@@ -44,3 +44,17 @@ Response: `output[]` has a `reasoning` item, then a `message` item; the text is 
 - `muse-spark-1.3` coaching reply: 1.4 to 2.5 s at `low`/`minimal` effort.
 - **Reasoning tokens count against `max_output_tokens`.** At 120 tokens the whole budget went on reasoning and the reply was empty. Keep the cap at 400+.
 - To feel live: stream the response and speak the first sentence as soon as it arrives, and test the lowest reasoning setting that still gives good coaching.
+
+## Tool calling (verified Oct 26)
+
+`muse-spark-1.3` supports function tools on the Responses API. Tools are declared as
+`{"type":"function","name":...,"description":...,"parameters":{JSON schema}}` in `tools[]`.
+One user sentence ("two eggs on toast, my left knee is sore, build me a leg workout") produced
+**two tool calls in a single turn** plus a short spoken line:
+
+- `log_food {"description":"two eggs on toast","meal":"breakfast"}`
+- `build_workout {"avoid_areas":["left knee"],"focus":"legs"}`
+
+In `output[]` these appear as items with `type: "function_call"` (`name`, `arguments` JSON string).
+Round trip was ~2.9 s at `low` reasoning. After running a tool, send its result back as a
+`function_call_output` input item and let the model speak the confirmation (TODO: verify shape).
