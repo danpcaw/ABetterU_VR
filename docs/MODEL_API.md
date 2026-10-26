@@ -86,3 +86,15 @@ needed (the resampler is kept as a safety net).
 - `low` + 1500 tokens: replied, but used 440 reasoning tokens, 3.5 s.
 - **`minimal` + 600-800 tokens: replied every time, 1.6-2.7 s.** This is the default (`replyEffort`, `replyMaxTokens`).
 - `none` is rejected (`reasoning_effort 'none' is not supported`). Allowed: minimal, low, medium, high, xhigh, max.
+
+## Text-to-speech (Wit.ai, verified Oct 26)
+
+Meta's Model API has no TTS, and the Quest's own engine logs `TTS disabled by MobileConfig` (switched off remotely),
+so spoken replies use Wit.ai (Meta-owned, free). Server token lives in `$WIT_SERVER_TOKEN` locally and in the
+git-ignored `ModelApiSecrets` asset for builds.
+
+- `GET https://api.wit.ai/voices?v=20240304` lists voices. en_US: Rebecca, Charlie, Cooper, Remi, Cody, Cam, Connor... (names are `wit$Name`);
+  en_GB has only character voices (Pirate, British Butler...).
+- `POST https://api.wit.ai/synthesize?v=20240304`, `Authorization: Bearer`, JSON `{"q","voice","style"}`,
+  `Accept: audio/raw` (24 kHz 16-bit mono PCM) or `audio/wav`. First byte ~0.7 s, a short sentence ~1.3-1.7 s total.
+- Client splits replies into sentences, fetches them in parallel and plays in order.
