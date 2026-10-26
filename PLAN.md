@@ -37,6 +37,27 @@ Our idea touches three of those. Positioning must lead with what is novel: a **v
 
 One voice loop, three intents: **food**, **workout**, **coaching**. Everything not in this story is cut.
 
+## How we're scored (Stage 2, 0-10 per category)
+
+| Category | Weight | What judges ask | Our answer |
+|---|---|---|---|
+| Impact | 30% | Real-world potential, who benefits, could people use it? | Real existing platform and users; hands-free logging and training in VR |
+| Use of Meta AI tooling | 25% | Creative, beyond a basic integration, surprising capabilities | Spark as a tool-calling agent + Voice Transcribe, plus one more model if cheap (Muse Image) |
+| Technical depth & execution | 20% | Sound, refined engineering | Clean voice loop, latency logged and tuned, real API sync |
+| Demo | 25% | Working, impressive, holds up live, video is cool | One continuous, rehearsed story; record several takes |
+
+Indie prizes (top 5 only): 1st $150K, 2nd $100K, 3rd $75K, 4th $50K, 5th $25K. Top 5 per track
+go to a final round where judges watch the demo videos live.
+
+### Bonus prizes worth aiming at (extra to the track prizes)
+
+- **Best Agentic Use-Case, $5K:** autonomy, effectiveness, multi-step workflows. Fits us if Spark
+  **calls tools** (`log_food`, `build_workout`, `log_set`) instead of just chatting. Verify tool calling on the Responses API.
+- **Best Creative Build, $5K:** built with Muse Image or Muse Wonder. A cheap Muse Image touch (e.g. generated session card) could qualify.
+- **Most Viral Project, $20K:** post the demo on X and submit the link through the platform; judged on engagement until Nov 8 EOD.
+- **Community Vote, $10K:** public gallery, one vote per verified account, winner Nov 16.
+- Best Build on Meta Open Weight Models ($10K) needs Muse Glimmer / Spark Open: not our path.
+
 ## Prep (before 18:30 GMT Oct 26)
 
 - [ ] Unity 6 LTS installed with Android Build Support (SDK, NDK, OpenJDK)
