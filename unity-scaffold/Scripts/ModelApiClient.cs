@@ -6,30 +6,42 @@ using UnityEngine.Networking;
 
 namespace ABetterU.Coach
 {
-    /// Thin wrapper over the Meta Model API. Request/response shape assumes a chat-completions
-    /// style API; TODO(verify) against the real docs before relying on it (prep checklist item 1).
+    /// Thin wrapper over the Meta Model API Responses endpoint (POST /v1/responses).
+    /// Non-streaming for now; streaming is the latency upgrade for evenings 3-4.
     public class ModelApiClient
     {
         readonly ModelApiConfig config;
 
         public ModelApiClient(ModelApiConfig config) => this.config = config;
 
-        [Serializable] class Msg { public string role; public string content; }
-        [Serializable] class Req { public string model; public Msg[] messages; public int max_tokens = 80; }
-        [Serializable] class Choice { public Msg message; }
-        [Serializable] class Resp { public Choice[] choices; }
+        [Serializable] class InPart { public string type = "input_text"; public string text; }
+        [Serializable] class InMsg { public string role = "user"; public InPart[] content; }
+        [Serializable] class Reasoning { public string effort; }
+        [Serializable] class Req
+        {
+            public string model;
+            public string instructions;
+            public InMsg[] input;
+            public Reasoning reasoning;
+            public int max_output_tokens;
+            public bool stream = false;
+        }
 
-        /// Sends one coaching turn. Calls onReply with the text, or onError with a message.
+        // Response: output[] holds a "reasoning" item then a "message" item with content[].text.
+        [Serializable] class OutPart { public string type; public string text; }
+        [Serializable] class OutItem { public string type; public OutPart[] content; }
+        [Serializable] class Resp { public OutItem[] output; public string status; }
+
+        /// Sends one coaching turn. Calls onReply with the spoken text, or onError with a message.
         public IEnumerator Ask(string userContext, Action<string> onReply, Action<string> onError)
         {
             var body = JsonUtility.ToJson(new Req
             {
                 model = config.model,
-                messages = new[]
-                {
-                    new Msg { role = "system", content = config.systemPrompt },
-                    new Msg { role = "user", content = userContext },
-                },
+                instructions = config.systemPrompt,
+                input = new[] { new InMsg { content = new[] { new InPart { text = userContext } } } },
+                reasoning = new Reasoning { effort = config.reasoningEffort },
+                max_output_tokens = config.maxOutputTokens,
             });
 
             using var req = new UnityWebRequest(config.endpoint, "POST")
@@ -48,13 +60,24 @@ namespace ABetterU.Coach
                 yield break;
             }
 
-            var parsed = JsonUtility.FromJson<Resp>(req.downloadHandler.text);
-            if (parsed?.choices == null || parsed.choices.Length == 0)
+            var text = ExtractMessageText(req.downloadHandler.text);
+            if (string.IsNullOrWhiteSpace(text))
             {
-                onError?.Invoke("Empty response: " + req.downloadHandler.text);
+                // Usually means max_output_tokens was all spent on reasoning.
+                onError?.Invoke("No message text in response: " + req.downloadHandler.text);
                 yield break;
             }
-            onReply?.Invoke(parsed.choices[0].message.content);
+            onReply?.Invoke(text.Trim());
+        }
+
+        static string ExtractMessageText(string json)
+        {
+            var parsed = JsonUtility.FromJson<Resp>(json);
+            if (parsed?.output == null) return null;
+            foreach (var item in parsed.output)
+                if (item.type == "message" && item.content != null && item.content.Length > 0)
+                    return item.content[0].text;
+            return null;
         }
     }
 }
