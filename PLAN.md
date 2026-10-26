@@ -73,7 +73,7 @@ go to a final round where judges watch the demo videos live.
 
 | Eve | Date | Goal | Done when |
 |---|---|---|---|
-| 1 (short, from 18:30) | Mon Oct 26 | Unity project + Quest build pipeline | Bare scene runs on the headset |
+| 1 (short, from 18:30) | Mon Oct 26 | Unity project + Quest build pipeline | **DONE 21:50 GMT**: scene with floor and cube runs on the Quest 3S |
 | 2 | Tue Oct 27 | Mic permission, audio out, first STT/TTS test | Hear a TTS line in the headset |
 | 3 | Wed Oct 28 | **Voice loop**: mic to STT to Muse Spark | Spoken question returns a text answer |
 | 4 | Thu Oct 29 | Voice loop: TTS out, latency tuning | Round trip feels live |
