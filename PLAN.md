@@ -8,10 +8,26 @@
 - Event window: **Mon Oct 26, 12:00 PM ET** to **Wed Nov 4, 9:00 PM ET** (page says EST; if it is really EDT, kickoff is 16:00 GMT, so confirm on the day).
 - Hard deadline: **Nov 5, ~01:00-02:00 GMT**. **Our target: submitted by 22:00 GMT Nov 4**, leaving a 3+ hour safety buffer.
 - Kickoff livestream Oct 26. Workshops and Discord office hours Oct 27 to Nov 4.
-- Judging Nov 4-8. Winners Nov 9.
+- Judging Nov 5-8. Closing ceremony Mon Nov 9, 12:00 PM ET (top 10 live). Community vote winner Nov 16.
+- Daily Meta office hours in Discord #office-hours, 10-11 AM ET on weekdays (text only). Sessions Oct 27, 28, 30 at 12-1 PM ET.
+- Submit at cerebralvalley.ai/e/meta-ai-developer-hackathon/hackathon/submit. Late submissions are not considered.
+
+## Official rules that affect us (from the Participant Guide)
+
+- **Repo must be PUBLIC.** Never commit keys (`.gitignore` covers `.env` and `ModelApiSecrets.asset`). Create the GitHub repo early and push often.
+- **Demo video: 3 minutes**, showing only what we built during the hackathon. It is a primary judging artifact.
+- **New work only.** Judges must clearly see what was built in the event. Startups may build on existing products; we must label what is new vs the existing A Better U platform.
+- **Stage 1 is pass/fail:** fits a theme and genuinely uses Meta Model API / open-weight models.
+- **Credits ($150) must be claimed via a Google form** (link in the Participant Guide, section 5) by Nov 4, 9 PM ET. A card must be on file. Set a Spend Limit alert on the Billing page.
+- Everyone who worked on the project is listed on the submission page. Test that the repo and video links work logged out.
+- **Anti-projects list** includes "AI Nutrition Coach", "Sports analyzers or coaches" and "AI medical advice". See the risk note below.
+
+### Risk: the anti-project list
+
+Our idea touches three of those. Positioning must lead with what is novel: a **voice-driven agent in VR that takes real actions on a production platform** (tool calls into A Better U: log food, build a program from the existing exercise library, record a set). Avoid presenting it as a generic nutrition/fitness coach. Injury input should only **filter exercises from the existing library**, never diagnose or give medical advice, with a visible disclaimer. Ask the organisers in Discord #questions if unsure.
 - Personal start: **18:30 GMT Mon Oct 26** (about 2.5 hours lost). Make it back with the weekend (Sat Oct 31, Sun Nov 1) and by doing prep before then.
 
-## The demo (one continuous ~2-minute story)
+## The demo (one continuous story, fitted into the 3-minute video)
 
 1. Headset on, coach greets the user by name (profile hard-coded or pre-authed, **no login screen**).
 2. User says "I had eggs on toast for breakfast". A food card appears: logged.
