@@ -47,6 +47,20 @@ namespace ABetterU.Coach
             return IsRecording;
         }
 
+        /// Peak level (0..1) over roughly the last 0.1 s of the live recording, for an on-screen meter.
+        public float CurrentLevel()
+        {
+            if (!IsRecording || clip == null) return 0f;
+            int position = Microphone.GetPosition(device);
+            int count = Mathf.Min(sampleRate / 10, position);
+            if (count <= 0) return 0f;
+            var buffer = new float[count];
+            clip.GetData(buffer, position - count);
+            float peak = 0f;
+            foreach (var s in buffer) peak = Mathf.Max(peak, Mathf.Abs(s));
+            return peak;
+        }
+
         public byte[] StopRecording()
         {
             if (!IsRecording) return null;

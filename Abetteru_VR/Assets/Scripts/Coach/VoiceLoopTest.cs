@@ -48,7 +48,16 @@ namespace ABetterU.Coach
 
             if (PressedDown()) { if (mic.StartRecording()) board.Show("Listening..."); }
             else if (ReleasedUp() && mic.IsRecording) StartCoroutine(Turn(mic.StopRecording()));
+            else if (mic.IsRecording && Time.unscaledTime >= nextMeter)
+            {
+                nextMeter = Time.unscaledTime + 0.15f;
+                float level = mic.CurrentLevel();
+                int bars = Mathf.Clamp(Mathf.RoundToInt(level * 40f), 0, 20);   // 0.5 peak = full bar
+                board.Show("Listening...\n" + new string('|', bars) + new string('.', 20 - bars) + $"\nlevel {level:0.000}");
+            }
         }
+
+        float nextMeter;
 
         static bool PressedDown() =>
             OVRInput.GetDown(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.RTouch) ||
