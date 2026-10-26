@@ -74,9 +74,9 @@ go to a final round where judges watch the demo videos live.
 | Eve | Date | Goal | Done when |
 |---|---|---|---|
 | 1 (short, from 18:30) | Mon Oct 26 | Unity project + Quest build pipeline | **DONE 21:50 GMT**: scene with floor and cube runs on the Quest 3S |
-| 2 | Tue Oct 27 | Mic permission, audio out, first STT/TTS test | Hear a TTS line in the headset |
-| 3 | Wed Oct 28 | **Voice loop**: mic to STT to Muse Spark | Spoken question returns a text answer |
-| 4 | Thu Oct 29 | Voice loop: TTS out, latency tuning | Round trip feels live |
+| 2 | Tue Oct 27 | Mic permission, audio out, first STT/TTS test | **DONE Oct 26**: mic, transcribe, Spark and spoken reply (Wit.ai TTS) all work on the Quest |
+| 3 | Wed Oct 28 | **Voice loop** works; now make Spark an **agent with tools** (`log_food`, `build_workout`, `log_set`) | One sentence triggers real tool calls and the coach confirms them aloud |
+| 4 | Thu Oct 29 | Latency: realtime ASR WebSocket, stream Spark, speak first sentence early | Round trip under ~3 s (now ~6 s: ASR 3.1 + Spark 1.6 + TTS 1-2) |
 | 5 | Fri Oct 30 | Intents: food log + injury-aware workout | "Knee is sore" returns a safe plan, food card shows |
 | 6 | Sat Oct 31 (long day) | Gym scene + squat rep counting + live coaching | Reps counted, coach comments mid-set |
 | 7 | Sun Nov 1 (long day) | A Better U sync (food, workout, set) | Set appears in account, or mocked |
