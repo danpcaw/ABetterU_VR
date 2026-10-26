@@ -9,6 +9,7 @@ namespace ABetterU.Coach
     public class VoiceLoopTest : MonoBehaviour
     {
         MicRecorder mic;
+        AndroidTts tts;
         MetaTranscribeClient asr;
         ModelApiClient spark;
         StatusBoard board;
@@ -30,9 +31,15 @@ namespace ABetterU.Coach
             spark = new ModelApiClient(config);
             mic = gameObject.AddComponent<MicRecorder>();
 
+            tts = gameObject.AddComponent<AndroidTts>();
+
             board.Show("Allow the microphone\nwhen asked...");
             yield return mic.EnsurePermission();
-            board.Show("Hold RIGHT TRIGGER to talk.\nRelease to send.");
+
+            yield return tts.Initialise();
+            string ttsNote = tts.Ready ? "Voice ready." : "No voice: " + tts.InitError;
+            Debug.Log("[VoiceLoop] TTS: " + ttsNote);
+            board.Show($"Hold RIGHT TRIGGER to talk.\nRelease to send.\n\n{ttsNote}");
         }
 
         void Update()
@@ -80,12 +87,16 @@ namespace ABetterU.Coach
 
             string reply = null;
             float t1 = Time.realtimeSinceStartup;
-            yield return spark.Ask($"The user said: \"{heard}\"", r => reply = r, e => error = e);
+            yield return spark.Ask($"Context: no set in progress, no rep data.\nThe user said: \"{heard}\"", r => reply = r, e => error = e);
             float tSpark = Time.realtimeSinceStartup - t1;
 
-            if (reply == null) { board.Show("Coach failed:\n" + Short(error)); busy = false; yield break; }
+            if (reply == null) { board.Show("Coach failed:\n" + Wrap(Short(error, 160))); busy = false; yield break; }
 
             board.Show($"You: {Wrap(heard)}\n\nCoach: {Wrap(reply)}\n\nASR {tAsr:0.0}s  Spark {tSpark:0.0}s");
+
+            bool spoken = false;
+            tts.Speak(reply, () => spoken = true);
+            while (!spoken) yield return null;
             busy = false;
         }
 

@@ -66,7 +66,18 @@ namespace ABetterU.Coach
             // The API only accepts 16 or 24 kHz mono. Downmix and resample if the device differs.
             samples = Downmix(samples, clip.channels);
             if (clip.frequency != sampleRate) samples = Resample(samples, clip.frequency, sampleRate);
+            Normalise(samples, peak);
             return WavEncoder.FromSamples(samples, sampleRate);
+        }
+
+        // Quest mic levels are low (peak ~0.17 in testing). Quiet audio hurt transcription accuracy,
+        // so lift the peak to ~0.8, with a gain cap so silence/noise isn't blown up.
+        static void Normalise(float[] samples, float peak)
+        {
+            if (peak < 0.01f) return;
+            float gain = Mathf.Min(0.8f / peak, 8f);
+            if (gain <= 1.05f) return;
+            for (int i = 0; i < samples.Length; i++) samples[i] = Mathf.Clamp(samples[i] * gain, -1f, 1f);
         }
 
         static float[] Downmix(float[] interleaved, int channels)

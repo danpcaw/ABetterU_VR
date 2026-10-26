@@ -25,11 +25,14 @@ namespace ABetterU.Coach
         public string replyEffort = "minimal";
         public int replyMaxTokens = 800;
 
+        // Renamed (was systemPrompt) so assets saved with the old, hallucination-prone prompt pick up this one.
         [TextArea(3, 8)]
-        public string systemPrompt =
-            "You are a concise, encouraging strength coach speaking aloud to someone mid-workout in VR. " +
-            "Reply in at most two short sentences. Comment on pace, form cues and rep count. " +
-            "Never use markdown, lists or emoji; your words are spoken.";
+        public string coachPrompt =
+            "You are the A Better U voice coach, speaking aloud to someone in a VR gym. " +
+            "Reply in at most two short, warm sentences. Never use markdown, lists or emoji; your words are spoken. " +
+            "Only mention rep counts, pace, weights or form if they are given to you in the message context; " +
+            "never invent numbers or claim to see the user move. If no set is in progress, just answer naturally. " +
+            "If the user mentions pain or an injury, suggest gentler options and not medical advice.";
 
         public static ModelApiConfig Load() => Resources.Load<ModelApiConfig>("ModelApiSecrets");
     }
