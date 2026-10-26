@@ -9,7 +9,7 @@ namespace ABetterU.Coach
     public class VoiceLoopTest : MonoBehaviour
     {
         MicRecorder mic;
-        AndroidTts tts;
+        WitSpeaker tts;
         MetaTranscribeClient asr;
         ModelApiClient spark;
         StatusBoard board;
@@ -31,13 +31,13 @@ namespace ABetterU.Coach
             spark = new ModelApiClient(config);
             mic = gameObject.AddComponent<MicRecorder>();
 
-            tts = gameObject.AddComponent<AndroidTts>();
+            tts = gameObject.AddComponent<WitSpeaker>();
+            tts.Init(config);
 
             board.Show("Allow the microphone\nwhen asked...");
             yield return mic.EnsurePermission();
 
-            yield return tts.Initialise();
-            string ttsNote = tts.Ready ? "Voice ready." : "No voice: " + tts.InitError;
+            string ttsNote = tts.Ready ? "Voice ready (Wit.ai)." : "No voice: paste Wit token\nin ModelApiSecrets.";
             Debug.Log("[VoiceLoop] TTS: " + ttsNote);
             board.Show($"Hold RIGHT TRIGGER to talk.\nRelease to send.\n\n{ttsNote}");
         }

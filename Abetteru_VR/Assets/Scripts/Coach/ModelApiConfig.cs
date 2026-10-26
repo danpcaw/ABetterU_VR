@@ -35,6 +35,14 @@ namespace ABetterU.Coach
         public string replyEffort = "minimal";
         public int replyMaxTokens = 800;
 
+        // Spoken replies: Meta's Model API has no TTS and the Quest's own engine is disabled by Meta, so we use
+        // Wit.ai (Meta-owned). Paste the Wit SERVER access token here (this asset is git-ignored).
+        // Verified Oct 26: POST /synthesize, Accept audio/raw = 24 kHz 16-bit mono PCM, ~0.7 s to first byte.
+        public string witToken = "";
+        public string witVoice = "wit$Cooper";   // US voices: Cooper, Charlie, Cody (male); Rebecca, Remi (female)
+        public string witStyle = "default";      // default | soft | formal | fast | projected (varies by voice)
+        public string witVersion = "20240304";
+
         // Renamed (was systemPrompt) so assets saved with the old, hallucination-prone prompt pick up this one.
         [TextArea(3, 8)]
         public string coachPrompt =
