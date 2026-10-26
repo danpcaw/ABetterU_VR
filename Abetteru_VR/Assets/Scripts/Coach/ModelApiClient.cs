@@ -40,8 +40,8 @@ namespace ABetterU.Coach
                 model = config.model,
                 instructions = config.systemPrompt,
                 input = new[] { new InMsg { content = new[] { new InPart { text = userContext } } } },
-                reasoning = new Reasoning { effort = config.reasoningEffort },
-                max_output_tokens = config.maxOutputTokens,
+                reasoning = new Reasoning { effort = config.replyEffort },
+                max_output_tokens = config.replyMaxTokens,
             });
 
             using var req = new UnityWebRequest(config.endpoint, "POST")
@@ -63,8 +63,9 @@ namespace ABetterU.Coach
             var text = ExtractMessageText(req.downloadHandler.text);
             if (string.IsNullOrWhiteSpace(text))
             {
-                // Usually means max_output_tokens was all spent on reasoning.
-                onError?.Invoke("No message text in response: " + req.downloadHandler.text);
+                // Usually means max_output_tokens was all spent on reasoning (status: incomplete).
+                Debug.LogError("[ModelApi] No message text. Full response: " + req.downloadHandler.text);
+                onError?.Invoke("Model ran out of tokens before replying (see log).");
                 yield break;
             }
             onReply?.Invoke(text.Trim());

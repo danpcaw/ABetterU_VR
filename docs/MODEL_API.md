@@ -78,3 +78,11 @@ No text-to-speech in the API: use Android TTS on the headset.
 on Quest, while curl and a hand-built body (boundary, `\r\n` line endings, `Content-Type` per part) returned 200.
 `MetaTranscribeClient` builds the body itself. Also: the Quest mic gave a native 16 kHz mono clip, so no resampling was
 needed (the resampler is kept as a safety net).
+
+### Reasoning effort for the coach (verified Oct 26, on-device)
+
+`muse-spark-1.3`, ~20-word spoken reply, same prompt:
+- `low` + 400 tokens: **no reply** (398 reasoning tokens, `status: incomplete`, `incomplete_details.reason: max_output_tokens`), 3.1 s.
+- `low` + 1500 tokens: replied, but used 440 reasoning tokens, 3.5 s.
+- **`minimal` + 600-800 tokens: replied every time, 1.6-2.7 s.** This is the default (`replyEffort`, `replyMaxTokens`).
+- `none` is rejected (`reasoning_effort 'none' is not supported`). Allowed: minimal, low, medium, high, xhigh, max.

@@ -18,10 +18,12 @@ namespace ABetterU.Coach
         public string transcribeEndpoint = "https://api.meta.ai/v1/asr/transcribe";
         public string transcribeModel = "muse-voice-transcribe-1.0";
 
-        // Reasoning tokens count against max_output_tokens. Too small a cap means the
-        // budget is spent thinking and the reply comes back empty.
-        public string reasoningEffort = "low";
-        public int maxOutputTokens = 400;
+        // Reasoning tokens count against max_output_tokens. At "low" the model burned all 400 tokens
+        // thinking and returned no reply (status: incomplete). "minimal" with a generous cap is
+        // reliable and fastest (~1.6-2.7 s). "none" is not supported on muse-spark-1.3.
+        // (Fields renamed so older saved assets pick up these defaults.)
+        public string replyEffort = "minimal";
+        public int replyMaxTokens = 800;
 
         [TextArea(3, 8)]
         public string systemPrompt =
