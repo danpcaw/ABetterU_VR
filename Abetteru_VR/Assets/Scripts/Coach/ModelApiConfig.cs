@@ -14,6 +14,10 @@ namespace ABetterU.Coach
         public string model = "muse-spark-1.3";
         public string apiKey = "";
 
+        // Verified Oct 26: multipart POST, JSON "request" part + WAV "audio" part (16 kHz mono 16-bit).
+        public string transcribeEndpoint = "https://api.meta.ai/v1/asr/transcribe";
+        public string transcribeModel = "muse-voice-transcribe-1.0";
+
         // Reasoning tokens count against max_output_tokens. Too small a cap means the
         // budget is spent thinking and the reply comes back empty.
         public string reasoningEffort = "low";
