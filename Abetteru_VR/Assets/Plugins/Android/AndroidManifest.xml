@@ -14,6 +14,12 @@
     <meta-data android:name="com.oculus.telemetry.project_guid" android:value="b7b1f62d-d181-4996-9da1-d35106b0c9fd" />
     <meta-data android:name="com.oculus.supportedDevices" android:value="quest|quest2|questpro|quest3|quest3s|stanley" tools:replace="android:value" />
   </application>
+  <!-- Android 11+ package visibility: lets TextToSpeech find the headset's speech engine (HzOS TTS). -->
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.TTS_SERVICE" />
+    </intent>
+  </queries>
   <uses-feature android:name="android.hardware.vr.headtracking" android:version="1" android:required="true" />
   <horizonos:uses-horizonos-sdk horizonos:minSdkVersion="60" horizonos:targetSdkVersion="207" />
 </manifest>

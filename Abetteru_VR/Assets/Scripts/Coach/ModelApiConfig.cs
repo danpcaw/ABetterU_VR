@@ -18,6 +18,16 @@ namespace ABetterU.Coach
         public string transcribeEndpoint = "https://api.meta.ai/v1/asr/transcribe";
         public string transcribeModel = "muse-voice-transcribe-1.0";
 
+        // Verified Oct 26 on a real UK-accent recording: keyword biasing fixed "earned my money" -> "hurt my knee"
+        // type misses and removed stutter repeats. languageBias must be an ARRAY (a string gives 400 "Malformed request").
+        public string[] transcribeLanguageBias = { "en-GB" };
+        public string[] transcribeKeywords =
+        {
+            "knee", "hurt", "injured", "injury", "sore", "pain", "ankle", "shoulder", "back",
+            "squats", "workout", "reps", "sets", "lunges", "glute bridges", "deadlift",
+            "A Better U", "breakfast", "lunch", "dinner", "snack", "eggs", "toast", "protein",
+        };
+
         // Reasoning tokens count against max_output_tokens. At "low" the model burned all 400 tokens
         // thinking and returned no reply (status: incomplete). "minimal" with a generous cap is
         // reliable and fastest (~1.6-2.7 s). "none" is not supported on muse-spark-1.3.

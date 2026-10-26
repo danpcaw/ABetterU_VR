@@ -21,12 +21,24 @@ namespace ABetterU.Coach
 
         public MetaTranscribeClient(ModelApiConfig config) => this.config = config;
 
-        [Serializable] class AsrRequest { public string mode = "PUSH_TO_TALK"; public string model; public string audioEncoding = "WAV"; }
+        [Serializable] class AsrRequest
+        {
+            public string mode = "PUSH_TO_TALK";
+            public string model;
+            public string audioEncoding = "WAV";
+            public string[] languageBias;
+            public string[] keywords;
+        }
         [Serializable] class AsrResponse { public string transcript; public int audioDurationMs; }
 
         public IEnumerator Transcribe(byte[] wav, Action<string> onText, Action<string> onError)
         {
-            var requestJson = JsonUtility.ToJson(new AsrRequest { model = config.transcribeModel });
+            var requestJson = JsonUtility.ToJson(new AsrRequest
+            {
+                model = config.transcribeModel,
+                languageBias = config.transcribeLanguageBias,
+                keywords = config.transcribeKeywords,
+            });
             var body = BuildMultipart(requestJson, wav);
 
             using var req = new UnityWebRequest(config.transcribeEndpoint, "POST")
