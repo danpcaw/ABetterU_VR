@@ -12,7 +12,7 @@ Work is relayed manually between the two agents. Give each **specific, scoped** 
 
 ```
 Task: <one sentence>
-Files: <paths in unity-scaffold/ or Assets/>
+Files: <paths under Abetteru_VR/Assets/>
 Scene objects involved: <names>
 Done when: <observable result on the headset>
 Do not change: <anything out of scope>

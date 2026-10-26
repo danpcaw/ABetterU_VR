@@ -31,7 +31,7 @@ Latency must stay low enough that coaching feels live.
 ```
 PLAN.md                  10-evening schedule, prep checklist, cut order
 docs/HANDOFF.md          How work is split between Claude Code and Muse Code
-unity-scaffold/Scripts/  C# skeleton to copy into the Unity project's Assets/Scripts
+Abetteru_VR/             Unity project (6000.6.7f1); coach scripts in Assets/Scripts/Coach
 scripts/deploy-quest.sh  Sideload the latest APK to the Quest over adb
 ```
 
@@ -41,6 +41,6 @@ The two PDFs in the root are the original application and build plan.
 
 1. Install Unity with the Android Build Support module.
 2. Put the Quest 3S in developer mode and confirm `adb devices` lists it.
-3. Create the Unity project in `unity/` (Unity Hub), then copy `unity-scaffold/Scripts/` into `unity/Assets/Scripts/`.
+3. Open `Abetteru_VR/` in Unity Hub (editor 6000.6.7f1, needs NDK r27c).
 4. Create `ModelApiSecrets` (see `ModelApiConfig.cs`) with your Meta Model API key. It is git-ignored.
 5. Build to APK, then `./scripts/deploy-quest.sh path/to/build.apk`.
