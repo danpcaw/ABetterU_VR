@@ -58,3 +58,16 @@ One user sentence ("two eggs on toast, my left knee is sore, build me a leg work
 In `output[]` these appear as items with `type: "function_call"` (`name`, `arguments` JSON string).
 Round trip was ~2.9 s at `low` reasoning. After running a tool, send its result back as a
 `function_call_output` input item and let the model speak the confirmation (TODO: verify shape).
+
+## Speech-to-text (verified Oct 26)
+
+`POST https://api.meta.ai/v1/asr/transcribe` (HTTP file upload), `Authorization: Bearer`, multipart:
+- `request` (application/json): `{"mode":"PUSH_TO_TALK","model":"muse-voice-transcribe-1.0","audioEncoding":"WAV"}`
+- `audio` (audio/wav): RIFF/WAVE, mono, 16-bit PCM, 16 kHz or 24 kHz. Max 32 MB / 10 min.
+
+Response: `{"sessionId","transcript","audioDurationMs","turns":[]}` (`turns` only in ENDPOINTING/DIARIZATION).
+Test: a 3.8 s clip transcribed correctly in ~2.1 s.
+
+Realtime option: `wss://api.meta.ai/v1/asr/realtime` (auth in the first JSON frame, not the header;
+raw PCM16 binary frames; `mode: ENDPOINTING` gives automatic end-of-speech). Use it if HTTP latency is too high.
+No text-to-speech in the API: use Android TTS on the headset.
