@@ -18,6 +18,7 @@ namespace ABetterU.Coach
         bool busy;
 
         bool inGym;                       // false until the user has logged in and entered the gym
+        AppFlow flow;
 
         IEnumerator Start()
         {
@@ -46,9 +47,9 @@ namespace ABetterU.Coach
 
             // Front door: the lobby with Judge Instant Login or your own account, then the hub, then "Enter the gym".
             // RLS scopes everything the agent does to whichever user signs in.
-            supabase = new SupabaseClient(config);
-            var flow = gameObject.AddComponent<AppFlow>();
-            flow.Init(config, supabase, board);
+            supabase = AppFlow.Session ?? (AppFlow.Session = new SupabaseClient(config));   // survives "Back to hub" scene reloads
+            flow = gameObject.AddComponent<AppFlow>();
+            flow.Init(supabase, board);
             while (flow.Current != AppFlow.Stage.Gym) yield return null;
 
             string loginNote = $"Signed in as {supabase.DisplayName ?? "user"}.";
@@ -72,6 +73,7 @@ namespace ABetterU.Coach
         void Update()
         {
             if (mic == null || !inGym) return;
+            if (flow != null && flow.MenuOpen) return;   // the right trigger is clicking menu buttons, not recording
 
             // The left trigger starts a squat set, and ends it.
             if (SetTogglePressed() && !busy)
