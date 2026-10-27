@@ -269,6 +269,7 @@ namespace ABetterU.Coach
 
             pointer = gameObject.AddComponent<VRPointer>();
             pointer.Init(head);
+            pointer.PreferLeftHand(true);        // the left Menu button opened this, so that hand is already up
             MenuOpen = true;
         }
 

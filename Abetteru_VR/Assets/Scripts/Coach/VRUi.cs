@@ -110,15 +110,20 @@ namespace ABetterU.Coach
     /// Pull the right trigger while it rests on a VRButton to click it.
     public class VRPointer : MonoBehaviour
     {
-        Transform head, hand;
+        Transform head, leftHand, rightHand;
+        bool useLeft;                    // the pointer follows whichever hand you used last
         LineRenderer line;
         Transform dot;
         VRButton hovered;
 
+        /// Starts the laser on the left hand (e.g. when the menu was opened with the left Menu button).
+        public void PreferLeftHand(bool left) { useLeft = left; }
+
         public void Init(Transform head)
         {
             this.head = head;
-            hand = FindAny("RightControllerAnchor", "RightHandAnchor");
+            leftHand = FindAny("LeftControllerAnchor", "LeftHandAnchor");
+            rightHand = FindAny("RightControllerAnchor", "RightHandAnchor");
 
             var lineGo = new GameObject("PointerLine");
             lineGo.transform.SetParent(transform, false);
@@ -145,6 +150,14 @@ namespace ABetterU.Coach
         void Update()
         {
             if (head == null) return;
+
+            // Either trigger works: pulling one makes that hand the pointer, then clicks whatever it is resting on.
+            bool leftPulled = OVRInput.GetDown(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.LTouch);
+            bool rightPulled = OVRInput.GetDown(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.RTouch);
+            if (leftPulled) useLeft = true;
+            else if (rightPulled) useLeft = false;
+
+            Transform hand = useLeft ? leftHand : rightHand;
             Transform from = hand != null && hand.gameObject.activeInHierarchy ? hand : head;
             var ray = new Ray(from.position, from.forward);
 
@@ -167,8 +180,7 @@ namespace ABetterU.Coach
             line.SetPosition(1, end);
             dot.position = end;
 
-            bool clicked = OVRInput.GetDown(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.RTouch);
-            if (clicked && hovered != null && hovered.Interactable) hovered.OnClick?.Invoke();
+            if ((leftPulled || rightPulled) && hovered != null && hovered.Interactable) hovered.OnClick?.Invoke();
         }
 
         void OnDestroy()

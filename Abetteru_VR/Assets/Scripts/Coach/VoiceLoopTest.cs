@@ -62,7 +62,7 @@ namespace ABetterU.Coach
             reps = gameObject.AddComponent<RepCounter>();
             reps.head = Camera.main != null ? Camera.main.transform : transform;
 
-            board.Show($"Hold RIGHT TRIGGER to talk.\nPress LEFT TRIGGER\nto start a squat set.\n\n{ttsNote}\n{loginNote}");
+            board.Show($"Hold RIGHT TRIGGER to talk.\nPress LEFT TRIGGER\nto start a squat set.\nLeft MENU button: menu.\n\n{ttsNote}\n{loginNote}");
             inGym = true;
         }
 
