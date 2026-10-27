@@ -22,6 +22,9 @@ namespace ABetterU.Coach
         // (the web app computes calories from grams; a servings-only row shows no calories until edited).
         readonly Dictionary<string, double> servingGrams = new Dictionary<string, double>();
 
+        // Every food the search has returned, so log_food can only log something the database actually showed us.
+        readonly Dictionary<string, JObject> foodsSeen = new Dictionary<string, JObject>();
+
         public CoachAgent(ModelApiConfig config, SupabaseClient supabase)
         {
             this.config = config;
@@ -54,7 +57,10 @@ namespace ABetterU.Coach
 
         const string AgentRules =
             " You can act on the user's A Better U account with tools. To log food: call search_foods, pick the closest " +
-            "plain or generic match (avoid restaurant-branded items unless the user named one), then call log_food. " +
+            "match, then call log_food. Choose the result whose name contains the most of the words the user said, " +
+            "branded or not (the user's speech may drop a brand word). Never pick an item whose name lacks a key word the user said; " +
+            "if no result clearly matches, say so and ask. Do not search again once a result already matches. " +
+            "After logging, say the exact logged_name, its brand and kcal_per_serving aloud. " +
             "Only say something is logged after log_food returns ok:true. The food search matches the food's own name and handles brand words itself, " +
             "so if it returns nothing, try once more with fewer, simpler words before telling the user it was not found. " +
             "Use the earlier conversation to understand short replies like yes or no. Do not start a workout unless the user asked for one. " +
@@ -189,7 +195,7 @@ namespace ABetterU.Coach
             {
                 if (f["serving_size_g"]?.Type != JTokenType.Null && f["serving_size_g"] != null)
                     servingGrams[(string)f["id"]] = (double)f["serving_size_g"];
-                rows.Add(new JObject
+                var summary = new JObject
                 {
                     ["food_id"] = f["id"],
                     ["name"] = f["name"],
@@ -197,7 +203,9 @@ namespace ABetterU.Coach
                     ["serving"] = f["serving_name"],
                     ["serving_g"] = f["serving_size_g"],
                     ["kcal_per_serving"] = f["energy_kcal_serving"],
-                });
+                };
+                foodsSeen[(string)f["id"]] = summary;
+                rows.Add(summary);
             }
             done(new JObject { ["ok"] = true, ["searched_as"] = usedQuery, ["results"] = rows }.ToString(Newtonsoft.Json.Formatting.None));
         }
@@ -216,6 +224,12 @@ namespace ABetterU.Coach
         {
             string foodId = (string)args["food_id"];
             if (string.IsNullOrEmpty(foodId)) { done(Fail("food_id is required; call search_foods first")); yield break; }
+
+            if (!foodsSeen.TryGetValue(foodId, out JObject chosen))
+            {
+                done(Fail("food_id was not returned by search_foods; call search_foods and use an id from its results"));
+                yield break;
+            }
 
             string meal = (string)args["meal"];
             if (meal != "breakfast" && meal != "lunch" && meal != "dinner" && meal != "snack")
@@ -243,7 +257,16 @@ namespace ABetterU.Coach
             yield return supabase.Insert("food_log_entries", row.ToString(Newtonsoft.Json.Formatting.None), r => raw = r, e => err = e);
             if (err != null) { done(Fail(err)); yield break; }
 
-            done(new JObject { ["ok"] = true, ["meal"] = meal, ["servings"] = servings }.ToString(Newtonsoft.Json.Formatting.None));
+            // Echo exactly what was stored so the coach can say it aloud and a wrong match is audible.
+            done(new JObject
+            {
+                ["ok"] = true,
+                ["logged_name"] = chosen["name"],
+                ["logged_brand"] = chosen["brand"],
+                ["kcal_per_serving"] = chosen["kcal_per_serving"],
+                ["meal"] = meal,
+                ["servings"] = servings,
+            }.ToString(Newtonsoft.Json.Formatting.None));
         }
 
         IEnumerator ReportInjury(JObject args, Action<string> done)
