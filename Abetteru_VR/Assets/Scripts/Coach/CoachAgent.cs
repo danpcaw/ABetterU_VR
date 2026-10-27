@@ -55,7 +55,9 @@ namespace ABetterU.Coach
         const string AgentRules =
             " You can act on the user's A Better U account with tools. To log food: call search_foods, pick the closest " +
             "plain or generic match (avoid restaurant-branded items unless the user named one), then call log_food. " +
-            "Only say something is logged after log_food returns ok:true. If nothing matches, say so and ask. " +
+            "Only say something is logged after log_food returns ok:true. The food search matches the food's own name and handles brand words itself, " +
+            "so if it returns nothing, try once more with fewer, simpler words before telling the user it was not found. " +
+            "Use the earlier conversation to understand short replies like yes or no. Do not start a workout unless the user asked for one. " +
             "Never invent calories or numbers; use only what tools return. " +
             "If the user says something hurts or is sore, call report_injury first (record their words, never diagnose), " +
             "then if they want a workout call build_workout and pick exactly 3 exercises from its candidates, giving sets and reps. " +
@@ -64,14 +66,15 @@ namespace ABetterU.Coach
         /// Runs one user turn. onProgress gets short status text (tool names) for the board.
         public IEnumerator Run(string userText, Action<string> onProgress, Action<string> onReply, Action<string> onError)
         {
-            var input = new JArray
+            // Earlier turns (text only) come first so "yes please" has something to refer to.
+            var input = new JArray();
+            foreach (var h in history) input.Add(h);
+            var userMsg = new JObject
             {
-                new JObject
-                {
-                    ["role"] = "user",
-                    ["content"] = new JArray { new JObject { ["type"] = "input_text", ["text"] = userText } },
-                },
+                ["role"] = "user",
+                ["content"] = new JArray { new JObject { ["type"] = "input_text", ["text"] = userText } },
             };
+            input.Add(userMsg);
 
             var now = DateTime.Now;
             string instructions = config.coachPrompt + AgentRules +
@@ -123,11 +126,27 @@ namespace ABetterU.Coach
                 if (!calledTool)
                 {
                     if (string.IsNullOrEmpty(text)) { onError("Model returned no reply (see log)."); yield break; }
+                    Remember(userMsg, text);
                     onReply(text);
                     yield break;
                 }
             }
             onError("Agent used too many steps.");
+        }
+
+        // Keeps the last few user/assistant text turns. Tool calls are not kept: the reply already says what happened.
+        readonly List<JObject> history = new List<JObject>();
+        const int MaxHistoryMessages = 8;
+
+        void Remember(JObject userMsg, string reply)
+        {
+            history.Add(userMsg);
+            history.Add(new JObject
+            {
+                ["role"] = "assistant",
+                ["content"] = new JArray { new JObject { ["type"] = "output_text", ["text"] = reply } },
+            });
+            while (history.Count > MaxHistoryMessages) history.RemoveAt(0);
         }
 
         IEnumerator RunTool(string name, string argsJson, Action<string> done)
@@ -151,10 +170,18 @@ namespace ABetterU.Coach
         {
             if (string.IsNullOrWhiteSpace(query)) { done(Fail("query is required")); yield break; }
 
-            var body = new JObject { ["q"] = query, ["lim"] = 5, ["uid"] = supabase.UserId }.ToString(Newtonsoft.Json.Formatting.None);
-            string raw = null, err = null;
-            yield return supabase.Rpc("search_foods", body, r => raw = r, e => err = e);
-            if (err != null) { done(Fail(err)); yield break; }
+            // search_foods matches the food NAME only, so a spoken brand ("KFC") or a synonym ("barbecue" for BBQ)
+            // returns nothing. Normalise, then retry with up to two leading words dropped ("kfc bbq mini wrap" -> "mini wrap").
+            var words = NormaliseQuery(query);
+            string raw = "[]", err = null, usedQuery = query;
+            for (int skip = 0; skip < words.Count && skip <= 2; skip++)
+            {
+                usedQuery = string.Join(" ", words.GetRange(skip, words.Count - skip));
+                var body = new JObject { ["q"] = usedQuery, ["lim"] = 5, ["uid"] = supabase.UserId }.ToString(Newtonsoft.Json.Formatting.None);
+                yield return supabase.Rpc("search_foods", body, r => raw = r, e => err = e);
+                if (err != null) { done(Fail(err)); yield break; }
+                if (JArray.Parse(raw).Count > 0) break;
+            }
 
             var rows = new JArray();
             foreach (var f in JArray.Parse(raw))
@@ -171,7 +198,17 @@ namespace ABetterU.Coach
                     ["kcal_per_serving"] = f["energy_kcal_serving"],
                 });
             }
-            done(new JObject { ["ok"] = true, ["results"] = rows }.ToString(Newtonsoft.Json.Formatting.None));
+            done(new JObject { ["ok"] = true, ["searched_as"] = usedQuery, ["results"] = rows }.ToString(Newtonsoft.Json.Formatting.None));
+        }
+
+        static List<string> NormaliseQuery(string query)
+        {
+            var cleaned = new StringBuilder();
+            foreach (char c in query.ToLowerInvariant()) cleaned.Append(char.IsLetterOrDigit(c) ? c : ' ');
+            var words = new List<string>();
+            foreach (var w in cleaned.ToString().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
+                words.Add(w == "barbecue" || w == "barbeque" ? "bbq" : w);
+            return words;
         }
 
         IEnumerator LogFood(JObject args, Action<string> done)
