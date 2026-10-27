@@ -11,6 +11,7 @@ namespace ABetterU.Coach
 
         public bool Active;                 // reps are only counted while a set is in progress
 
+        public float CurrentDrop { get; private set; }   // live drop below standing, as a fraction (for the depth meter)
         public int RepCount { get; private set; }
         public float SecondsPerRep { get; private set; }
 
@@ -57,6 +58,7 @@ namespace ABetterU.Coach
         {
             if (!Active) return;
             float dropFraction = (standingHeight - HeadHeight()) / standingHeight;
+            CurrentDrop = dropFraction;
             bool wasInBottom = inBottom;
             bool repDone = DetectRepStep(dropFraction, ref inBottom);
             if (!wasInBottom && inBottom) DepthCue();   // the moment the squat is deep enough to count

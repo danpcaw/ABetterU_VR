@@ -79,10 +79,14 @@ namespace ABetterU.Coach
             }
             if (inSet)
             {
-                if (reps.RepCount != lastShownReps)
+                if (Time.unscaledTime >= nextMeter)
                 {
+                    nextMeter = Time.unscaledTime + 0.1f;
                     lastShownReps = reps.RepCount;
-                    board.Show($"SQUAT SET\n\nReps: {lastShownReps}\n\nPress LEFT TRIGGER\nwhen done.");
+                    // Depth meter: the bar fills toward the "down" line (| marks it); % is how far below standing you are.
+                    float pct = Mathf.Max(0f, reps.CurrentDrop);
+                    int bars = Mathf.Clamp(Mathf.RoundToInt(pct / reps.downFraction * 10f), 0, 14);
+                    board.Show($"SQUAT SET\n\nReps: {lastShownReps}\n[{new string('#', Mathf.Min(bars, 10))}{new string('.', Mathf.Max(0, 10 - bars))}]{(bars >= 10 ? " DEEP" : "")}\ndepth {pct * 100f:0}% (need {reps.downFraction * 100f:0}%)\n\nPress LEFT TRIGGER\nwhen done.");
                 }
                 return;
             }
