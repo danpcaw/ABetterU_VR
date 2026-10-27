@@ -102,6 +102,12 @@ go to a final round where judges watch the demo videos live.
 
 **Never cut:** the voice loop (eves 3-4) and the demo recording (eves 9-10).
 
+## Known quirks (for UI polish, eve 8)
+
+- Left X and Y never reach the app on our Quest build (verified Oct 27); the **left trigger** starts and ends a squat set. Any on-screen help text or the demo script must say "left trigger", not X/Y.
+- Rep counts at the top of the squat (down then up); a tick and buzz fire at depth. `downFraction` 0.20 and `upFraction` 0.08 are Inspector-tunable on RepCounter.
+- Social cost: Wit.ai voice is US-only; greeting uses the profile name ("Judge" for the judge account).
+
 ## Risks to watch
 
 - Model API access arriving late (use fallback model).
