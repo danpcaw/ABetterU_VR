@@ -84,8 +84,16 @@ go to a final round where judges watch the demo videos live.
 | 9 | Tue Nov 3 | Demo recording | Clean take captured |
 | 10 | Wed Nov 4 | Pitch video, edit, **submit by 22:00 GMT** | Submitted with buffer |
 
+## Stretch: "where this is going" (only after gym + squats + sync work)
+
+- **Roadmap wall** in the gym scene: three glowing panels labelled ROADMAP (Virtual Workouts, Social Posts, Coach Studio). Static quads with text, ~20 min.
+- **Voice teaser:** "what's coming next?" answered from a short roadmap paragraph in the coach prompt.
+- **Make one real:** Social Post Creator. After a set, the coach writes a caption from the real logged data, plus a Muse Image card (targets Best Creative Build, $5K).
+- **Honesty rule:** teasers are always labelled ROADMAP on screen and in the voiceover. The submission states: existing = A Better U web app; new = this VR voice agent. The web app is our credibility edge, not something to hide.
+
 ## Cut order (if evenings run short)
 
+0. Roadmap wall / teasers (above)
 1. Badge unlock / Muse Image flex
 2. Dashboard panel (use a static card)
 3. A Better U live sync (show as mocked/planned in narration, say so honestly)
