@@ -60,7 +60,7 @@ namespace ABetterU.Coach
             reps = gameObject.AddComponent<RepCounter>();
             reps.head = Camera.main != null ? Camera.main.transform : transform;
 
-            board.Show($"Hold RIGHT TRIGGER to talk.\nPress X, Y or LEFT TRIGGER\nto start a squat set.\n\n{ttsNote}\n{loginNote}");
+            board.Show($"Hold RIGHT TRIGGER to talk.\nPress LEFT TRIGGER\nto start a squat set.\n\n{ttsNote}\n{loginNote}");
         }
 
         RepCounter reps;
@@ -82,7 +82,7 @@ namespace ABetterU.Coach
                 if (reps.RepCount != lastShownReps)
                 {
                     lastShownReps = reps.RepCount;
-                    board.Show($"SQUAT SET\n\nReps: {lastShownReps}\n\nPress X when done.");
+                    board.Show($"SQUAT SET\n\nReps: {lastShownReps}\n\nPress LEFT TRIGGER\nwhen done.");
                 }
                 return;
             }
@@ -101,7 +101,8 @@ namespace ABetterU.Coach
 
         float nextMeter;
 
-        // Left X, left Y or the left trigger all start/end a set. Each press is logged so adb shows what the headset sees.
+        // The left trigger starts/ends a set. Left X/Y are kept as a fallback, but on our Quest build they never arrive
+        // (verified Oct 27), so the on-screen text only mentions the trigger. Each press is logged for diagnosis.
         bool SetTogglePressed()
         {
             string pressed = null;
@@ -130,7 +131,7 @@ namespace ABetterU.Coach
             inSet = false;
             busy = true;
             int n = reps.RepCount;
-            if (n == 0) { board.Show("No reps counted.\nPress X to try again."); busy = false; yield break; }
+            if (n == 0) { board.Show("No reps counted.\nPress LEFT TRIGGER to try again."); busy = false; yield break; }
 
             // The rep count comes from the headset, not from the user or the model.
             board.Show($"Set done: {n} reps.\nLogging...");

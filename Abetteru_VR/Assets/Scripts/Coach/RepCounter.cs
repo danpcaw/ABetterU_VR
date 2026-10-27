@@ -49,7 +49,10 @@ namespace ABetterU.Coach
         {
             if (!Active) return;
             float dropFraction = (standingHeight - head.localPosition.y) / standingHeight;
-            if (DetectRepStep(dropFraction, ref inBottom))
+            bool wasInBottom = inBottom;
+            bool repDone = DetectRepStep(dropFraction, ref inBottom);
+            if (!wasInBottom && inBottom) DepthCue();   // the moment the squat is deep enough to count
+            if (repDone)
             {
                 RepCount++;
                 SecondsPerRep = (Time.time - lastRepTime) / 1f;
@@ -57,6 +60,44 @@ namespace ABetterU.Coach
                 if (voice != null && RepCount % 5 == 0)
                     voice.CoachProactively($"The user just completed rep {RepCount}.");
             }
+        }
+
+        // ── Depth cue: a short tick plus a controller buzz when you pass the "down" line, so you know the rep will count.
+        AudioSource beeper;
+        AudioClip tick;
+
+        void Awake()
+        {
+            const int rate = 24000;
+            var samples = new float[(int)(rate * 0.09f)];
+            for (int i = 0; i < samples.Length; i++)
+            {
+                float fade = 1f - (float)i / samples.Length;            // quick fade-out avoids a click
+                samples[i] = Mathf.Sin(2f * Mathf.PI * 880f * i / rate) * 0.35f * fade;
+            }
+            tick = AudioClip.Create("depth-tick", samples.Length, 1, rate, false);
+            tick.SetData(samples, 0);
+            beeper = gameObject.AddComponent<AudioSource>();
+            beeper.playOnAwake = false;
+            beeper.spatialBlend = 0f;
+        }
+
+        void DepthCue()
+        {
+            beeper.PlayOneShot(tick);
+            StartCoroutine(Buzz(0.12f));
+        }
+
+        System.Collections.IEnumerator Buzz(float seconds)
+        {
+            for (float t = 0f; t < seconds; t += Time.deltaTime)
+            {
+                OVRInput.SetControllerVibration(0.6f, 0.6f, OVRInput.Controller.LTouch);
+                OVRInput.SetControllerVibration(0.6f, 0.6f, OVRInput.Controller.RTouch);
+                yield return null;
+            }
+            OVRInput.SetControllerVibration(0f, 0f, OVRInput.Controller.LTouch);
+            OVRInput.SetControllerVibration(0f, 0f, OVRInput.Controller.RTouch);
         }
 
         /// Called every frame with how far the head has dropped below standing height, as a FRACTION of that
