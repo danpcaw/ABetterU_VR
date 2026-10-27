@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -16,6 +17,10 @@ namespace ABetterU.Coach
 
         readonly ModelApiConfig config;
         readonly SupabaseClient supabase;
+
+        // food_id -> grams per serving, remembered from search results so log_food can also write quantity_g
+        // (the web app computes calories from grams; a servings-only row shows no calories until edited).
+        readonly Dictionary<string, double> servingGrams = new Dictionary<string, double>();
 
         public CoachAgent(ModelApiConfig config, SupabaseClient supabase)
         {
@@ -137,6 +142,9 @@ namespace ABetterU.Coach
 
             var rows = new JArray();
             foreach (var f in JArray.Parse(raw))
+            {
+                if (f["serving_size_g"]?.Type != JTokenType.Null && f["serving_size_g"] != null)
+                    servingGrams[(string)f["id"]] = (double)f["serving_size_g"];
                 rows.Add(new JObject
                 {
                     ["food_id"] = f["id"],
@@ -146,6 +154,7 @@ namespace ABetterU.Coach
                     ["serving_g"] = f["serving_size_g"],
                     ["kcal_per_serving"] = f["energy_kcal_serving"],
                 });
+            }
             done(new JObject { ["ok"] = true, ["results"] = rows }.ToString(Newtonsoft.Json.Formatting.None));
         }
 
@@ -173,6 +182,9 @@ namespace ABetterU.Coach
                 ["source"] = "ai_assistant",
             };
 
+            if (servingGrams.TryGetValue(foodId, out double gramsPerServing))
+                row["quantity_g"] = Math.Round(gramsPerServing * servings, 1);
+
             string raw = null, err = null;
             yield return supabase.Insert("food_log_entries", row.ToString(Newtonsoft.Json.Formatting.None), r => raw = r, e => err = e);
             if (err != null) { done(Fail(err)); yield break; }
@@ -185,8 +197,12 @@ namespace ABetterU.Coach
         /// Used when the model gives no valid meal. Local clock decides.
         static string DefaultMealSlot(DateTime localNow)
         {
-            // TODO(human): return "breakfast", "lunch", "dinner" or "snack" for the given time of day.
-            return "snack";
+            int minutes = localNow.Hour * 60 + localNow.Minute;
+
+if (minutes >= 6 * 60 && minutes <= 10 * 60 + 30) return "breakfast";
+if (minutes >= 12 * 60 && minutes <= 14 * 60) return "lunch";
+if (minutes >= 18 * 60 && minutes <= 20 * 60) return "dinner";
+return "snack";
         }
 
         IEnumerator Post(string json, Action<string> ok, Action<string> fail)
