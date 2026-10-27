@@ -103,15 +103,22 @@ namespace ABetterU.Coach
 
         void BuildDumbbellRack(float x)
         {
-            Box("Rack frame", new Vector3(x, 0.45f, 0.4f), new Vector3(0.5f, 0.9f, 3.0f), Black);
-            Box("Rack shelf", new Vector3(x, 0.62f, 0.4f), new Vector3(0.55f, 0.04f, 3.0f), Metal);
+            // Open two-tier rack: four legs, two shelves, dumbbells resting on top of each shelf.
+            const float zc = 0.4f, len = 3.0f;
+            float[] shelves = { 0.38f, 0.78f };
 
-            for (int i = 0; i < 6; i++)
-            {
-                float z = -0.85f + i * 0.5f;
-                float size = 0.07f + i * 0.012f;           // heavier dumbbells get bigger discs
-                Dumbbell(new Vector3(x, 0.74f, 0.4f + z), size);
-            }
+            foreach (float y in shelves)
+                Box("Rack shelf", new Vector3(x, y, zc), new Vector3(0.5f, 0.04f, len), Metal, 0.8f, 0.5f);
+            for (int sx = -1; sx <= 1; sx += 2)
+                for (int sz = -1; sz <= 1; sz += 2)
+                    Box("Rack leg", new Vector3(x + sx * 0.22f, 0.4f, zc + sz * (len / 2 - 0.04f)), new Vector3(0.05f, 0.8f, 0.05f), Black, 0.6f);
+
+            foreach (float y in shelves)
+                for (int i = 0; i < 6; i++)
+                {
+                    float r = 0.07f + i * 0.012f;                       // heavier dumbbells get bigger discs
+                    Dumbbell(new Vector3(x, y + 0.02f + r, zc - 1.25f + i * 0.5f), r);
+                }
         }
 
         void Dumbbell(Vector3 pos, float discRadius)
@@ -134,11 +141,20 @@ namespace ABetterU.Coach
                     Box("Rack upright", new Vector3(x + sx * 0.55f, 1.1f, z + sz * 0.45f), new Vector3(0.08f, 2.2f, 0.08f), Black, 0.6f);
             Box("Rack top", new Vector3(x, 2.2f, z), new Vector3(1.2f, 0.08f, 1.0f), Black, 0.6f);
 
-            var bar = Shape(PrimitiveType.Cylinder, "Barbell", new Vector3(x, 1.45f, z), new Vector3(0.03f, 1.1f, 0.03f), Metal, 0.95f);
+            // Base beams so the frame stands on the floor.
+            Box("Rack base front", new Vector3(x, 0.05f, z - 0.45f), new Vector3(2.0f, 0.1f, 0.1f), Black, 0.6f);
+            Box("Rack base back", new Vector3(x, 0.05f, z + 0.45f), new Vector3(2.0f, 0.1f, 0.1f), Black, 0.6f);
+
+            // The bar rests on hooks fixed to the two FRONT uprights (the ones nearest the user), with plates outside the frame.
+            float barZ = z - 0.45f, barY = 1.45f;
+            for (int sx = -1; sx <= 1; sx += 2)
+                Box("Rack hook", new Vector3(x + sx * 0.55f, barY - 0.05f, barZ), new Vector3(0.16f, 0.05f, 0.12f), Metal, 0.8f, 0.5f);
+
+            var bar = Shape(PrimitiveType.Cylinder, "Barbell", new Vector3(x, barY, barZ), new Vector3(0.03f, 1.1f, 0.03f), Metal, 0.95f, 0.8f);
             bar.localRotation = Quaternion.Euler(0, 0, 90f);
             for (int s = -1; s <= 1; s += 2)
             {
-                var plate = Shape(PrimitiveType.Cylinder, "Plate", new Vector3(x + s * 0.5f, 1.45f, z), new Vector3(0.42f, 0.04f, 0.42f), Teal, 0.5f);
+                var plate = Shape(PrimitiveType.Cylinder, "Plate", new Vector3(x + s * 0.85f, barY, barZ), new Vector3(0.42f, 0.04f, 0.42f), Teal, 0.5f);
                 plate.localRotation = Quaternion.Euler(0, 0, 90f);
             }
         }
