@@ -19,6 +19,7 @@ namespace ABetterU.Coach
 
         IEnumerator Start()
         {
+            gameObject.AddComponent<GymRoom>();   // the virtual gym, built from primitives at startup
             board = StatusBoard.Create(Camera.main != null ? Camera.main.transform : transform);
 
             var config = ModelApiConfig.Load();
