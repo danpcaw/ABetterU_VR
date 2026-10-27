@@ -9,6 +9,8 @@ namespace ABetterU.Coach
         public Transform head;              // the XR camera
         public VoiceLoopController voice;
 
+        public bool Active;                 // reps are only counted while a set is in progress
+
         public int RepCount { get; private set; }
         public float SecondsPerRep { get; private set; }
 
@@ -45,6 +47,7 @@ namespace ABetterU.Coach
 
         void Update()
         {
+            if (!Active) return;
             float dropFraction = (standingHeight - head.localPosition.y) / standingHeight;
             if (DetectRepStep(dropFraction, ref inBottom))
             {
@@ -61,8 +64,19 @@ namespace ABetterU.Coach
         /// `inBottom` is state you own across frames. Use the downFraction / upFraction fields above.
         bool DetectRepStep(float dropFraction, ref bool inBottom)
         {
-            // TODO(human): implement squat rep detection.
-            return false;
+if (!inBottom && dropFraction >= downFraction)
+{
+    inBottom = true;      // you've gone down: remember it
+    return false;         // not a full rep yet
+}
+
+if (inBottom && dropFraction <= upFraction)
+{
+    inBottom = false;     // you're back up: clear the note
+    return true;          // that's one rep
+}
+
+return false;             // nothing happened this frame
         }
     }
 }

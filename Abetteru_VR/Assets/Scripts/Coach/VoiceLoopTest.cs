@@ -55,12 +55,38 @@ namespace ABetterU.Coach
             }
             Debug.Log("[Supabase] " + loginNote);
             agent = new CoachAgent(config, supabase);
-            board.Show($"Hold RIGHT TRIGGER to talk.\nRelease to send.\n\n{ttsNote}\n{loginNote}");
+
+            // Squat counter: the headset's height is the only body signal the Quest gives us.
+            reps = gameObject.AddComponent<RepCounter>();
+            reps.head = Camera.main != null ? Camera.main.transform : transform;
+
+            board.Show($"Hold RIGHT TRIGGER to talk.\nPress X (left) to start a squat set.\n\n{ttsNote}\n{loginNote}");
         }
+
+        RepCounter reps;
+        bool inSet;
+        int lastShownReps = -1;
 
         void Update()
         {
-            if (mic == null || busy) return;
+            if (mic == null) return;
+
+            // X on the left controller starts a squat set, and ends it.
+            if (!busy && OVRInput.GetDown(OVRInput.Button.Three, OVRInput.Controller.LTouch))
+            {
+                StartCoroutine(inSet ? EndSet() : BeginSet());
+                return;
+            }
+            if (inSet)
+            {
+                if (reps.RepCount != lastShownReps)
+                {
+                    lastShownReps = reps.RepCount;
+                    board.Show($"SQUAT SET\n\nReps: {lastShownReps}\n\nPress X when done.");
+                }
+                return;
+            }
+            if (busy) return;
 
             if (PressedDown()) { if (mic.StartRecording()) board.Show("Listening..."); }
             else if (ReleasedUp() && mic.IsRecording) StartCoroutine(Turn(mic.StopRecording()));
@@ -74,6 +100,41 @@ namespace ABetterU.Coach
         }
 
         float nextMeter;
+
+        IEnumerator BeginSet()
+        {
+            busy = true;
+            board.Show("Stand tall and\nstay still...");
+            yield return reps.Calibrate(2f);
+            reps.Active = true;
+            inSet = true;
+            busy = false;
+            lastShownReps = -1;   // forces the first "Reps: 0" draw
+        }
+
+        IEnumerator EndSet()
+        {
+            reps.Active = false;
+            inSet = false;
+            busy = true;
+            int n = reps.RepCount;
+            if (n == 0) { board.Show("No reps counted.\nPress X to try again."); busy = false; yield break; }
+
+            // The rep count comes from the headset, not from the user or the model.
+            board.Show($"Set done: {n} reps.\nLogging...");
+            string turn = $"Context: the headset just counted a finished set: {n} bodyweight squat reps (exercise name: Bodyweight Squat). " +
+                          "Log it with log_set and reply briefly with what was recorded.";
+            string reply = null, error = null;
+            yield return agent.Run(turn, p => board.Show($"Set done: {n} reps.\n{Wrap(p)}"), r => reply = r, e => error = e);
+
+            if (reply == null) { board.Show("Coach failed:\n" + Wrap(Short(error ?? "no reply", 160))); busy = false; yield break; }
+            board.Show($"Set done: {n} reps.\n\nCoach: {Wrap(reply)}");
+
+            bool spoken = false;
+            tts.Speak(reply, () => spoken = true);
+            while (!spoken) yield return null;
+            busy = false;
+        }
 
         static bool PressedDown() =>
             OVRInput.GetDown(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.RTouch) ||
