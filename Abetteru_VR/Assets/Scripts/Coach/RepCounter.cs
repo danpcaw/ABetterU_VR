@@ -64,6 +64,7 @@ namespace ABetterU.Coach
                 yield return null;
             }
             if (n > 0) standingHeight = sum / n;
+            Debug.Log($"[Squat] calibrated standing neck height {standingHeight:0.00} m (origin {(OVRManager.instance != null ? OVRManager.instance.trackingOriginType.ToString() : "n/a")})");
             RepCount = 0;
             inBottom = false;
             lastRepTime = Time.time;
