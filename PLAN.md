@@ -75,10 +75,10 @@ go to a final round where judges watch the demo videos live.
 |---|---|---|---|
 | 1 (short, from 18:30) | Mon Oct 26 | Unity project + Quest build pipeline | **DONE 21:50 GMT**: scene with floor and cube runs on the Quest 3S |
 | 2 | Tue Oct 27 | Mic permission, audio out, first STT/TTS test | **DONE Oct 26**: mic, transcribe, Spark and spoken reply (Wit.ai TTS) all work on the Quest |
-| 3 | Wed Oct 28 | **Voice loop** works; now make Spark an **agent with tools** (`log_food`, `build_workout`, `log_set`) | One sentence triggers real tool calls and the coach confirms them aloud |
+| 3 | Wed Oct 28 | **Voice loop** works; now make Spark an **agent with tools** (`log_food`, `build_workout`, `log_set`) | **DONE Oct 27**: five tools (search_foods, log_food, report_injury, build_workout, log_set) write to the real ABetterU account, confirmed aloud |
 | 4 | Thu Oct 29 | Latency: realtime ASR WebSocket, stream Spark, speak first sentence early | Round trip under ~3 s (now ~6 s: ASR 3.1 + Spark 1.6 + TTS 1-2) |
 | 5 | Fri Oct 30 | Intents: food log + injury-aware workout | "Knee is sore" returns a safe plan, food card shows |
-| 6 | Sat Oct 31 (long day) | Gym scene + squat rep counting + live coaching | Reps counted, coach comments mid-set |
+| 6 | Sat Oct 31 (long day) | Gym scene + squat rep counting + live coaching | **Mostly DONE Oct 27**: gym, mannequin, real mirror, rep counting and set logging work. Left: live coach comments mid-set |
 | 7 | Sun Nov 1 (long day) | A Better U sync (food, workout, set) | Set appears in account, or mocked |
 | 8 | Mon Nov 2 | Polish, "your A Better U today" panel, bug bash | Full story runs start to finish |
 | 9 | Tue Nov 3 | Demo recording | Clean take captured |
