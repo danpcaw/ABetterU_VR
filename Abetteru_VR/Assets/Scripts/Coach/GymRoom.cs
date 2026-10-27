@@ -53,7 +53,23 @@ namespace ABetterU.Coach
             BuildSquatRack(Half - 0.9f, 1.4f);
             BuildBenches();
             BuildSign();
+            BuildWallScreen();
             BuildBodyAndReflection();
+        }
+
+        // ── Coach screen on the mirror wall: all StatusBoard text (replies, rep count, depth meter) appears here ──
+
+        void BuildWallScreen()
+        {
+            const float cy = 2.4f, w = 3.0f, h = 0.9f;
+            float z = Half - 0.22f;
+            Box("Screen bezel", new Vector3(0, cy, z + 0.02f), new Vector3(w + 0.14f, h + 0.14f, 0.05f), Black, 0.6f);
+            Box("Screen glass", new Vector3(0, cy, z), new Vector3(w, h, 0.02f), new Color(0.04f, 0.06f, 0.10f), 0.9f);
+            Box("Screen accent", new Vector3(0, cy + h / 2 - 0.02f, z - 0.012f), new Vector3(w, 0.03f, 0.005f), Teal);
+
+            var board = FindFirstObjectByType<StatusBoard>();
+            if (board != null) board.PinToWall(new Vector3(0, cy - 0.02f, z - 0.02f), 1.8f);
+            else Debug.LogWarning("[Gym] No StatusBoard found; coach text stays head-locked.");
         }
 
         // The user's own stylised body, and the mirror that shows it.
@@ -206,7 +222,7 @@ namespace ABetterU.Coach
         {
             var go = new GameObject("Sign");
             go.transform.SetParent(root, false);
-            go.transform.position = new Vector3(0, 2.75f, Half - 0.1f);
+            go.transform.position = new Vector3(0, 3.02f, Half - 0.1f);   // above the coach screen, under the ceiling
             // TextMesh text is readable when viewed along +Z, which is how the user faces the mirror wall; no rotation needed.
 
             var text = go.AddComponent<TextMesh>();
@@ -214,7 +230,7 @@ namespace ABetterU.Coach
             text.anchor = TextAnchor.MiddleCenter;
             text.alignment = TextAlignment.Center;
             text.fontSize = 120;
-            text.characterSize = 0.05f;
+            text.characterSize = 0.035f;
             text.color = Teal;
             text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             go.GetComponent<MeshRenderer>().sharedMaterial = text.font.material;

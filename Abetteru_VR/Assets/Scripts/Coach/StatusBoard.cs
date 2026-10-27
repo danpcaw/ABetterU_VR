@@ -29,6 +29,15 @@ namespace ABetterU.Coach
             GetComponent<MeshRenderer>().sharedMaterial = font.material;
         }
 
+        /// Detaches the board from the head and fixes it in the world (e.g. on the gym's wall screen).
+        /// TextMesh text reads correctly when viewed along +Z, which is how the user faces the screen.
+        public void PinToWall(Vector3 position, float scale)
+        {
+            transform.SetParent(null, false);
+            transform.SetPositionAndRotation(position, Quaternion.identity);
+            transform.localScale = Vector3.one * scale;
+        }
+
         public void Show(string message)
         {
             if (text != null) text.text = message;
