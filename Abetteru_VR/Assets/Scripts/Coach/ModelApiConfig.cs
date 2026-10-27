@@ -43,6 +43,13 @@ namespace ABetterU.Coach
         public string witStyle = "default";      // default | soft | formal | fast | projected (varies by voice)
         public string witVersion = "20240304";
 
+        // A Better U backend. The anon key is public by design (RLS limits it); the judge password is not,
+        // so it lives only in this git-ignored asset.
+        public string supabaseUrl = "";
+        public string supabaseAnonKey = "";
+        public string judgeEmail = "judgeuser@abetteru.co.uk";
+        public string judgePassword = "";
+
         // Renamed (was systemPrompt) so assets saved with the old, hallucination-prone prompt pick up this one.
         [TextArea(3, 8)]
         public string coachPrompt =

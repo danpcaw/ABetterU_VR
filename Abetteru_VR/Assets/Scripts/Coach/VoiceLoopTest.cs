@@ -12,6 +12,7 @@ namespace ABetterU.Coach
         WitSpeaker tts;
         MetaTranscribeClient asr;
         ModelApiClient spark;
+        SupabaseClient supabase;
         StatusBoard board;
         bool busy;
 
@@ -39,7 +40,20 @@ namespace ABetterU.Coach
 
             string ttsNote = tts.Ready ? "Voice ready (Wit.ai)." : "No voice: paste Wit token\nin ModelApiSecrets.";
             Debug.Log("[VoiceLoop] TTS: " + ttsNote);
-            board.Show($"Hold RIGHT TRIGGER to talk.\nRelease to send.\n\n{ttsNote}");
+
+            // Judge Instant Login: sign in to A Better U (RLS scopes everything to this one user).
+            supabase = new SupabaseClient(config);
+            string loginNote = "Not signed in (Supabase unset).";
+            if (supabase.Configured)
+            {
+                board.Show("Signing in to\nA Better U...");
+                string loginError = null;
+                yield return supabase.SignInJudge(e => loginError = e);
+                if (loginError != null) Debug.LogError("[Supabase] " + loginError);
+                loginNote = loginError == null ? $"Signed in as {supabase.DisplayName ?? "user"}." : "Sign-in failed (see logcat).";
+            }
+            Debug.Log("[Supabase] " + loginNote);
+            board.Show($"Hold RIGHT TRIGGER to talk.\nRelease to send.\n\n{ttsNote}\n{loginNote}");
         }
 
         void Update()
