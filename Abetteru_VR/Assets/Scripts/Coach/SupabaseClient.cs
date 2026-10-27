@@ -61,6 +61,23 @@ namespace ABetterU.Coach
             }
         }
 
+        /// Calls a Postgres function through PostgREST (e.g. search_foods). RLS applies as the signed-in user.
+        public IEnumerator Rpc(string fn, string json, Action<string> ok, Action<string> fail) =>
+            Send($"{config.supabaseUrl}/rest/v1/rpc/{fn}", "POST", json, false, ok, fail);
+
+        /// Inserts one row and returns the stored row, so callers confirm the write really happened.
+        public IEnumerator Insert(string table, string json, Action<string> ok, Action<string> fail) =>
+            Send($"{config.supabaseUrl}/rest/v1/{table}", "POST", json, true, ok, fail);
+
+        IEnumerator Send(string url, string method, string json, bool returnRow, Action<string> ok, Action<string> fail)
+        {
+            using var req = Build(url, method, json, true);
+            if (returnRow) req.SetRequestHeader("Prefer", "return=representation");
+            yield return req.SendWebRequest();
+            if (req.result == UnityWebRequest.Result.Success) ok(req.downloadHandler.text);
+            else fail($"{req.responseCode}: {req.downloadHandler.text}");
+        }
+
         UnityWebRequest Build(string url, string method, string json, bool auth)
         {
             var req = new UnityWebRequest(url, method) { downloadHandler = new DownloadHandlerBuffer() };

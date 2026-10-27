@@ -13,6 +13,7 @@ namespace ABetterU.Coach
         MetaTranscribeClient asr;
         ModelApiClient spark;
         SupabaseClient supabase;
+        CoachAgent agent;
         StatusBoard board;
         bool busy;
 
@@ -53,6 +54,7 @@ namespace ABetterU.Coach
                 loginNote = loginError == null ? $"Signed in as {supabase.DisplayName ?? "user"}." : "Sign-in failed (see logcat).";
             }
             Debug.Log("[Supabase] " + loginNote);
+            agent = new CoachAgent(config, supabase);
             board.Show($"Hold RIGHT TRIGGER to talk.\nRelease to send.\n\n{ttsNote}\n{loginNote}");
         }
 
@@ -110,7 +112,11 @@ namespace ABetterU.Coach
 
             string reply = null;
             float t1 = Time.realtimeSinceStartup;
-            yield return spark.Ask($"Context: no set in progress, no rep data.\nThe user said: \"{heard}\"", r => reply = r, e => error = e);
+            string userTurn = $"Context: no set in progress, no rep data.\nThe user said: \"{heard}\"";
+            if (supabase != null && supabase.SignedIn)
+                yield return agent.Run(userTurn, p => board.Show($"You: {Wrap(heard)}\n\n{Wrap(p)}"), r => reply = r, e => error = e);
+            else
+                yield return spark.Ask(userTurn, r => reply = r, e => error = e);
             float tSpark = Time.realtimeSinceStartup - t1;
 
             if (reply == null) { board.Show("Coach failed:\n" + Wrap(Short(error, 160))); busy = false; yield break; }
