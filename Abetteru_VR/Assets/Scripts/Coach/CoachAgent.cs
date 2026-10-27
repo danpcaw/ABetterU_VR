@@ -250,10 +250,17 @@ namespace ABetterU.Coach
                 ["source"] = "ai_assistant",
             };
 
-            if (servingGrams.TryGetValue(foodId, out double gramsPerServing))
-                row["quantity_g"] = Math.Round(gramsPerServing * servings, 1);
+            // Match what the web app itself writes: grams. With no serving weight on the food (e.g. KFC BBQ Mini Wrap),
+            // the web app stores 100 g per unit, so do the same and the diary shows calories without an Edit + Save.
+            double gramsPerUnit = servingGrams.TryGetValue(foodId, out double g) ? g : 100.0;
+            row["quantity_g"] = Math.Round(gramsPerUnit * servings, 1);
 
-            string raw = null, err = null;
+            // Order within the meal: after whatever is already there.
+            string raw = null, err = null, sameMeal = null;
+            yield return supabase.Get($"food_log_entries?select=id&log_date=eq.{row["log_date"]}&meal_slot=eq.{meal}", r => sameMeal = r, e => err = e);
+            if (err == null && sameMeal != null) row["position"] = JArray.Parse(sameMeal).Count;
+            err = null;
+
             yield return supabase.Insert("food_log_entries", row.ToString(Newtonsoft.Json.Formatting.None), r => raw = r, e => err = e);
             if (err != null) { done(Fail(err)); yield break; }
 
