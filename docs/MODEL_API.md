@@ -98,3 +98,10 @@ git-ignored `ModelApiSecrets` asset for builds.
 - `POST https://api.wit.ai/synthesize?v=20240304`, `Authorization: Bearer`, JSON `{"q","voice","style"}`,
   `Accept: audio/raw` (24 kHz 16-bit mono PCM) or `audio/wav`. First byte ~0.7 s, a short sentence ~1.3-1.7 s total.
 - Client splits replies into sentences, fetches them in parallel and plays in order.
+
+## Tool calling round trip (verified Oct 27)
+
+1. POST `/v1/responses` with `tools:[{type:"function",name,description,parameters}]`.
+2. `output[]` may hold a `message` with `phase:"commentary"` (a short spoken filler such as "Logging your breakfast, one sec.") plus a `function_call` item `{call_id,name,arguments(JSON string)}`.
+3. Run the tool, then POST again with `input` = original input + the `function_call` item (`type,call_id,name,arguments`) + `{type:"function_call_output",call_id,output:"<JSON string>"}`.
+4. The final `message` item is the reply. Same `minimal` effort and 800-token cap work.
