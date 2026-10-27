@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -5,12 +6,12 @@ using UnityEngine.SceneManagement;
 
 namespace ABetterU.Coach
 {
-    /// The app's front door: the retreat environment with a two-column login (Judge Instant Login, or your own
-    /// account typed on an on-screen keyboard), a hub, then the gym. Also owns the in-gym menu (left Menu button).
-    /// VoiceLoopTest waits for Stage.Gym before it builds the gym and starts the coach.
+    /// The app's front door and its screens: login, Home (four destinations), My World (live data), My Experiences
+    /// (the way into the virtual gym), all inside the sunset retreat, with one persistent voice assistant bar.
+    /// Also owns the in-gym menu (left Menu button). VoiceLoopTest builds the gym when this enters Stage.Gym.
     public class AppFlow : MonoBehaviour
     {
-        public enum Stage { Login, Hub, Gym }
+        public enum Stage { Login, Home, MyWorld, Experiences, Gym }
         public Stage Current { get; private set; } = Stage.Login;
 
         /// True while the in-gym menu is open, so the right trigger clicks menu buttons instead of starting the mic.
@@ -21,11 +22,16 @@ namespace ABetterU.Coach
 
         static readonly Color Navy = new Color(0.04f, 0.06f, 0.10f);
         static readonly Color Teal = new Color(0.45f, 0.92f, 0.86f);
+        static readonly Color Amber = new Color(1.0f, 0.76f, 0.30f);
 
         SupabaseClient supabase;
         StatusBoard board;
+        VoiceLoopTest voice;
         VRPointer pointer;
         RetreatEnvironment retreat;
+        AssistantBar assistant;
+        readonly DashboardData data = new DashboardData();
+        bool refreshing, refreshAgain;
 
         Transform screen;                // the current screen; replaced as the stage changes
         Transform keyboardRoot;          // the on-screen keyboard (login only)
@@ -36,6 +42,14 @@ namespace ABetterU.Coach
 
         string email = "", password = "";
         bool editingPassword, showPassword, shift, busy;
+
+        /// Connects the voice loop so the assistant bar can mirror it and saved actions can refresh the dashboards.
+        public void Bind(VoiceLoopTest v)
+        {
+            voice = v;
+            v.OnAssistant += (state, headline, detail) => { if (assistant != null) assistant.Set(state, headline, detail); };
+            v.OnSaved += _ => StartCoroutine(RefreshData());
+        }
 
         public void Init(SupabaseClient supabase, StatusBoard board)
         {
@@ -63,7 +77,7 @@ namespace ABetterU.Coach
             pointer = gameObject.AddComponent<VRPointer>();
             pointer.Init(cam != null ? cam.transform : transform);
 
-            if (supabase.SignedIn) ShowHub(); else ShowLogin();    // already signed in: we came back from the gym menu
+            if (supabase.SignedIn) ShowHome(); else ShowLogin();    // already signed in: we came back from the gym menu
         }
 
         /// True while the pointer is resting on a button, so voice capture can ignore the trigger.
@@ -86,6 +100,7 @@ namespace ABetterU.Coach
         void ShowLogin()
         {
             Current = Stage.Login;
+            if (assistant != null) { Destroy(assistant.gameObject); assistant = null; }
             var p = NewRoot(new Vector3(0f, 1.55f, 2.6f));
 
             VRGlass.Panel(p, "Backdrop", new Vector3(0, 0, 0.04f), new Vector2(3.6f, 2.1f), 0.10f, GlassStyle.Panel, 0);
@@ -227,7 +242,7 @@ namespace ABetterU.Coach
             }
             Debug.Log($"[Login] signed in as {supabase.DisplayName ?? "user"} ({(judge ? "judge" : "own account")})");
             password = "";                      // do not keep the typed password around
-            ShowHub();
+            ShowHome();
         }
 
         void Say(string message)
@@ -235,21 +250,302 @@ namespace ABetterU.Coach
             if (statusLabel != null) statusLabel.text = message;
         }
 
-        // ── Hub (placeholder until the home dashboard milestone): a welcome and the door into the gym ──────
+        // ── Data: loaded after sign-in and again after every confirmed save ─────────────────────────────
 
-        void ShowHub()
+        IEnumerator RefreshData()
         {
-            Current = Stage.Hub;
-            var p = NewRoot(new Vector3(0f, 1.5f, 2.4f));
-
-            VRGlass.Panel(p, "Hub panel", new Vector3(0, 0, 0.03f), new Vector2(2.1f, 1.4f), 0.07f, GlassStyle.Panel, 0);
-            VRGlass.Label(p, "Welcome,", new Vector3(0, 0.45f, -0.02f), 0.012f, VRUi.Muted);
-            VRGlass.Label(p, supabase.DisplayName ?? "athlete", new Vector3(0, 0.30f, -0.02f), 0.024f, VRUi.Ink);
-            VRGlass.Label(p, "You are signed in to your A Better U account.\nYour voice coach is ready.", new Vector3(0, 0.08f, -0.02f), 0.0082f, VRUi.Muted);
-
-            VRGlass.Button(p, "Enter the gym", new Vector3(0, -0.20f, -0.02f), new Vector2(1.5f, 0.2f), GlassStyle.Primary, 0.012f, EnterGym);
-            VRGlass.Button(p, "Switch account", new Vector3(0, -0.46f, -0.02f), new Vector2(0.9f, 0.14f), GlassStyle.Secondary, 0.0085f, SwitchAccount);
+            if (refreshing) { refreshAgain = true; yield break; }
+            refreshing = true;
+            do
+            {
+                refreshAgain = false;
+                yield return data.Refresh(supabase, null);
+            }
+            while (refreshAgain);
+            refreshing = false;
+            Rerender();
         }
+
+        // Redraws the current screen with the freshest numbers (without starting another refresh).
+        void Rerender()
+        {
+            switch (Current)
+            {
+                case Stage.Home: BuildHome(); break;
+                case Stage.MyWorld: BuildMyWorld(); break;
+                case Stage.Experiences: BuildExperiences(); break;
+            }
+        }
+
+        string DisplayName => !string.IsNullOrEmpty(data.Name) ? data.Name : (supabase.DisplayName ?? "there");
+
+        // ── Assistant bar: one persistent control under the dashboards ──────────────────────────────────
+
+        void EnsureAssistant()
+        {
+            if (assistant != null) return;
+            assistant = AssistantBar.Create(new Vector3(0f, 0.62f, 2.15f), Quaternion.Euler(14f, 0f, 0f));
+        }
+
+        // ── Home: greeting, today's summary and four destinations ───────────────────────────────────────
+
+        void ShowHome()
+        {
+            Current = Stage.Home;
+            EnsureAssistant();
+            BuildHome();
+            StartCoroutine(RefreshData());
+        }
+
+        void BuildHome()
+        {
+            var p = NewRoot(new Vector3(0f, 1.55f, 2.5f));
+
+            var logo = Resources.Load<Texture2D>("Branding/logo");
+            if (logo != null) VRGlass.Image(p, "Logo", logo, new Vector3(0f, 1.05f, -0.01f), new Vector2(1.35f, 0.45f));
+            VRGlass.Label(p, Greeting() + ", " + DisplayName, new Vector3(0f, 0.72f, -0.02f), 0.0145f, VRUi.Ink);
+
+            string summary = SummaryLine();
+            VRGlass.Label(p, summary, new Vector3(0f, 0.58f, -0.02f), 0.0082f, VRUi.Muted);
+
+            DestinationCard(p, -1.5f, "My World", "Your personal information and daily activity.", VRArt.IconKind.Person,
+                GlassStyle.Secondary, Teal, ShowMyWorld, "Open");
+            DestinationCard(p, -0.5f, "My Community", "Friends, social posts, groups and connections.", VRArt.IconKind.Group,
+                GlassStyle.Disabled, VRUi.Muted, null, "Coming soon");
+            DestinationCard(p, 0.5f, "My Experiences", "Interactive activities and virtual spaces.", VRArt.IconKind.Dumbbell,
+                GlassStyle.Amber, Amber, ShowExperiences, "Open");
+            DestinationCard(p, 1.5f, "Discover", "Explore people, services and events.", VRArt.IconKind.Compass,
+                GlassStyle.Disabled, VRUi.Muted, null, "Coming soon");
+
+            VRGlass.Button(p, "Switch account", new Vector3(1.55f, 0.95f, -0.02f), new Vector2(0.62f, 0.12f), GlassStyle.Secondary, 0.0072f, SwitchAccount, 0.04f);
+        }
+
+        // One destination card, placed on a gentle arc around the user and turned to face them.
+        void DestinationCard(Transform p, float x, string title, string subtitle, VRArt.IconKind icon, GlassStyle style, Color accent, Action onClick, string tag)
+        {
+            const float radius = 2.5f;
+            float a = Mathf.Asin(Mathf.Clamp(x / radius, -0.95f, 0.95f));
+            var g = new GameObject("Card: " + title).transform;
+            g.SetParent(p, false);
+            g.localPosition = new Vector3(radius * Mathf.Sin(a), -0.05f, radius * (Mathf.Cos(a) - 1f));
+            g.localRotation = Quaternion.Euler(0f, a * Mathf.Rad2Deg, 0f);
+
+            bool off = style == GlassStyle.Disabled;
+            VRGlass.Button(g, "", Vector3.zero, new Vector2(0.92f, 1.0f), style, 0.01f, onClick, 0.06f);
+            VRGlass.Icon(g, icon, off ? VRUi.Muted : accent, new Vector3(0f, 0.27f, -0.02f), 0.30f);
+            VRGlass.Label(g, title, new Vector3(0f, 0.02f, -0.02f), 0.0125f, off ? VRUi.Muted : VRUi.Ink);
+            VRGlass.Label(g, VRUi.Wrap(subtitle, 22, 3), new Vector3(0f, -0.20f, -0.02f), 0.0072f, VRUi.Muted);
+            if (tag != null) VRGlass.Label(g, tag, new Vector3(0f, -0.42f, -0.02f), 0.0078f, off ? VRUi.Muted : accent);
+        }
+
+        string Greeting()
+        {
+            int h = DateTime.Now.Hour;
+            return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+        }
+
+        string SummaryLine()
+        {
+            if (!data.Loaded) return data.Loading || supabase.SignedIn ? "Loading your day..." : "";
+            var parts = new List<string>
+            {
+                data.MealsToday > 0 ? $"{data.Kcal:N0} kcal today" : "No meals logged today",
+                data.WorkoutsThisWeek > 0 ? $"{data.WorkoutsThisWeek} workout{(data.WorkoutsThisWeek == 1 ? "" : "s")} this week" : "No workouts this week",
+            };
+            if (data.Injuries.Count > 0)
+            {
+                var n = data.Injuries[0];
+                parts.Add($"{Describe(n)} noted");
+            }
+            string line = string.Join("   ·   ", parts);
+            return data.HadError ? line + "\n(some details could not be loaded)" : line;
+        }
+
+        static string Describe(DashboardData.InjuryNote n) =>
+            Capitalise((string.IsNullOrEmpty(n.Side) ? "" : n.Side + " ") + n.Area);
+
+        static string Capitalise(string s) => string.IsNullOrEmpty(s) ? "" : char.ToUpper(s[0]) + s.Substring(1);
+
+        // ── My World: profile, nutrition, activity and wellbeing notes, all from the real account ───────
+
+        void ShowMyWorld()
+        {
+            Current = Stage.MyWorld;
+            EnsureAssistant();
+            BuildMyWorld();
+            StartCoroutine(RefreshData());
+        }
+
+        void BuildMyWorld()
+        {
+            var p = NewRoot(new Vector3(0f, 1.62f, 2.8f));
+
+            // Navigation rail
+            VRGlass.Panel(p, "Rail", new Vector3(-1.85f, 0.15f, 0.03f), new Vector2(0.78f, 1.9f), 0.06f, GlassStyle.Panel, 0);
+            RailButton(p, "Home", 0.70f, GlassStyle.Secondary, ShowHome);
+            RailButton(p, "My World", 0.53f, GlassStyle.Primary, null);
+            RailButton(p, "My Community", 0.36f, GlassStyle.Disabled, null);
+            RailButton(p, "My Experiences", 0.19f, GlassStyle.Secondary, ShowExperiences);
+            RailButton(p, "Discover", 0.02f, GlassStyle.Disabled, null);
+            RailButton(p, "Switch account", -0.62f, GlassStyle.Secondary, SwitchAccount);
+
+            VRGlass.Label(p, "My World", new Vector3(-1.4f, 1.02f, -0.02f), 0.02f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+            VRGlass.Label(p, "Your wellbeing, connected.", new Vector3(-1.4f, 0.88f, -0.02f), 0.0085f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+
+            // Row 1: profile and weight
+            var profile = Card(p, new Vector3(-0.40f, 0.52f, 0f), new Vector2(2.0f, 0.5f));
+            VRGlass.Image(profile, "Avatar", VRArt.Orb(new Color(0.20f, 0.75f, 0.80f), new Color(0.20f, 0.75f, 0.80f)), new Vector3(-0.82f, 0f, -0.01f), new Vector2(0.36f, 0.36f), 3);
+            VRGlass.Label(profile, Initial(DisplayName), new Vector3(-0.82f, 0f, -0.02f), 0.014f, VRUi.Ink);
+            VRGlass.Label(profile, DisplayName, new Vector3(-0.55f, 0.07f, -0.02f), 0.0145f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+            VRGlass.Label(profile, "A Better U account", new Vector3(-0.55f, -0.09f, -0.02f), 0.0078f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+
+            var weight = Card(p, new Vector3(1.05f, 0.52f, 0f), new Vector2(0.8f, 0.5f));
+            VRGlass.Label(weight, "Weight", new Vector3(0f, 0.13f, -0.02f), 0.0085f, VRUi.Muted);
+            VRGlass.Label(weight, data.WeightKg.HasValue ? $"{data.WeightKg.Value:0.#} kg" : (data.Loaded ? "Not logged" : "..."), new Vector3(0f, -0.04f, -0.02f), 0.0155f, VRUi.Ink);
+
+            // Row 2: nutrition, activity, wellbeing notes
+            BuildNutritionCard(Card(p, new Vector3(-0.875f, -0.25f, 0f), new Vector2(1.05f, 0.95f)));
+            BuildActivityCard(Card(p, new Vector3(0.15f, -0.25f, 0f), new Vector2(0.9f, 0.95f)));
+            BuildWellbeingCard(Card(p, new Vector3(1.075f, -0.25f, 0f), new Vector2(0.85f, 0.95f)));
+        }
+
+        void RailButton(Transform p, string text, float y, GlassStyle style, Action onClick) =>
+            VRGlass.Button(p, text, new Vector3(-1.85f, y, -0.02f), new Vector2(0.66f, 0.13f), style, 0.0075f, onClick, 0.04f);
+
+        static Transform Card(Transform p, Vector3 pos, Vector2 size)
+        {
+            var g = new GameObject("Card").transform;
+            g.SetParent(p, false);
+            g.localPosition = pos;
+            VRGlass.Panel(g, "Card panel", new Vector3(0, 0, 0.02f), size, 0.05f, GlassStyle.Card, 1);
+            return g;
+        }
+
+        static string Initial(string s) => string.IsNullOrEmpty(s) ? "?" : s.Substring(0, 1).ToUpper();
+
+        void CardTitle(Transform c, VRArt.IconKind icon, Color color, string title, float y)
+        {
+            VRGlass.Icon(c, icon, color, new Vector3(-0.36f, y, -0.02f), 0.14f);
+            VRGlass.Label(c, title, new Vector3(-0.25f, y, -0.02f), 0.0105f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+        }
+
+        void BuildNutritionCard(Transform c)
+        {
+            CardTitle(c, VRArt.IconKind.Apple, new Color(0.40f, 0.95f, 0.70f), "Today's Nutrition", 0.37f);
+
+            if (!data.Loaded) { VRGlass.Label(c, "Loading...", new Vector3(0, 0.1f, -0.02f), 0.009f, VRUi.Muted); return; }
+            if (data.MealsToday == 0)
+            {
+                VRGlass.Label(c, "Nothing logged today", new Vector3(0, 0.12f, -0.02f), 0.0095f, VRUi.Ink);
+                VRGlass.Label(c, "Tell your coach what you ate\nand it will appear here.", new Vector3(0, -0.02f, -0.02f), 0.0072f, VRUi.Muted);
+                return;
+            }
+
+            VRGlass.Label(c, $"{data.Kcal:N0}", new Vector3(0, 0.21f, -0.02f), 0.024f, VRUi.Ink);
+            bool goal = data.CalorieGoal.HasValue && data.CalorieGoal.Value > 0;
+            VRGlass.Label(c, goal ? $"of {data.CalorieGoal.Value:N0} kcal" : "kcal today", new Vector3(0, 0.10f, -0.02f), 0.0082f, VRUi.Muted);
+            if (goal) VRGlass.Bar(c, new Vector3(0, 0.02f, -0.02f), 0.88f, 0.045f, (float)(data.Kcal / data.CalorieGoal.Value));
+
+            MacroRow(c, "Protein", data.Protein, -0.09f);
+            MacroRow(c, "Carbs", data.Carbs, -0.18f);
+            MacroRow(c, "Fat", data.Fat, -0.27f);
+
+            if (!string.IsNullOrEmpty(data.LatestMeal))
+                VRGlass.Label(c, VRUi.Wrap(data.LatestMeal, 30, 1), new Vector3(0, -0.37f, -0.02f), 0.0082f, VRUi.Ink);
+            VRGlass.Label(c, "Full diary on the web and phone app", new Vector3(0, -0.44f, -0.02f), 0.0058f, VRUi.Muted);
+        }
+
+        static void MacroRow(Transform c, string name, double grams, float y)
+        {
+            VRGlass.Label(c, name, new Vector3(-0.40f, y, -0.02f), 0.0082f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+            VRGlass.Label(c, $"{grams:0} g", new Vector3(0.40f, y, -0.02f), 0.0085f, VRUi.Ink, TextAnchor.MiddleRight, TextAlignment.Right);
+        }
+
+        void BuildActivityCard(Transform c)
+        {
+            CardTitle(c, VRArt.IconKind.Dumbbell, new Color(0.45f, 0.75f, 1.0f), "Today's Activity", 0.37f);
+
+            if (!data.Loaded) { VRGlass.Label(c, "Loading...", new Vector3(0, 0.1f, -0.02f), 0.009f, VRUi.Muted); return; }
+            if (data.WorkoutsThisWeek == 0)
+            {
+                VRGlass.Label(c, "No workouts this week", new Vector3(0, 0.12f, -0.02f), 0.0095f, VRUi.Ink);
+                VRGlass.Label(c, "Start one from My Experiences.", new Vector3(0, -0.02f, -0.02f), 0.0072f, VRUi.Muted);
+                return;
+            }
+
+            VRGlass.Label(c, data.WorkoutsThisWeek.ToString(), new Vector3(0, 0.21f, -0.02f), 0.024f, VRUi.Ink);
+            VRGlass.Label(c, data.WorkoutsThisWeek == 1 ? "workout this week" : "workouts this week", new Vector3(0, 0.10f, -0.02f), 0.0082f, VRUi.Muted);
+
+            VRGlass.Label(c, "Latest", new Vector3(-0.38f, -0.06f, -0.02f), 0.0075f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+            VRGlass.Label(c, VRUi.Wrap(data.LatestWorkout ?? "", 24, 2), new Vector3(-0.38f, -0.2f, -0.02f), 0.0088f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+            if (!string.IsNullOrEmpty(data.LatestWorkoutWhen))
+                VRGlass.Label(c, data.LatestWorkoutWhen, new Vector3(-0.38f, -0.33f, -0.02f), 0.0075f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+            VRGlass.Label(c, "Saved to your profile", new Vector3(0, -0.44f, -0.02f), 0.0062f, VRUi.Muted);
+        }
+
+        void BuildWellbeingCard(Transform c)
+        {
+            CardTitle(c, VRArt.IconKind.Heart, new Color(1.0f, 0.50f, 0.60f), "Wellbeing Notes", 0.37f);
+
+            if (!data.Loaded) { VRGlass.Label(c, "Loading...", new Vector3(0, 0.1f, -0.02f), 0.009f, VRUi.Muted); return; }
+            if (data.Injuries.Count == 0)
+            {
+                VRGlass.Label(c, "No notes right now", new Vector3(0, 0.12f, -0.02f), 0.0095f, VRUi.Ink);
+                VRGlass.Label(c, "Tell your coach if something\nhurts and it will be kept here.", new Vector3(0, -0.02f, -0.02f), 0.0072f, VRUi.Muted);
+                return;
+            }
+
+            float y = 0.20f;
+            for (int i = 0; i < Mathf.Min(3, data.Injuries.Count); i++)
+            {
+                var n = data.Injuries[i];
+                VRGlass.Label(c, Describe(n), new Vector3(-0.36f, y, -0.02f), 0.0105f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+                string sub = string.IsNullOrEmpty(n.Reported) ? "Reported" : "Reported " + n.Reported.ToLower();
+                VRGlass.Label(c, sub, new Vector3(-0.36f, y - 0.075f, -0.02f), 0.0075f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+                y -= 0.20f;
+            }
+            VRGlass.Label(c, "Used to shape your workouts", new Vector3(0, -0.44f, -0.02f), 0.0062f, VRUi.Muted);
+        }
+
+        // ── My Experiences: the way into the virtual gym ────────────────────────────────────────────────
+
+        void ShowExperiences()
+        {
+            Current = Stage.Experiences;
+            EnsureAssistant();
+            BuildExperiences();
+            StartCoroutine(RefreshData());
+        }
+
+        void BuildExperiences()
+        {
+            var p = NewRoot(new Vector3(0f, 1.6f, 2.6f));
+
+            VRGlass.Panel(p, "Panel", new Vector3(0, 0, 0.04f), new Vector2(3.4f, 1.7f), 0.08f, GlassStyle.Panel, 0);
+            VRGlass.Label(p, "My Experiences", new Vector3(-1.5f, 0.68f, -0.02f), 0.02f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+            VRGlass.Label(p, "Interactive activities and virtual spaces.", new Vector3(-1.5f, 0.54f, -0.02f), 0.0085f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+            VRGlass.Button(p, "Home", new Vector3(1.38f, 0.66f, -0.02f), new Vector2(0.5f, 0.14f), GlassStyle.Secondary, 0.0085f, ShowHome, 0.04f);
+
+            // The Virtual Gym card
+            var g = new GameObject("Virtual Gym card").transform;
+            g.SetParent(p, false);
+            g.localPosition = new Vector3(0f, -0.1f, 0f);
+            VRGlass.Panel(g, "Card panel", new Vector3(0, 0, 0.02f), new Vector2(3.1f, 1.05f), 0.06f, GlassStyle.Amber, 1);
+            VRGlass.Icon(g, VRArt.IconKind.Dumbbell, Amber, new Vector3(-1.32f, 0.17f, -0.02f), 0.36f);
+            VRGlass.Label(g, "Virtual Gym", new Vector3(-1.05f, 0.30f, -0.02f), 0.0155f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+            VRGlass.Label(g, "A guided squat session. Calibrate, then the headset counts your reps\nand the set is saved to your A Better U profile.",
+                new Vector3(-1.05f, 0.10f, -0.02f), 0.0082f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+
+            string tip = data.Injuries.Count > 0
+                ? $"You noted: {Describe(data.Injuries[0])}. Ask your coach to build a workout around it."
+                : "Ask your coach to build a workout, or just start a set.";
+            VRGlass.Label(g, tip, new Vector3(-1.05f, -0.12f, -0.02f), 0.0082f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+            VRGlass.Label(g, "Left trigger starts and ends a set  ·  the coach saves it for you", new Vector3(-1.05f, -0.26f, -0.02f), 0.0072f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+
+            VRGlass.Button(g, "Start Virtual Gym", new Vector3(1.05f, -0.0f, -0.02f), new Vector2(0.85f, 0.2f), GlassStyle.Primary, 0.0095f, EnterGym, 0.05f);
+        }
+
+        // ── Moving on ───────────────────────────────────────────────────────────────────────────────────
 
         void SwitchAccount()
         {
@@ -263,9 +559,11 @@ namespace ABetterU.Coach
             Destroy(pointer);
             CloseKeyboard();
             if (screen != null) Destroy(screen.gameObject);
+            if (assistant != null) { Destroy(assistant.gameObject); assistant = null; }
             if (retreat != null) { retreat.Teardown(); Destroy(retreat); }
             board.SetVisible(true);
             Current = Stage.Gym;
+            voice.EnterGym();
         }
 
         // ── In-gym menu: the left Menu button opens it ──────────────────────────────────────────────────

@@ -1,11 +1,14 @@
+using System;
 using System.Collections;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 
 namespace ABetterU.Coach
 {
-    /// Hold the RIGHT trigger (or A) to talk, release to send:
-    /// mic -> Muse Voice Transcribe -> Muse Spark -> text on a head-locked board.
-    /// Add to any GameObject in the scene (e.g. an empty "VoiceLoop"). It adds the MicRecorder itself.
+    /// The coach's voice loop. Hold the RIGHT trigger (or A) to talk, release to send:
+    /// mic -> Muse Voice Transcribe -> Muse Spark agent (tools on the real A Better U account) -> Wit.ai voice.
+    /// It works on the dashboard screens and in the gym. In the gym the LEFT trigger also starts and ends a squat set.
+    /// Add to any GameObject in the scene (the "VoiceLoop" object). It adds the other components it needs.
     public class VoiceLoopTest : MonoBehaviour
     {
         MicRecorder mic;
@@ -15,10 +18,20 @@ namespace ABetterU.Coach
         SupabaseClient supabase;
         CoachAgent agent;
         StatusBoard board;
-        bool busy;
-
-        bool inGym;                       // false until the user has logged in and entered the gym
         AppFlow flow;
+        RepCounter reps;
+
+        bool busy, inSet;
+        int lastShownReps = -1;
+        float nextMeter;
+
+        /// The dashboard's assistant bar subscribes to this. (state, headline, detail)
+        public Action<AssistantState, string, string> OnAssistant;
+        /// Raised with a short confirmation after the backend confirmed a write (food, injury note, set).
+        public Action<string> OnSaved;
+
+        string lastSaved;                 // confirmation text for the turn in progress
+        float readyAt;                    // when to return the assistant to "Ready" after Done or Error
 
         IEnumerator Start()
         {
@@ -41,62 +54,80 @@ namespace ABetterU.Coach
 
             board.Show("Allow the microphone\nwhen asked...");
             yield return mic.EnsurePermission();
+            Debug.Log("[VoiceLoop] TTS: " + (tts.Ready ? "Voice ready (Wit.ai)." : "No Wit token"));
 
-            string ttsNote = tts.Ready ? "Voice ready (Wit.ai)." : "No voice: paste Wit token\nin ModelApiSecrets.";
-            Debug.Log("[VoiceLoop] TTS: " + ttsNote);
-
-            // Front door: the lobby with Judge Instant Login or your own account, then the hub, then "Enter the gym".
-            // RLS scopes everything the agent does to whichever user signs in.
-            supabase = AppFlow.Session ?? (AppFlow.Session = new SupabaseClient(config));   // survives "Back to hub" scene reloads
-            flow = gameObject.AddComponent<AppFlow>();
-            flow.Init(supabase, board);
-            while (flow.Current != AppFlow.Stage.Gym) yield return null;
-
-            string loginNote = $"Signed in as {supabase.DisplayName ?? "user"}.";
-            Debug.Log("[Supabase] " + loginNote);
-
-            gameObject.AddComponent<GymRoom>();   // the virtual gym, built from primitives
+            // The signed-in session survives "Back to hub" scene reloads; the agent works for whichever user signs in.
+            supabase = AppFlow.Session ?? (AppFlow.Session = new SupabaseClient(config));
             agent = new CoachAgent(config, supabase);
+            agent.ToolSucceeded += OnToolSucceeded;
+
+            flow = gameObject.AddComponent<AppFlow>();
+            flow.Bind(this);
+            flow.Init(supabase, board);
+        }
+
+        /// Called by AppFlow when the user enters the gym: build the room and the squat counter.
+        public void EnterGym()
+        {
+            gameObject.AddComponent<GymRoom>();   // the virtual gym, built from primitives
 
             // Squat counter: the headset's height is the only body signal the Quest gives us.
             reps = gameObject.AddComponent<RepCounter>();
             reps.head = Camera.main != null ? Camera.main.transform : transform;
 
-            board.Show($"Hold RIGHT TRIGGER to talk.\nPress LEFT TRIGGER\nto start a squat set.\nLeft MENU button: menu.\n\n{ttsNote}\n{loginNote}");
-            inGym = true;
+            board.Show($"Hold RIGHT TRIGGER to talk.\nPress LEFT TRIGGER\nto start a squat set.\nLeft MENU button: menu.\n\nSigned in as {supabase.DisplayName ?? "user"}.");
         }
-
-        RepCounter reps;
-        bool inSet;
-        int lastShownReps = -1;
 
         void Update()
         {
-            if (mic == null || !inGym) return;
-            if (flow != null && flow.MenuOpen) return;   // the right trigger is clicking menu buttons, not recording
+            if (mic == null || flow == null) return;
+            var stage = flow.Current;
+            if (stage == AppFlow.Stage.Login) return;           // nothing to talk to until someone is signed in
+            if (flow.MenuOpen) return;                          // the trigger is clicking menu buttons, not recording
+            bool inGym = stage == AppFlow.Stage.Gym;
 
-            // The left trigger starts a squat set, and ends it.
-            if (SetTogglePressed() && !busy)
+            if (inGym)
             {
-                StartCoroutine(inSet ? EndSet() : BeginSet());
-                return;
-            }
-            if (inSet)
-            {
-                if (Time.unscaledTime >= nextMeter)
+                // The left trigger starts a squat set, and ends it.
+                if (SetTogglePressed() && !busy)
                 {
-                    nextMeter = Time.unscaledTime + 0.1f;
-                    lastShownReps = reps.RepCount;
-                    // Depth meter: the bar fills toward the "down" line (| marks it); % is how far below standing you are.
-                    float pct = Mathf.Max(0f, reps.CurrentDrop);
-                    int bars = Mathf.Clamp(Mathf.RoundToInt(pct / reps.downFraction * 10f), 0, 14);
-                    board.Show($"SQUAT SET\n\nReps: {lastShownReps}\n[{new string('#', Mathf.Min(bars, 10))}{new string('.', Mathf.Max(0, 10 - bars))}]{(bars >= 10 ? " DEEP" : "")}\ndepth {pct * 100f:0}% (need {reps.downFraction * 100f:0}%)\n\nPress LEFT TRIGGER\nwhen done.");
+                    StartCoroutine(inSet ? EndSet() : BeginSet());
+                    return;
                 }
-                return;
+                if (inSet)
+                {
+                    if (Time.unscaledTime >= nextMeter)
+                    {
+                        nextMeter = Time.unscaledTime + 0.1f;
+                        lastShownReps = reps.RepCount;
+                        // Depth meter: the bar fills toward the "down" line; % is how far below standing you are.
+                        float pct = Mathf.Max(0f, reps.CurrentDrop);
+                        int bars = Mathf.Clamp(Mathf.RoundToInt(pct / reps.downFraction * 10f), 0, 14);
+                        board.Show($"SQUAT SET\n\nReps: {lastShownReps}\n[{new string('#', Mathf.Min(bars, 10))}{new string('.', Mathf.Max(0, 10 - bars))}]{(bars >= 10 ? " DEEP" : "")}\ndepth {pct * 100f:0}% (need {reps.downFraction * 100f:0}%)\n\nPress LEFT TRIGGER\nwhen done.");
+                    }
+                    return;
+                }
             }
             if (busy) return;
 
-            if (PressedDown()) { if (mic.StartRecording()) board.Show("Listening..."); }
+            // After a confirmation or an error, the assistant goes back to "Ready" by itself.
+            if (readyAt > 0f && Time.unscaledTime >= readyAt && !mic.IsRecording)
+            {
+                readyAt = 0f;
+                Report(AssistantState.Ready, "Ask A Better U", "Hold right trigger to speak");
+            }
+
+            if (PressedDown())
+            {
+                // On the dashboard a trigger pull while the laser is on a button is a click, never a recording.
+                if (!inGym && flow.PointerOverButton) { /* the pointer handles the click */ }
+                else if (mic.StartRecording())
+                {
+                    readyAt = 0f;
+                    board.Show("Listening...");
+                    Report(AssistantState.Listening, "Listening...", "Release the trigger to send");
+                }
+            }
             else if (ReleasedUp() && mic.IsRecording) StartCoroutine(Turn(mic.StopRecording()));
             else if (mic.IsRecording && Time.unscaledTime >= nextMeter)
             {
@@ -107,7 +138,7 @@ namespace ABetterU.Coach
             }
         }
 
-        float nextMeter;
+        void Report(AssistantState state, string headline, string detail) => OnAssistant?.Invoke(state, headline, detail);
 
         // The left trigger starts/ends a set. Left X/Y are kept as a fallback, but on our Quest build they never arrive
         // (verified Oct 27), so the on-screen text only mentions the trigger. Each press is logged for diagnosis.
@@ -167,15 +198,22 @@ namespace ABetterU.Coach
 
         IEnumerator Turn(byte[] wav)
         {
-            if (wav == null) { board.Show("Too short, try again.\nHold trigger while talking."); yield break; }
+            if (wav == null)
+            {
+                board.Show("Too short, try again.\nHold trigger while talking.");
+                Report(AssistantState.Ready, "Ask A Better U", "That was too short. Hold the trigger while you talk.");
+                yield break;
+            }
 
             busy = true;
+            lastSaved = null;
             float t0 = Time.realtimeSinceStartup;
             board.Show("Transcribing...");
+            Report(AssistantState.Processing, "Transcribing...", "");
 
             // Debug aid: keep the last recording so it can be pulled with adb and replayed with curl.
             try { System.IO.File.WriteAllBytes(System.IO.Path.Combine(Application.persistentDataPath, "last.wav"), wav); }
-            catch (System.Exception ex) { Debug.LogWarning("[VoiceLoop] Could not save last.wav: " + ex.Message); }
+            catch (Exception ex) { Debug.LogWarning("[VoiceLoop] Could not save last.wav: " + ex.Message); }
 
             string heard = null, error = null;
             yield return asr.Transcribe(wav, t => heard = t, e => error = e);
@@ -185,47 +223,106 @@ namespace ABetterU.Coach
             {
                 Debug.LogError("[VoiceLoop] FULL ERROR: " + error);
                 board.Show("Transcribe failed:\n" + Wrap(Short(error, 160)));
+                Report(AssistantState.Error, "I couldn't hear that", "Hold right trigger and try again.");
+                readyAt = Time.unscaledTime + 7f;
                 busy = false;
                 yield break;
             }
-            if (string.IsNullOrWhiteSpace(heard)) { board.Show("Didn't catch that.\nTry again."); busy = false; yield break; }
+            if (string.IsNullOrWhiteSpace(heard))
+            {
+                board.Show("Didn't catch that.\nTry again.");
+                Report(AssistantState.Error, "I didn't catch that", "Hold right trigger and try again.");
+                readyAt = Time.unscaledTime + 6f;
+                busy = false;
+                yield break;
+            }
 
             board.Show($"You: {Wrap(heard)}\n\nThinking...");
+            Report(AssistantState.Processing, $"You said: \"{heard}\"", "Working on it...");
 
             string reply = null;
             float t1 = Time.realtimeSinceStartup;
             string userTurn = $"Context: no set in progress, no rep data.\nThe user said: \"{heard}\"";
             if (supabase != null && supabase.SignedIn)
-                yield return agent.Run(userTurn, p => board.Show($"You: {Wrap(heard)}\n\n{Wrap(p)}"), r => reply = r, e => error = e);
+                yield return agent.Run(userTurn, p =>
+                {
+                    board.Show($"You: {Wrap(heard)}\n\n{Wrap(p)}");
+                    Report(AssistantState.Processing, $"You said: \"{heard}\"", Friendly(p));
+                }, r => reply = r, e => error = e);
             else
                 yield return spark.Ask(userTurn, r => reply = r, e => error = e);
             float tSpark = Time.realtimeSinceStartup - t1;
 
-            if (reply == null) { board.Show("Coach failed:\n" + Wrap(Short(error, 160))); busy = false; yield break; }
+            if (reply == null)
+            {
+                board.Show("Coach failed:\n" + Wrap(Short(error ?? "no reply", 160)));
+                Debug.LogError("[VoiceLoop] Coach error: " + error);
+                Report(AssistantState.Error, "Something went wrong", "Hold right trigger to try again.");
+                readyAt = Time.unscaledTime + 7f;
+                busy = false;
+                yield break;
+            }
 
             board.Show($"You: {Wrap(heard)}\n\nCoach: {Wrap(reply)}\n\nASR {tAsr:0.0}s  Spark {tSpark:0.0}s");
+            Report(AssistantState.Speaking, "A Better U", reply);
 
             bool spoken = false;
             tts.Speak(reply, () => spoken = true);
             while (!spoken) yield return null;
+
+            // "Saved" appears only if the backend confirmed a write during this turn.
+            if (lastSaved != null)
+            {
+                Report(AssistantState.Done, "Saved", lastSaved);
+                readyAt = Time.unscaledTime + 8f;
+            }
+            else Report(AssistantState.Ready, "Ask A Better U", "Hold right trigger to speak");
             busy = false;
+        }
+
+        // Turns the agent's "[tool] {args}" progress text into something a person would want to read.
+        static string Friendly(string progress)
+        {
+            int close = progress.IndexOf(']');
+            string tool = progress.StartsWith("[") && close > 1 ? progress.Substring(1, close - 1) : "";
+            switch (tool)
+            {
+                case "search_foods": return "Searching your food database...";
+                case "log_food": return "Saving your meal...";
+                case "report_injury": return "Saving your note...";
+                case "build_workout": return "Building your workout...";
+                case "log_set": return "Saving your set...";
+                default: return "Working on it...";
+            }
+        }
+
+        void OnToolSucceeded(string tool, JObject result)
+        {
+            string text = null;
+            switch (tool)
+            {
+                case "log_food":
+                    text = $"{(string)result["logged_name"]} logged to {(string)result["meal"]}";
+                    break;
+                case "report_injury":
+                {
+                    string side = (string)result["side"];
+                    string area = ((string)result["body_area"] ?? "area").Replace('_', ' ');
+                    text = ((bool?)result["already_recorded"] == true ? "Already noted: " : "Noted: ") + (side != null ? side + " " : "") + area;
+                    break;
+                }
+                case "log_set":
+                    text = $"{(int)result["reps"]} reps of {(string)result["logged_exercise"]} saved to your activity";
+                    break;
+            }
+            if (text == null) return;
+            lastSaved = text;
+            OnSaved?.Invoke(text);
         }
 
         static string Short(string s, int max = 120) => s.Length > max ? s.Substring(0, max) + "..." : s;
 
         // Wraps long lines at ~32 chars so the TextMesh stays readable.
-        static string Wrap(string s, int width = 32)
-        {
-            var words = s.Split(' ');
-            var sb = new System.Text.StringBuilder();
-            int line = 0;
-            foreach (var w in words)
-            {
-                if (line + w.Length > width) { sb.Append('\n'); line = 0; }
-                sb.Append(w).Append(' ');
-                line += w.Length + 1;
-            }
-            return sb.ToString().TrimEnd();
-        }
+        static string Wrap(string s, int width = 32) => VRUi.Wrap(s, width);
     }
 }

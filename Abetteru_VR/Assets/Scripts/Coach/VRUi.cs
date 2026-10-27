@@ -75,6 +75,25 @@ namespace ABetterU.Coach
         static Font font;
         static Font Font => font != null ? font : (font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
 
+        /// Word-wraps text for a TextMesh (which does not wrap by itself), optionally cutting off with "..." after maxLines.
+        public static string Wrap(string s, int width, int maxLines = int.MaxValue)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            var sb = new System.Text.StringBuilder();
+            int line = 1, col = 0;
+            foreach (var word in s.Replace("\n", " ").Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (col > 0 && col + 1 + word.Length > width)
+                {
+                    if (line >= maxLines) { sb.Append("..."); return sb.ToString(); }
+                    sb.Append('\n'); line++; col = 0;
+                }
+                if (col > 0) { sb.Append(' '); col++; }
+                sb.Append(word); col += word.Length;
+            }
+            return sb.ToString();
+        }
+
         public static Transform Box(Transform parent, string name, Vector3 localPos, Vector3 size, Color color, bool collider = false)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);

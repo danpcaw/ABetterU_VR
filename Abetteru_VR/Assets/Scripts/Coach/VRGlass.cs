@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ABetterU.Coach
 {
-    public enum GlassStyle { Panel, Card, Primary, Secondary, Purple, Disabled }
+    public enum GlassStyle { Panel, Card, Primary, Secondary, Purple, Amber, Disabled }
 
     /// Glass-style UI built from rounded-rectangle textures on unlit quads. Unlit (Sprites/Default) keeps the
     /// panels readable regardless of scene lighting and gives real translucency over the environment.
@@ -34,6 +34,10 @@ namespace ABetterU.Coach
                     return hover
                         ? new Look { top = new Color(0.55f, 0.32f, 0.95f, 1f), bottom = new Color(0.36f, 0.18f, 0.72f, 1f), border = new Color(0.92f, 0.70f, 1f, 1f), borderM = 0.007f }
                         : new Look { top = new Color(0.40f, 0.20f, 0.78f, 0.95f), bottom = new Color(0.25f, 0.12f, 0.55f, 0.95f), border = new Color(0.80f, 0.50f, 1f, 1f), borderM = 0.006f };
+                case GlassStyle.Amber:
+                    return hover
+                        ? new Look { top = new Color(0.42f, 0.28f, 0.12f, 0.97f), bottom = new Color(0.30f, 0.20f, 0.09f, 0.97f), border = new Color(1.00f, 0.82f, 0.45f, 1f), borderM = 0.008f }
+                        : new Look { top = new Color(0.30f, 0.20f, 0.10f, 0.92f), bottom = new Color(0.20f, 0.13f, 0.07f, 0.92f), border = new Color(1.00f, 0.70f, 0.25f, 0.95f), borderM = 0.007f };
                 default: // Disabled
                     return new Look { top = new Color(0.10f, 0.12f, 0.16f, 0.70f), bottom = new Color(0.08f, 0.10f, 0.14f, 0.70f), border = new Color(0.22f, 0.28f, 0.34f, 0.60f), borderM = 0.004f };
             }
@@ -83,6 +87,36 @@ namespace ABetterU.Coach
             r.sortingOrder = order;
             return go.transform;
         }
+
+        /// A plain rounded block with an explicit colour and no border (bar tracks, chips).
+        public static Transform Solid(Transform parent, string name, Vector3 localPos, Vector2 size, float radius, Color top, Color bottom, int order = 3)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            go.name = name;
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localScale = new Vector3(size.x, size.y, 1f);
+            UnityEngine.Object.Destroy(go.GetComponent<Collider>());
+
+            var r = go.GetComponent<MeshRenderer>();
+            r.sharedMaterial = NewMaterial(VRArt.RoundedRect(size.x, size.y, radius, top, bottom, Color.clear, 0f));
+            r.sortingOrder = order;
+            return go.transform;
+        }
+
+        /// A horizontal progress bar: a dark track with a teal-to-blue fill from the left. fraction is 0 to 1.
+        public static void Bar(Transform parent, Vector3 localPos, float width, float height, float fraction, int order = 4)
+        {
+            Solid(parent, "Bar track", localPos, new Vector2(width, height), height / 2f, new Color(0.13f, 0.17f, 0.24f, 1f), new Color(0.10f, 0.14f, 0.20f, 1f), order);
+            float f = Mathf.Clamp01(fraction);
+            if (f <= 0.001f) return;
+            float w = Mathf.Max(height, width * f);
+            Solid(parent, "Bar fill", localPos + new Vector3(-width / 2f + w / 2f, 0f, -0.003f), new Vector2(w, height), height / 2f,
+                new Color(0.20f, 0.90f, 0.80f, 1f), new Color(0.15f, 0.60f, 0.98f, 1f), order + 1);
+        }
+
+        public static Transform Icon(Transform parent, VRArt.IconKind kind, Color color, Vector3 localPos, float size, int order = 6) =>
+            Image(parent, "Icon " + kind, VRArt.Icon(kind, color), localPos, new Vector2(size, size), order);
 
         public static TextMesh Label(Transform parent, string text, Vector3 localPos, float charSize, Color color,
             TextAnchor anchor = TextAnchor.MiddleCenter, TextAlignment alignment = TextAlignment.Center, int order = 6)

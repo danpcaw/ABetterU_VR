@@ -25,6 +25,9 @@ namespace ABetterU.Coach
         // Every food the search has returned, so log_food can only log something the database actually showed us.
         readonly Dictionary<string, JObject> foodsSeen = new Dictionary<string, JObject>();
 
+        /// Raised after a tool call the backend confirmed (ok:true), with the tool's name and its result.
+        public event Action<string, JObject> ToolSucceeded;
+
         public CoachAgent(ModelApiConfig config, SupabaseClient supabase)
         {
             this.config = config;
@@ -137,6 +140,11 @@ namespace ABetterU.Coach
                         string result = null;
                         yield return RunTool(name, args, r => result = r);
                         Debug.Log($"[Agent] {name}({args}) -> {result}");
+
+                        // Tell the UI about every tool that really succeeded, so "Saved" is only ever shown after the backend said ok.
+                        JObject parsedResult = null;
+                        try { parsedResult = JObject.Parse(result); } catch (Exception) { /* not JSON: nothing to announce */ }
+                        if (parsedResult != null && (bool?)parsedResult["ok"] == true) ToolSucceeded?.Invoke(name, parsedResult);
                         input.Add(new JObject { ["type"] = "function_call_output", ["call_id"] = callId, ["output"] = result });
                     }
                 }
