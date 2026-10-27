@@ -16,8 +16,16 @@ namespace ABetterU.Coach
 
         // Depth thresholds as a FRACTION of the user's standing head height, so they scale with the person.
         // About 0.20 is a half squat (35 cm on a 1.65 m headset height), about 0.33 is a full squat (55 cm).
-        public float downFraction = 0.20f;   // head must drop this far to count as "down"
-        public float upFraction = 0.08f;     // and come back within this to count as "back up" (smaller = hysteresis gap)
+        public float downFraction = 0.16f;   // must drop this far to count as "down" (about 23 cm for an average adult)
+        public float upFraction = 0.06f;     // and come back within this to count as "back up" (smaller = hysteresis gap)
+
+        // Height of the neck pivot, not the eyes: looking up or down swings the headset around the neck by a few cm,
+        // which made borderline squats count only when the user tilted their head (found on-device Oct 27).
+        float HeadHeight()
+        {
+            Vector3 neck = head.TransformPoint(new Vector3(0f, -0.10f, -0.08f));   // ~10 cm below and ~8 cm behind the eyes
+            return head.parent != null ? head.parent.InverseTransformPoint(neck).y : neck.y;
+        }
 
         float standingHeight;
         float lastRepTime;
@@ -25,7 +33,7 @@ namespace ABetterU.Coach
 
         void Start()
         {
-            standingHeight = head.localPosition.y;   // rough default; call Calibrate() for a proper reading
+            standingHeight = HeadHeight();   // rough default; call Calibrate() for a proper reading
             lastRepTime = Time.time;
         }
 
@@ -36,7 +44,7 @@ namespace ABetterU.Coach
             float sum = 0f; int n = 0;
             for (float t = 0f; t < seconds; t += Time.deltaTime)
             {
-                sum += head.localPosition.y; n++;
+                sum += HeadHeight(); n++;
                 yield return null;
             }
             if (n > 0) standingHeight = sum / n;
@@ -48,7 +56,7 @@ namespace ABetterU.Coach
         void Update()
         {
             if (!Active) return;
-            float dropFraction = (standingHeight - head.localPosition.y) / standingHeight;
+            float dropFraction = (standingHeight - HeadHeight()) / standingHeight;
             bool wasInBottom = inBottom;
             bool repDone = DetectRepStep(dropFraction, ref inBottom);
             if (!wasInBottom && inBottom) DepthCue();   // the moment the squat is deep enough to count
