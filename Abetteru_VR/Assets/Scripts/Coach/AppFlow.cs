@@ -91,7 +91,7 @@ namespace ABetterU.Coach
             VRGlass.Panel(p, "Backdrop", new Vector3(0, 0, 0.04f), new Vector2(3.6f, 2.1f), 0.10f, GlassStyle.Panel, 0);
 
             // Left column: the real logo, the tagline, and two unavailable sign-in tiles.
-            const float lx = -0.95f;                                   // centre of the left column
+            const float lx = -0.81f;                                   // centre of the free space left of the card (-1.8 to 0.175)
             var logo = Resources.Load<Texture2D>("Branding/logo");
             if (logo != null) VRGlass.Image(p, "Logo", logo, new Vector3(lx, 0.52f, -0.01f), new Vector2(1.8f, 0.6f));
             else VRGlass.Label(p, "A Better U", new Vector3(lx, 0.52f, -0.02f), 0.024f, VRUi.Ink);
