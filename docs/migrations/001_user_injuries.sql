@@ -1,4 +1,4 @@
--- DRAFT: not applied. Review before running on the ABetterU project.
+-- APPLIED to ABetterU on 2026-10-27 as migration "create_user_injuries".
 -- Additive only: creates one new table, touches no existing table.
 -- Records what the user SAYS hurts. No diagnosis, no severity scoring, no medical advice.
 
