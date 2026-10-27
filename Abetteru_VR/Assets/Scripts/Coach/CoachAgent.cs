@@ -49,6 +49,14 @@ namespace ABetterU.Coach
              ""side"":{""type"":""string"",""enum"":[""left"",""right"",""both""]},
              ""note"":{""type"":""string"",""description"":""The user's own words, under 200 characters""}},
             ""required"":[""body_area""]}},
+          {""type"":""function"",""name"":""log_set"",
+           ""description"":""Record a finished exercise set in the user's workout history. Use only rep counts the user states or the message context provides; never guess."",
+           ""parameters"":{""type"":""object"",""properties"":{
+             ""exercise_name"":{""type"":""string"",""description"":""e.g. Bodyweight Squat""},
+             ""reps"":{""type"":""integer""},
+             ""sets"":{""type"":""integer"",""description"":""Default 1""},
+             ""weight_kg"":{""type"":""number"",""description"":""Omit for bodyweight""}},
+            ""required"":[""exercise_name"",""reps""]}},
           {""type"":""function"",""name"":""build_workout"",
            ""description"":""Fetch exercise candidates from the A Better U library, already filtered to avoid the user's active injuries. Then choose 3 and give sets and reps."",
            ""parameters"":{""type"":""object"",""properties"":{
@@ -68,6 +76,7 @@ namespace ABetterU.Coach
             "If the user says something hurts or is sore, call report_injury first (record their words, never diagnose), " +
             "then if they want a workout call build_workout with focus legs unless they ask for upper body, core or full body, " +
             "and pick exactly 3 exercises from its candidates, giving sets and reps. For legs, prefer gentle glute, hip and bodyweight squat options. " +
+            "When the user says they finished a set, call log_set with the exercise and the reps they stated, then say what was recorded. " +
             "Say the exercise names aloud in one short sentence, and add that you are not a medical professional only if they ask about treatment.";
 
         /// Runs one user turn. onProgress gets short status text (tool names) for the board.
@@ -169,6 +178,7 @@ namespace ABetterU.Coach
                 case "log_food": yield return LogFood(args, done); break;
                 case "report_injury": yield return ReportInjury(args, done); break;
                 case "build_workout": yield return BuildWorkout(args, done); break;
+                case "log_set": yield return LogSet(args, done); break;
                 default: done(Fail("unknown tool " + name)); break;
             }
         }
@@ -303,6 +313,35 @@ namespace ABetterU.Coach
             yield return supabase.Insert("user_injuries", row.ToString(Newtonsoft.Json.Formatting.None), r => raw = r, e => err = e);
             if (err != null) { done(Fail(err)); yield break; }
             done(new JObject { ["ok"] = true, ["recorded"] = true, ["body_area"] = area, ["side"] = side }.ToString(Newtonsoft.Json.Formatting.None));
+        }
+
+        IEnumerator LogSet(JObject args, Action<string> done)
+        {
+            string exercise = ((string)args["exercise_name"] ?? "").Trim();
+            int reps = args["reps"] != null ? (int)args["reps"] : 0;
+            int sets = args["sets"] != null ? (int)args["sets"] : 1;
+            if (exercise.Length == 0) { done(Fail("exercise_name is required")); yield break; }
+            if (reps < 1 || reps > 200) { done(Fail("reps must be between 1 and 200")); yield break; }
+            if (sets < 1 || sets > 20) sets = 1;
+
+            // source='vr' marks these rows as created by the VR app (exercise_logs has the column; strength_sets does not).
+            var row = new JObject
+            {
+                ["user_id"] = supabase.UserId,
+                ["date"] = DateTime.Now.ToString("yyyy-MM-dd"),
+                ["exercise_name"] = exercise,
+                ["sets_completed"] = sets,
+                ["reps_completed"] = reps.ToString(),
+                ["notes"] = "Logged from A Better U VR",
+                ["source"] = "vr",
+            };
+            if (args["weight_kg"] != null && (double)args["weight_kg"] > 0) row["weight_kg"] = (double)args["weight_kg"];
+
+            string raw = null, err = null;
+            yield return supabase.Insert("exercise_logs", row.ToString(Newtonsoft.Json.Formatting.None), r => raw = r, e => err = e);
+            if (err != null) { done(Fail(err)); yield break; }
+
+            done(new JObject { ["ok"] = true, ["logged_exercise"] = exercise, ["sets"] = sets, ["reps"] = reps }.ToString(Newtonsoft.Json.Formatting.None));
         }
 
         // Exercise-name fragments to hide per injured area. Deterministic on purpose: the safety filter
