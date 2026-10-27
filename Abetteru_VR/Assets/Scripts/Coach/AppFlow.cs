@@ -88,21 +88,22 @@ namespace ABetterU.Coach
             Current = Stage.Login;
             var p = NewRoot(new Vector3(0f, 1.55f, 2.6f));
 
-            VRGlass.Panel(p, "Backdrop", new Vector3(0, 0, 0.04f), new Vector2(4.1f, 2.1f), 0.10f, GlassStyle.Panel, 0);
+            VRGlass.Panel(p, "Backdrop", new Vector3(0, 0, 0.04f), new Vector2(3.6f, 2.1f), 0.10f, GlassStyle.Panel, 0);
 
             // Left column: the real logo, the tagline, and two unavailable sign-in tiles.
+            const float lx = -0.95f;                                   // centre of the left column
             var logo = Resources.Load<Texture2D>("Branding/logo");
-            if (logo != null) VRGlass.Image(p, "Logo", logo, new Vector3(-1.15f, 0.52f, -0.01f), new Vector2(1.95f, 0.65f));
-            else VRGlass.Label(p, "A Better U", new Vector3(-1.15f, 0.52f, -0.02f), 0.024f, VRUi.Ink);
+            if (logo != null) VRGlass.Image(p, "Logo", logo, new Vector3(lx, 0.52f, -0.01f), new Vector2(1.8f, 0.6f));
+            else VRGlass.Label(p, "A Better U", new Vector3(lx, 0.52f, -0.02f), 0.024f, VRUi.Ink);
 
-            VRGlass.Label(p, "Mind   ·   Movement   ·   Progress", new Vector3(-1.15f, 0.12f, -0.02f), 0.0105f, Teal);
-            VRGlass.Label(p, "Your complete wellness platform\nin virtual and real life.", new Vector3(-1.15f, -0.10f, -0.02f), 0.0085f, VRUi.Ink);
+            VRGlass.Label(p, "Mind   ·   Movement   ·   Progress", new Vector3(lx, 0.12f, -0.02f), 0.0105f, Teal);
+            VRGlass.Label(p, "Your complete wellness platform\nin virtual and real life.", new Vector3(lx, -0.10f, -0.02f), 0.0085f, VRUi.Ink);
 
-            VRGlass.Button(p, "Coach Login\nComing soon", new Vector3(-1.55f, -0.62f, -0.02f), new Vector2(0.74f, 0.46f), GlassStyle.Disabled, 0.0085f, null, 0.05f);
-            VRGlass.Button(p, "Gym Login\nComing soon", new Vector3(-0.75f, -0.62f, -0.02f), new Vector2(0.74f, 0.46f), GlassStyle.Disabled, 0.0085f, null, 0.05f);
+            VRGlass.Button(p, "Coach Login\nComing soon", new Vector3(lx - 0.40f, -0.62f, -0.02f), new Vector2(0.74f, 0.46f), GlassStyle.Disabled, 0.0085f, null, 0.05f);
+            VRGlass.Button(p, "Gym Login\nComing soon", new Vector3(lx + 0.40f, -0.62f, -0.02f), new Vector2(0.74f, 0.46f), GlassStyle.Disabled, 0.0085f, null, 0.05f);
 
             // Right column: the sign-in card.
-            const float cx = 1.2f;
+            const float cx = 0.95f;
             VRGlass.Panel(p, "Card", new Vector3(cx, 0, 0.0f), new Vector2(1.55f, 1.85f), 0.07f, GlassStyle.Card, 1);
             VRGlass.Label(p, "Welcome to", new Vector3(cx, 0.76f, -0.02f), 0.0095f, VRUi.Muted);
             VRGlass.Label(p, "A Better U", new Vector3(cx, 0.64f, -0.02f), 0.021f, VRUi.Ink);
