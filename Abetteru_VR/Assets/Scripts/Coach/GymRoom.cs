@@ -20,15 +20,27 @@ namespace ABetterU.Coach
         const float Height = 3.2f;
 
         Transform root;
+        Material template;     // a known-good URP Lit material; CreatePrimitive's default renders magenta on device
 
         void Start()
         {
-            // The scene's original test objects would poke through the new room.
+            // Borrow a working URP material from the scene's original test objects, then hide them
+            // (they would poke through the new room).
             foreach (var name in new[] { "Cube", "Plane" })
             {
                 var old = GameObject.Find(name);
-                if (old != null) old.SetActive(false);
+                if (old == null) continue;
+                var r = old.GetComponent<Renderer>();
+                if (template == null && r != null && r.sharedMaterial != null) template = r.sharedMaterial;
+                old.SetActive(false);
             }
+            if (template == null)
+            {
+                var lit = Shader.Find("Universal Render Pipeline/Lit");
+                if (lit != null) template = new Material(lit);
+            }
+            if (template == null) Debug.LogError("[Gym] No URP material available; the room will render magenta.");
+            else Debug.Log($"[Gym] using material template '{template.name}' with shader '{template.shader.name}'");
 
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
             RenderSettings.ambientLight = new Color(0.62f, 0.64f, 0.68f);
@@ -178,9 +190,15 @@ namespace ABetterU.Coach
             Destroy(go.GetComponent<Collider>());                       // nothing needs physics; keeps the headset light
 
             var r = go.GetComponent<Renderer>();
-            r.material.color = color;
-            if (r.material.HasProperty("_Smoothness")) r.material.SetFloat("_Smoothness", smoothness);
-            if (r.material.HasProperty("_Metallic")) r.material.SetFloat("_Metallic", metallic);
+            if (template != null)
+            {
+                var m = new Material(template);
+                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);   // URP Lit
+                if (m.HasProperty("_Color")) m.SetColor("_Color", color);           // built-in naming, harmless on URP
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", smoothness);
+                if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", metallic);
+                r.sharedMaterial = m;
+            }
             return go.transform;
         }
     }
