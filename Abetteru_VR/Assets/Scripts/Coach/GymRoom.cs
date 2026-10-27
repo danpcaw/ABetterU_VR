@@ -53,6 +53,20 @@ namespace ABetterU.Coach
             BuildSquatRack(Half - 0.9f, 1.4f);
             BuildBenches();
             BuildSign();
+            BuildBodyAndReflection();
+        }
+
+        // The user's own stylised body, and the mirror that shows it.
+        void BuildBodyAndReflection()
+        {
+            var eye = Camera.main;
+            if (eye == null) { Debug.LogWarning("[Gym] No main camera; skipping body and mirror."); return; }
+
+            // The head ball is on a mirror-only layer: visible in the reflection, hidden from the user's own eyes.
+            eye.cullingMask &= ~(1 << Mannequin.MirrorOnlyLayer);
+
+            gameObject.AddComponent<Mannequin>().Init(template, eye.transform);
+            gameObject.AddComponent<MirrorReflection>().Init(eye.transform, mirrorDisplay);
         }
 
         // ── Shell ────────────────────────────────────────────────────────────────
@@ -82,14 +96,29 @@ namespace ABetterU.Coach
         {
             float z = Half - 0.07f;
             Box("Mirror frame", new Vector3(0, 1.3f, z + 0.02f), new Vector3(5.2f, 2.3f, 0.04f), Black);
-            Box("Mirror", new Vector3(0, 1.3f, z), new Vector3(5.0f, 2.1f, 0.03f), Glass, 0.95f, 0.6f);
-            // Soft diagonal highlights so the panel reads as glass.
-            for (int i = 0; i < 3; i++)
-            {
-                var streak = Box("Mirror shine " + i, new Vector3(-1.4f + i * 1.4f, 1.3f, z - 0.02f), new Vector3(0.18f, 2.0f, 0.005f), new Color(0.85f, 0.92f, 0.98f), 1f, 0f);
-                streak.localRotation = Quaternion.Euler(0, 0, 14f);
-            }
+
+            // The glass is a quad that shows a second camera's view (MirrorReflection), not a painted panel.
+            var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            quad.name = "Mirror";
+            quad.transform.SetParent(root, false);
+            quad.transform.position = new Vector3(0, 1.3f, MirrorPlaneZ - 0.005f);
+            // Negative X scale flips the image left-right, as a mirror does (Sprites/Default draws both sides, so culling is no issue).
+            quad.transform.localScale = new Vector3(-MirrorXMax * 2f, MirrorYMax - MirrorYMin, 1f);
+            quad.layer = MirrorDisplayLayer;                     // hidden from the reflection camera so it cannot reflect itself
+            Destroy(quad.GetComponent<Collider>());
+
+            // Sprites/Default is always in builds and unlit, so the reflection is not darkened by scene lighting.
+            var shader = Shader.Find("Sprites/Default");
+            var rend = quad.GetComponent<Renderer>();
+            rend.sharedMaterial = shader != null ? new Material(shader) : MakeMaterial(template, Glass, 0.9f, 0.5f);
+            mirrorDisplay = rend;
         }
+
+        // Mirror geometry shared with MirrorReflection. The plane is the glass surface the user faces.
+        public const float MirrorXMax = 2.5f, MirrorYMin = 0.25f, MirrorYMax = 2.35f;
+        public const int MirrorDisplayLayer = 29;
+        public static float MirrorPlaneZ => Half - 0.085f;
+        Renderer mirrorDisplay;
 
         // ── Squat mat under the user's feet ─────────────────────────────────────
 
@@ -205,17 +234,21 @@ namespace ABetterU.Coach
             go.transform.localScale = scale;
             Destroy(go.GetComponent<Collider>());                       // nothing needs physics; keeps the headset light
 
-            var r = go.GetComponent<Renderer>();
-            if (template != null)
-            {
-                var m = new Material(template);
-                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);   // URP Lit
-                if (m.HasProperty("_Color")) m.SetColor("_Color", color);           // built-in naming, harmless on URP
-                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", smoothness);
-                if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", metallic);
-                r.sharedMaterial = m;
-            }
+            var m = MakeMaterial(template, color, smoothness, metallic);
+            if (m != null) go.GetComponent<Renderer>().sharedMaterial = m;
             return go.transform;
+        }
+
+        /// A tinted copy of the known-good URP material (shared with the mannequin).
+        public static Material MakeMaterial(Material template, Color color, float smoothness = 0.15f, float metallic = 0f)
+        {
+            if (template == null) return null;
+            var m = new Material(template);
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);   // URP Lit
+            if (m.HasProperty("_Color")) m.SetColor("_Color", color);           // built-in naming, harmless on URP
+            if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", smoothness);
+            if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", metallic);
+            return m;
         }
     }
 }
