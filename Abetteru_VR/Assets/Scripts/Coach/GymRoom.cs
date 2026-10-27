@@ -67,7 +67,7 @@ namespace ABetterU.Coach
             Box("Screen glass", new Vector3(0, cy, z), new Vector3(w, h, 0.02f), new Color(0.04f, 0.06f, 0.10f), 0.9f);
             Box("Screen accent", new Vector3(0, cy + h / 2 - 0.02f, z - 0.012f), new Vector3(w, 0.03f, 0.005f), Teal);
 
-            var board = FindFirstObjectByType<StatusBoard>();
+            var board = FindAnyObjectByType<StatusBoard>();   // only one exists, so "any" is deterministic here
             if (board != null) board.PinToWall(new Vector3(0, cy - 0.02f, z - 0.02f), 1.8f);
             else Debug.LogWarning("[Gym] No StatusBoard found; coach text stays head-locked.");
         }
