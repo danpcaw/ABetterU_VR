@@ -32,8 +32,21 @@ namespace ABetterU.Coach
         float lastRepTime;
         bool inBottom;
 
+        // The Meta camera rig prefab defaults to EyeLevel tracking, where head height reads ~0 at app start
+        // instead of the real height above the floor (found on-device Oct 27). Ask for FloorLevel so heights are real.
+        void EnsureFloorLevel()
+        {
+            if (OVRManager.instance != null && OVRManager.instance.trackingOriginType != OVRManager.TrackingOrigin.FloorLevel)
+                OVRManager.instance.trackingOriginType = OVRManager.TrackingOrigin.FloorLevel;
+        }
+
+        // Fractions need a believable denominator. If the origin is still eye level (height ~0), assume 1.6 m
+        // instead of dividing by nearly zero.
+        float Scale => standingHeight > 0.8f ? standingHeight : 1.6f;
+
         void Start()
         {
+            EnsureFloorLevel();
             standingHeight = HeadHeight();   // rough default; call Calibrate() for a proper reading
             lastRepTime = Time.time;
         }
@@ -42,6 +55,8 @@ namespace ABetterU.Coach
         /// localPosition.y is their real head height). Call at the start of each set, e.g. after "stand tall".
         public System.Collections.IEnumerator Calibrate(float seconds = 2f)
         {
+            EnsureFloorLevel();
+            yield return null;               // let the origin change take effect before sampling
             float sum = 0f; int n = 0;
             for (float t = 0f; t < seconds; t += Time.deltaTime)
             {
@@ -57,7 +72,7 @@ namespace ABetterU.Coach
         void Update()
         {
             if (!Active) return;
-            float dropFraction = (standingHeight - HeadHeight()) / standingHeight;
+            float dropFraction = (standingHeight - HeadHeight()) / Scale;
             CurrentDrop = dropFraction;
             bool wasInBottom = inBottom;
             bool repDone = DetectRepStep(dropFraction, ref inBottom);

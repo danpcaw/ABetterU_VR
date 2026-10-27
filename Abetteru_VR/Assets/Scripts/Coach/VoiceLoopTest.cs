@@ -121,7 +121,7 @@ namespace ABetterU.Coach
         IEnumerator BeginSet()
         {
             busy = true;
-            board.Show("Stand tall and\nstay still...");
+            board.Show("Stand tall, look\nstraight ahead and\nstay still...");
             yield return reps.Calibrate(2f);
             reps.Active = true;
             inSet = true;
