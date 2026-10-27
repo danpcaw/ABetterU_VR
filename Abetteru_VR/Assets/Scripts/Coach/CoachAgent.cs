@@ -350,7 +350,35 @@ namespace ABetterU.Coach
             };
             if (args["weight_kg"] != null && (double)args["weight_kg"] > 0) row["weight_kg"] = (double)args["weight_kg"];
 
+            string today = row["date"].ToString();
             string raw = null, err = null;
+
+            // 1) strength_sets is where the web Fitness page lists history (exercise_logs is collapsed "older history").
+            //    Link the set to the library exercise when the name matches, and number sets after any already logged today.
+            string libRaw = null;
+            yield return supabase.Rpc($"get_exercise_library?select=id,name&name=ilike.{UnityWebRequest.EscapeURL(exercise)}&limit=1", "{}", r => libRaw = r, e => err = e);
+            string libraryId = null;
+            if (err == null && libRaw != null) { var libRows = JArray.Parse(libRaw); if (libRows.Count > 0) libraryId = (string)libRows[0]["id"]; }
+            err = null;
+
+            string existingRaw = null;
+            yield return supabase.Get($"strength_sets?select=id&date=eq.{today}&exercise_name=eq.{UnityWebRequest.EscapeURL(exercise)}", r => existingRaw = r, e => err = e);
+            int alreadyLogged = (err == null && existingRaw != null) ? JArray.Parse(existingRaw).Count : 0;
+            err = null;
+
+            double weight = row["weight_kg"] != null ? (double)row["weight_kg"] : 0.0;   // NOT NULL in strength_sets; 0 = bodyweight
+            var setRows = new JArray();
+            for (int n = 1; n <= sets; n++)
+                setRows.Add(new JObject
+                {
+                    ["user_id"] = supabase.UserId, ["exercise_name"] = exercise, ["date"] = today,
+                    ["set_number"] = alreadyLogged + n, ["reps"] = reps, ["weight_kg"] = weight, ["is_warmup"] = false,
+                    ["exercise_library_id"] = libraryId,
+                });
+            yield return supabase.Insert("strength_sets", setRows.ToString(Newtonsoft.Json.Formatting.None), r => raw = r, e => err = e);
+            if (err != null) { done(Fail(err)); yield break; }
+
+            // 2) exercise_logs row keeps the source='vr' marker (strength_sets has no source column) and feeds the dashboard count.
             yield return supabase.Insert("exercise_logs", row.ToString(Newtonsoft.Json.Formatting.None), r => raw = r, e => err = e);
             if (err != null) { done(Fail(err)); yield break; }
 
