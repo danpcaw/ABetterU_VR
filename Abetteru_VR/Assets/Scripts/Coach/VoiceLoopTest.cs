@@ -60,7 +60,7 @@ namespace ABetterU.Coach
             reps = gameObject.AddComponent<RepCounter>();
             reps.head = Camera.main != null ? Camera.main.transform : transform;
 
-            board.Show($"Hold RIGHT TRIGGER to talk.\nPress X (left) to start a squat set.\n\n{ttsNote}\n{loginNote}");
+            board.Show($"Hold RIGHT TRIGGER to talk.\nPress X, Y or LEFT TRIGGER\nto start a squat set.\n\n{ttsNote}\n{loginNote}");
         }
 
         RepCounter reps;
@@ -72,7 +72,7 @@ namespace ABetterU.Coach
             if (mic == null) return;
 
             // X on the left controller starts a squat set, and ends it.
-            if (!busy && OVRInput.GetDown(OVRInput.Button.Three, OVRInput.Controller.LTouch))
+            if (SetTogglePressed() && !busy)
             {
                 StartCoroutine(inSet ? EndSet() : BeginSet());
                 return;
@@ -100,6 +100,18 @@ namespace ABetterU.Coach
         }
 
         float nextMeter;
+
+        // Left X, left Y or the left trigger all start/end a set. Each press is logged so adb shows what the headset sees.
+        bool SetTogglePressed()
+        {
+            string pressed = null;
+            if (OVRInput.GetDown(OVRInput.Button.Three, OVRInput.Controller.LTouch)) pressed = "left X";
+            else if (OVRInput.GetDown(OVRInput.Button.Four, OVRInput.Controller.LTouch)) pressed = "left Y";
+            else if (OVRInput.GetDown(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.LTouch)) pressed = "left trigger";
+            if (pressed == null) return false;
+            Debug.Log($"[Input] {pressed} pressed (busy={busy}, inSet={inSet})");
+            return true;
+        }
 
         IEnumerator BeginSet()
         {
