@@ -38,14 +38,28 @@ namespace ABetterU.Coach
              ""food_id"":{""type"":""string""},
              ""meal"":{""type"":""string"",""enum"":[""breakfast"",""lunch"",""dinner"",""snack""]},
              ""servings"":{""type"":""number"",""description"":""Number of servings, default 1""}},
-            ""required"":[""food_id"",""meal""]}}
+            ""required"":[""food_id"",""meal""]}},
+          {""type"":""function"",""name"":""report_injury"",
+           ""description"":""Save an injury or sore area the user says they have. Record only what they say; never diagnose."",
+           ""parameters"":{""type"":""object"",""properties"":{
+             ""body_area"":{""type"":""string"",""enum"":[""neck"",""shoulder"",""upper_back"",""lower_back"",""chest"",""elbow"",""wrist_hand"",""hip"",""glute"",""hamstring"",""quad"",""knee"",""calf_shin"",""ankle_foot"",""other""]},
+             ""side"":{""type"":""string"",""enum"":[""left"",""right"",""both""]},
+             ""note"":{""type"":""string"",""description"":""The user's own words, under 200 characters""}},
+            ""required"":[""body_area""]}},
+          {""type"":""function"",""name"":""build_workout"",
+           ""description"":""Fetch exercise candidates from the A Better U library, already filtered to avoid the user's active injuries. Then choose 3 and give sets and reps."",
+           ""parameters"":{""type"":""object"",""properties"":{
+             ""focus"":{""type"":""string"",""enum"":[""legs"",""core"",""upper"",""full""],""description"":""Default legs""}}}}
         ]");
 
         const string AgentRules =
             " You can act on the user's A Better U account with tools. To log food: call search_foods, pick the closest " +
             "plain or generic match (avoid restaurant-branded items unless the user named one), then call log_food. " +
             "Only say something is logged after log_food returns ok:true. If nothing matches, say so and ask. " +
-            "Never invent calories or numbers; use only what tools return.";
+            "Never invent calories or numbers; use only what tools return. " +
+            "If the user says something hurts or is sore, call report_injury first (record their words, never diagnose), " +
+            "then if they want a workout call build_workout and pick exactly 3 exercises from its candidates, giving sets and reps. " +
+            "Say the exercise names aloud in one short sentence, and add that you are not a medical professional only if they ask about treatment.";
 
         /// Runs one user turn. onProgress gets short status text (tool names) for the board.
         public IEnumerator Run(string userText, Action<string> onProgress, Action<string> onReply, Action<string> onError)
@@ -127,6 +141,8 @@ namespace ABetterU.Coach
             {
                 case "search_foods": yield return SearchFoods((string)args["query"], done); break;
                 case "log_food": yield return LogFood(args, done); break;
+                case "report_injury": yield return ReportInjury(args, done); break;
+                case "build_workout": yield return BuildWorkout(args, done); break;
                 default: done(Fail("unknown tool " + name)); break;
             }
         }
@@ -190,6 +206,115 @@ namespace ABetterU.Coach
             if (err != null) { done(Fail(err)); yield break; }
 
             done(new JObject { ["ok"] = true, ["meal"] = meal, ["servings"] = servings }.ToString(Newtonsoft.Json.Formatting.None));
+        }
+
+        IEnumerator ReportInjury(JObject args, Action<string> done)
+        {
+            string area = (string)args["body_area"];
+            string side = (string)args["side"];
+            string note = (string)args["note"];
+            if (string.IsNullOrEmpty(area)) { done(Fail("body_area is required")); yield break; }
+            if (note != null && note.Length > 280) note = note.Substring(0, 280);
+
+            // Don't stack duplicates: one active row per area+side is enough.
+            string existing = null, err = null;
+            string sideFilter = side != null ? $"&side=eq.{side}" : "&side=is.null";
+            yield return supabase.Get($"user_injuries?select=id&status=eq.active&body_area=eq.{area}{sideFilter}", r => existing = r, e => err = e);
+            if (err != null) { done(Fail(err)); yield break; }
+            if (JArray.Parse(existing).Count > 0)
+            {
+                done(new JObject { ["ok"] = true, ["already_recorded"] = true, ["body_area"] = area }.ToString(Newtonsoft.Json.Formatting.None));
+                yield break;
+            }
+
+            var row = new JObject { ["user_id"] = supabase.UserId, ["body_area"] = area, ["source"] = "ai_assistant" };
+            if (side != null) row["side"] = side;
+            if (!string.IsNullOrWhiteSpace(note)) row["note"] = note;
+
+            string raw = null;
+            yield return supabase.Insert("user_injuries", row.ToString(Newtonsoft.Json.Formatting.None), r => raw = r, e => err = e);
+            if (err != null) { done(Fail(err)); yield break; }
+            done(new JObject { ["ok"] = true, ["recorded"] = true, ["body_area"] = area, ["side"] = side }.ToString(Newtonsoft.Json.Formatting.None));
+        }
+
+        // Exercise-name fragments to hide per injured area. Deterministic on purpose: the safety filter
+        // is code, not model judgement. It only FILTERS the existing library; it never advises treatment.
+        static readonly Dictionary<string, string[]> AvoidWords = new Dictionary<string, string[]>
+        {
+            ["knee"] = new[] { "jump", "lunge", "plyo", "hop", "burpee", "pistol", "sissy", "extension", "leg press", "hack", "split squat", "step", "skater", "full squat", "deep",
+                                    "bound", "skip", "mountain", "swing", "sprint", "drill", "acceleration", "butt kick", "claw" },
+            ["quad"] = new[] { "squat", "lunge", "extension", "leg press", "step", "jump" },
+            ["hamstring"] = new[] { "deadlift", "curl", "good morning", "lunge", "jump" },
+            ["glute"] = new[] { "bridge", "thrust", "lunge", "squat", "jump" },
+            ["hip"] = new[] { "lunge", "split", "sumo", "abduct", "adduct", "step", "jump" },
+            ["calf_shin"] = new[] { "jump", "run", "calf", "hop", "skip", "burpee" },
+            ["ankle_foot"] = new[] { "jump", "hop", "plyo", "run", "skip", "burpee", "calf", "bound", "mountain", "sprint", "drill" },
+            ["lower_back"] = new[] { "deadlift", "good morning", "bent over", "row", "twist", "sit-up", "situp", "hyperextension", "clean", "snatch" },
+            ["upper_back"] = new[] { "row", "pull", "shrug", "clean", "snatch" },
+            ["shoulder"] = new[] { "overhead", "shoulder press", "military", "snatch", "upright", "dip", "push press", "behind", "arnold" },
+            ["elbow"] = new[] { "curl", "extension", "skull", "dip", "pull-up", "chin" },
+            ["wrist_hand"] = new[] { "push-up", "pushup", "plank", "press", "curl", "handstand" },
+            ["chest"] = new[] { "bench", "press", "fly", "push-up", "pushup", "dip" },
+            ["neck"] = new[] { "shrug", "neck", "overhead" },
+        };
+
+        IEnumerator BuildWorkout(JObject args, Action<string> done)
+        {
+            string focus = ((string)args["focus"] ?? "legs").ToLowerInvariant();
+            string category = focus switch
+            {
+                "core" => "category=eq.Core",
+                "upper" => "category=in.(Chest,Back,Shoulders,Arms)",
+                "full" => "category=neq.Stretching",
+                _ => "category=eq.Legs",
+            };
+
+            // 1) What does the user say hurts right now? (RLS: only their own rows.)
+            string injuriesRaw = null, err = null;
+            yield return supabase.Get("user_injuries?select=body_area,side&status=eq.active", r => injuriesRaw = r, e => err = e);
+            if (err != null) { done(Fail(err)); yield break; }
+            var areas = new List<string>();
+            foreach (var i in JArray.Parse(injuriesRaw)) areas.Add((string)i["body_area"]);
+
+            // 2) Pull only the columns we need, bodyweight/dumbbell, beginner first when anything hurts.
+            string difficulty = areas.Count > 0 ? "difficulty=eq.beginner" : "difficulty=in.(beginner,intermediate)";
+            string path = "get_exercise_library?select=id,name,category,equipment,difficulty,primary_muscles,default_sets,default_reps" +
+                          $"&{category}&equipment=in.(bodyweight,dumbbell)&{difficulty}&limit=150";
+            string libRaw = null;
+            yield return supabase.Rpc(path, "{}", r => libRaw = r, e => err = e);
+            if (err != null) { done(Fail(err)); yield break; }
+
+            // 3) Drop anything whose name matches an avoid-word for an injured area, shuffle, keep 20.
+            var kept = new List<JToken>();
+            foreach (var ex in JArray.Parse(libRaw))
+            {
+                string name = ((string)ex["name"] ?? "").ToLowerInvariant();
+                bool blocked = false;
+                foreach (var area in areas)
+                    if (AvoidWords.TryGetValue(area, out var words))
+                        foreach (var w in words) if (name.Contains(w)) { blocked = true; break; }
+                if (!blocked) kept.Add(ex);
+            }
+            for (int i = kept.Count - 1; i > 0; i--)
+            {
+                int j = UnityEngine.Random.Range(0, i + 1);
+                (kept[i], kept[j]) = (kept[j], kept[i]);
+            }
+            var candidates = new JArray();
+            foreach (var ex in kept.GetRange(0, Math.Min(20, kept.Count)))
+                candidates.Add(new JObject
+                {
+                    ["id"] = ex["id"], ["name"] = ex["name"], ["equipment"] = ex["equipment"],
+                    ["muscles"] = ex["primary_muscles"], ["sets"] = ex["default_sets"], ["reps"] = ex["default_reps"],
+                });
+
+            done(new JObject
+            {
+                ["ok"] = true,
+                ["avoiding_areas"] = new JArray(areas),
+                ["note"] = "Candidates are pre-filtered from the A Better U exercise library. Choose 3. Prefer low-load, controlled options.",
+                ["candidates"] = candidates,
+            }.ToString(Newtonsoft.Json.Formatting.None));
         }
 
         static string Fail(string why) => new JObject { ["ok"] = false, ["error"] = why }.ToString(Newtonsoft.Json.Formatting.None);

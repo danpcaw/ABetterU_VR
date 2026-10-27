@@ -65,6 +65,10 @@ namespace ABetterU.Coach
         public IEnumerator Rpc(string fn, string json, Action<string> ok, Action<string> fail) =>
             Send($"{config.supabaseUrl}/rest/v1/rpc/{fn}", "POST", json, false, ok, fail);
 
+        /// Reads rows through PostgREST, e.g. Get("user_injuries?select=body_area&status=eq.active", ...).
+        public IEnumerator Get(string pathAndQuery, Action<string> ok, Action<string> fail) =>
+            Send($"{config.supabaseUrl}/rest/v1/{pathAndQuery}", "GET", null, false, ok, fail);
+
         /// Inserts one row and returns the stored row, so callers confirm the write really happened.
         public IEnumerator Insert(string table, string json, Action<string> ok, Action<string> fail) =>
             Send($"{config.supabaseUrl}/rest/v1/{table}", "POST", json, true, ok, fail);
