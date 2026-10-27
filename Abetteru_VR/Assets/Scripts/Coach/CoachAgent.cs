@@ -203,8 +203,8 @@ namespace ABetterU.Coach
             var rows = new JArray();
             foreach (var f in JArray.Parse(raw))
             {
-                if (f["serving_size_g"]?.Type != JTokenType.Null && f["serving_size_g"] != null)
-                    servingGrams[(string)f["id"]] = (double)f["serving_size_g"];
+                double? grams = EstimateServingGrams(f);
+                if (grams.HasValue) servingGrams[(string)f["id"]] = grams.Value;
                 var summary = new JObject
                 {
                     ["food_id"] = f["id"],
@@ -218,6 +218,19 @@ namespace ABetterU.Coach
                 rows.Add(summary);
             }
             done(new JObject { ["ok"] = true, ["searched_as"] = usedQuery, ["results"] = rows }.ToString(Newtonsoft.Json.Formatting.None));
+        }
+
+        /// Mirrors estimateServingGrams in the web app (src/lib/foods.ts): the serving weight if the food has one,
+        /// else grams derived from kcal per serving vs per 100 g, else null (the web app then logs 100 g).
+        static double? EstimateServingGrams(JToken food)
+        {
+            double servingG = food["serving_size_g"]?.Type == JTokenType.Null ? 0 : (double?)food["serving_size_g"] ?? 0;
+            if (servingG > 0) return servingG;
+
+            double kcalServing = food["energy_kcal_serving"]?.Type == JTokenType.Null ? 0 : (double?)food["energy_kcal_serving"] ?? 0;
+            double kcal100 = food["energy_kcal_100g"]?.Type == JTokenType.Null ? 0 : (double?)food["energy_kcal_100g"] ?? 0;
+            if (kcalServing > 0 && kcal100 > 0) return Math.Round(kcalServing / kcal100 * 100);
+            return null;
         }
 
         static List<string> NormaliseQuery(string query)
@@ -260,8 +273,8 @@ namespace ABetterU.Coach
                 ["source"] = "ai_assistant",
             };
 
-            // Match what the web app itself writes: grams. With no serving weight on the food (e.g. KFC BBQ Mini Wrap),
-            // the web app stores 100 g per unit, so do the same and the diary shows calories without an Edit + Save.
+            // The web diary computes calories only from quantity_g (computeEntryNutrition), so always write grams,
+            // exactly as LogFoodSheet does: estimated serving weight, else 100 g per unit.
             double gramsPerUnit = servingGrams.TryGetValue(foodId, out double g) ? g : 100.0;
             row["quantity_g"] = Math.Round(gramsPerUnit * servings, 1);
 
