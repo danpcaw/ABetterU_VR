@@ -24,21 +24,8 @@ namespace ABetterU.Coach
 
         void Start()
         {
-            // Borrow a working URP material from the scene's original test objects, then hide them
-            // (they would poke through the new room).
-            foreach (var name in new[] { "Cube", "Plane" })
-            {
-                var old = GameObject.Find(name);
-                if (old == null) continue;
-                var r = old.GetComponent<Renderer>();
-                if (template == null && r != null && r.sharedMaterial != null) template = r.sharedMaterial;
-                old.SetActive(false);
-            }
-            if (template == null)
-            {
-                var lit = Shader.Find("Universal Render Pipeline/Lit");
-                if (lit != null) template = new Material(lit);
-            }
+            template = AcquireTemplate();
+            HideSceneTestObjects();   // the scene's original cube and plane would poke through the new room
             if (template == null) Debug.LogError("[Gym] No URP material available; the room will render magenta.");
             else Debug.Log($"[Gym] using material template '{template.name}' with shader '{template.shader.name}'");
 
@@ -253,6 +240,36 @@ namespace ABetterU.Coach
             var m = MakeMaterial(template, color, smoothness, metallic);
             if (m != null) go.GetComponent<Renderer>().sharedMaterial = m;
             return go.transform;
+        }
+
+        /// A URP material that is known to render on the device, borrowed from the scene's original test objects
+        /// (CreatePrimitive's default is magenta in this project). Shared by the lobby, the gym and the mannequin.
+        public static Material SharedTemplate { get; private set; }
+
+        public static Material AcquireTemplate()
+        {
+            if (SharedTemplate != null) return SharedTemplate;
+            foreach (var name in new[] { "Cube", "Plane" })
+            {
+                var old = GameObject.Find(name);
+                var r = old != null ? old.GetComponent<Renderer>() : null;
+                if (r != null && r.sharedMaterial != null) { SharedTemplate = r.sharedMaterial; break; }
+            }
+            if (SharedTemplate == null)
+            {
+                var lit = Shader.Find("Universal Render Pipeline/Lit");
+                if (lit != null) SharedTemplate = new Material(lit);
+            }
+            return SharedTemplate;
+        }
+
+        public static void HideSceneTestObjects()
+        {
+            foreach (var name in new[] { "Cube", "Plane" })
+            {
+                var old = GameObject.Find(name);
+                if (old != null) old.SetActive(false);
+            }
         }
 
         /// A tinted copy of the known-good URP material (shared with the mannequin).

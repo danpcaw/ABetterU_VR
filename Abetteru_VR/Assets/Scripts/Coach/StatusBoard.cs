@@ -29,6 +29,13 @@ namespace ABetterU.Coach
             GetComponent<MeshRenderer>().sharedMaterial = font.material;
         }
 
+        /// Hides or shows the board's text (hidden during the login and hub screens).
+        public void SetVisible(bool visible)
+        {
+            var r = GetComponent<MeshRenderer>();
+            if (r != null) r.enabled = visible;
+        }
+
         /// Detaches the board from the head and fixes it in the world (e.g. on the gym's wall screen).
         /// TextMesh text reads correctly when viewed along +Z, which is how the user faces the screen.
         public void PinToWall(Vector3 position, float scale)

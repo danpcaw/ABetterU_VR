@@ -21,5 +21,7 @@
     </intent>
   </queries>
   <uses-feature android:name="android.hardware.vr.headtracking" android:version="1" android:required="true" />
+  <!-- Lets the app use Quest's system keyboard (TouchScreenKeyboard) for typing an email and password -->
+  <uses-feature android:name="oculus.software.overlay_keyboard" android:required="false" />
   <horizonos:uses-horizonos-sdk horizonos:minSdkVersion="60" horizonos:targetSdkVersion="207" />
 </manifest>

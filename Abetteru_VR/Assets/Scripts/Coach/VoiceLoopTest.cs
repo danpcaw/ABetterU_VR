@@ -17,9 +17,10 @@ namespace ABetterU.Coach
         StatusBoard board;
         bool busy;
 
+        bool inGym;                       // false until the user has logged in and entered the gym
+
         IEnumerator Start()
         {
-            gameObject.AddComponent<GymRoom>();   // the virtual gym, built from primitives at startup
             board = StatusBoard.Create(Camera.main != null ? Camera.main.transform : transform);
 
             var config = ModelApiConfig.Load();
@@ -43,18 +44,17 @@ namespace ABetterU.Coach
             string ttsNote = tts.Ready ? "Voice ready (Wit.ai)." : "No voice: paste Wit token\nin ModelApiSecrets.";
             Debug.Log("[VoiceLoop] TTS: " + ttsNote);
 
-            // Judge Instant Login: sign in to A Better U (RLS scopes everything to this one user).
+            // Front door: the lobby with Judge Instant Login or your own account, then the hub, then "Enter the gym".
+            // RLS scopes everything the agent does to whichever user signs in.
             supabase = new SupabaseClient(config);
-            string loginNote = "Not signed in (Supabase unset).";
-            if (supabase.Configured)
-            {
-                board.Show("Signing in to\nA Better U...");
-                string loginError = null;
-                yield return supabase.SignInJudge(e => loginError = e);
-                if (loginError != null) Debug.LogError("[Supabase] " + loginError);
-                loginNote = loginError == null ? $"Signed in as {supabase.DisplayName ?? "user"}." : "Sign-in failed (see logcat).";
-            }
+            var flow = gameObject.AddComponent<AppFlow>();
+            flow.Init(config, supabase, board);
+            while (flow.Current != AppFlow.Stage.Gym) yield return null;
+
+            string loginNote = $"Signed in as {supabase.DisplayName ?? "user"}.";
             Debug.Log("[Supabase] " + loginNote);
+
+            gameObject.AddComponent<GymRoom>();   // the virtual gym, built from primitives
             agent = new CoachAgent(config, supabase);
 
             // Squat counter: the headset's height is the only body signal the Quest gives us.
@@ -62,6 +62,7 @@ namespace ABetterU.Coach
             reps.head = Camera.main != null ? Camera.main.transform : transform;
 
             board.Show($"Hold RIGHT TRIGGER to talk.\nPress LEFT TRIGGER\nto start a squat set.\n\n{ttsNote}\n{loginNote}");
+            inGym = true;
         }
 
         RepCounter reps;
@@ -70,9 +71,9 @@ namespace ABetterU.Coach
 
         void Update()
         {
-            if (mic == null) return;
+            if (mic == null || !inGym) return;
 
-            // X on the left controller starts a squat set, and ends it.
+            // The left trigger starts a squat set, and ends it.
             if (SetTogglePressed() && !busy)
             {
                 StartCoroutine(inSet ? EndSet() : BeginSet());

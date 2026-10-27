@@ -36,8 +36,24 @@ namespace ABetterU.Coach
                 onError("Supabase url, anon key and judge password must be set in ModelApiSecrets.");
                 yield break;
             }
+            yield return SignIn(config.judgeEmail, config.judgePassword, onError);
+        }
 
-            var body = JsonUtility.ToJson(new SignInBody { email = config.judgeEmail, password = config.judgePassword });
+        /// Signs out locally (drops the token and cached profile). The next sign-in starts clean.
+        public void SignOut()
+        {
+            accessToken = null;
+            UserId = null;
+            DisplayName = null;
+        }
+
+        /// Password sign-in for any A Better U account. RLS then scopes every call to that user.
+        public IEnumerator SignIn(string email, string password, Action<string> onError)
+        {
+            if (!Configured) { onError("Supabase url and anon key must be set in ModelApiSecrets."); yield break; }
+            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrEmpty(password)) { onError("Enter your email and password."); yield break; }
+
+            var body = JsonUtility.ToJson(new SignInBody { email = email.Trim(), password = password });
             using var req = Build($"{config.supabaseUrl}/auth/v1/token?grant_type=password", "POST", body, false);
             yield return req.SendWebRequest();
 
