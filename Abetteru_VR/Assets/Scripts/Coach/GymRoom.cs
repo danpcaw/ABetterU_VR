@@ -32,6 +32,10 @@ namespace ABetterU.Coach
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
             RenderSettings.ambientLight = new Color(0.62f, 0.64f, 0.68f);
 
+            // The retreat tints the sun warm for sunset; the gym is an indoor room with neutral light.
+            var sun = FindAnyObjectByType<Light>();
+            if (sun != null) { sun.color = Color.white; sun.intensity = 1f; sun.transform.rotation = Quaternion.Euler(50f, -30f, 0f); }
+
             root = new GameObject("Gym").transform;
             BuildShell();
             BuildMirrorWall();

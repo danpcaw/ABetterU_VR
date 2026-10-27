@@ -24,6 +24,17 @@ namespace ABetterU.Coach
             Apply();
         }
 
+        // Glass buttons swap textures instead of tinting a colour.
+        Texture2D texNormal, texHover, texDisabled;
+
+        public void SetupTextures(Material material, TextMesh label, Texture2D normal, Texture2D hover, Texture2D disabled)
+        {
+            this.material = material;
+            this.label = label;
+            texNormal = normal; texHover = hover; texDisabled = disabled;
+            Apply();
+        }
+
         public bool Interactable
         {
             get => interactable;
@@ -37,6 +48,11 @@ namespace ABetterU.Coach
         void Apply()
         {
             if (material == null) return;
+            if (texNormal != null)
+            {
+                material.mainTexture = !interactable ? texDisabled : hovering ? texHover : texNormal;
+                return;
+            }
             Color c = !interactable ? Disabled : hovering ? hover : normal;
             if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", c);
             if (material.HasProperty("_Color")) material.SetColor("_Color", c);
@@ -83,8 +99,8 @@ namespace ABetterU.Coach
             var t = go.AddComponent<TextMesh>();
             t.text = text;
             t.font = Font;
-            t.fontSize = 64;
-            t.characterSize = charSize;
+            t.fontSize = 96;                         // rendered at a higher resolution for crisper text in the headset...
+            t.characterSize = charSize * (64f / 96f); // ...and scaled so the on-screen size matches the old 64 px values
             t.anchor = anchor;
             t.alignment = alignment;
             t.color = color;
@@ -115,6 +131,9 @@ namespace ABetterU.Coach
         LineRenderer line;
         Transform dot;
         VRButton hovered;
+
+        /// True while the laser rests on a button. Voice capture checks this so a click never starts recording.
+        public bool HoveringButton => hovered != null;
 
         /// Starts the laser on the left hand (e.g. when the menu was opened with the left Menu button).
         public void PreferLeftHand(bool left) { useLeft = left; }

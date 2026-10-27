@@ -5,8 +5,8 @@ using UnityEngine.SceneManagement;
 
 namespace ABetterU.Coach
 {
-    /// The app's front door: a lobby with a login screen (Judge Instant Login, or your own account typed on an
-    /// on-screen keyboard) and a hub, then the gym. Also owns the in-gym menu (left Menu button).
+    /// The app's front door: the retreat environment with a two-column login (Judge Instant Login, or your own
+    /// account typed on an on-screen keyboard), a hub, then the gym. Also owns the in-gym menu (left Menu button).
     /// VoiceLoopTest waits for Stage.Gym before it builds the gym and starts the coach.
     public class AppFlow : MonoBehaviour
     {
@@ -20,30 +20,29 @@ namespace ABetterU.Coach
         public static SupabaseClient Session;
 
         static readonly Color Navy = new Color(0.04f, 0.06f, 0.10f);
+        static readonly Color Teal = new Color(0.45f, 0.92f, 0.86f);
 
         SupabaseClient supabase;
         StatusBoard board;
         VRPointer pointer;
+        RetreatEnvironment retreat;
 
-        Transform lobby;                 // floor and mat; removed when entering the gym
-        Transform screen;                // the current panel; replaced as the stage changes
-        Transform menuRoot;
+        Transform screen;                // the current screen; replaced as the stage changes
+        Transform keyboardRoot;          // the on-screen keyboard (login only)
+        Transform menuRoot;              // the in-gym menu
         TextMesh statusLabel;
-        VRButton emailField, passwordField, shiftButton;
+        VRButton emailField, passwordField, showButton, shiftButton;
         readonly List<KeyValuePair<VRButton, char>> letterKeys = new List<KeyValuePair<VRButton, char>>();
 
         string email = "", password = "";
-        bool editingPassword;
-        bool shift;
-        bool busy;
+        bool editingPassword, showPassword, shift, busy;
 
         public void Init(SupabaseClient supabase, StatusBoard board)
         {
             this.supabase = supabase;
             this.board = board;
 
-            // Height must be real before anything is placed: the rig defaults to EyeLevel, which put the login panel
-            // in the air and the floor under the user's feet (found on-device Oct 27).
+            // Height must be real before anything is placed: the rig defaults to EyeLevel (found on-device Oct 27).
             if (OVRManager.instance != null && OVRManager.instance.trackingOriginType != OVRManager.TrackingOrigin.FloorLevel)
                 OVRManager.instance.trackingOriginType = OVRManager.TrackingOrigin.FloorLevel;
 
@@ -58,97 +57,120 @@ namespace ABetterU.Coach
             }
             board.SetVisible(false);
 
-            BuildLobby();
+            retreat = gameObject.AddComponent<RetreatEnvironment>();
+            retreat.Build();
+
             pointer = gameObject.AddComponent<VRPointer>();
             pointer.Init(cam != null ? cam.transform : transform);
 
             if (supabase.SignedIn) ShowHub(); else ShowLogin();    // already signed in: we came back from the gym menu
         }
 
-        // ── Lobby: a dark floor with a teal mat where you stand ─────────────────
+        /// True while the pointer is resting on a button, so voice capture can ignore the trigger.
+        public bool PointerOverButton => pointer != null && pointer.HoveringButton;
 
-        void BuildLobby()
-        {
-            lobby = new GameObject("Lobby").transform;
-            VRUi.Box(lobby, "Lobby floor", new Vector3(0, -0.05f, 0), new Vector3(10f, 0.1f, 10f), new Color(0.06f, 0.08f, 0.11f));
-            VRUi.Box(lobby, "Lobby mat", new Vector3(0, 0.005f, 0), new Vector3(1.4f, 0.01f, 1.4f), VRUi.Teal);
-        }
-
-        Transform NewScreen(float height = 1.3f)
+        Transform NewRoot(Vector3 position)
         {
             if (screen != null) Destroy(screen.gameObject);
-            statusLabel = null; emailField = null; passwordField = null; shiftButton = null;
-            letterKeys.Clear();
+            CloseKeyboard();
+            statusLabel = null; emailField = null; passwordField = null; showButton = null;
 
             var go = new GameObject("Screen");
-            go.transform.position = new Vector3(0f, 1.45f, 2.2f);   // in front of you, at about eye height
+            go.transform.position = position;
             screen = go.transform;
-
-            VRUi.Box(screen, "Panel", new Vector3(0, 0, 0.03f), new Vector3(1.9f, height, 0.04f), VRUi.PanelBg);
-            VRUi.Box(screen, "Accent", new Vector3(0, height / 2f - 0.03f, 0f), new Vector3(1.9f, 0.03f, 0.02f), VRUi.Teal);
             return screen;
         }
 
-        // ── Login screen ─────────────────────────────────────────────────────────
+        // ── Login: two columns, like the mockup ─────────────────────────────────────────────────────────
 
         void ShowLogin()
         {
             Current = Stage.Login;
-            var p = NewScreen();
+            var p = NewRoot(new Vector3(0f, 1.55f, 2.6f));
 
-            VRUi.Label(p, "A BETTER U", new Vector3(0, 0.40f, -0.02f), 0.022f, VRUi.Teal);
-            VRUi.Label(p, "VR COACH", new Vector3(0, 0.26f, -0.02f), 0.011f, VRUi.Ink);
-            VRUi.Label(p, "A voice agent that acts on your real\nA Better U account", new Vector3(0, 0.12f, -0.02f), 0.0075f, VRUi.Muted);
+            VRGlass.Panel(p, "Backdrop", new Vector3(0, 0, 0.04f), new Vector2(4.1f, 2.1f), 0.10f, GlassStyle.Panel, 0);
 
-            VRUi.Button(p, "Judge Instant Login", new Vector3(0, -0.10f, -0.02f), new Vector2(1.5f, 0.22f),
-                VRUi.Teal, VRUi.TealHover, 0.011f, () => StartCoroutine(Login(judge: true)));
-            VRUi.Button(p, "Sign in with your account", new Vector3(0, -0.38f, -0.02f), new Vector2(1.5f, 0.18f),
-                VRUi.Slate, VRUi.SlateHover, 0.009f, ShowAccountForm);
+            // Left column: the real logo, the tagline, and two unavailable sign-in tiles.
+            var logo = Resources.Load<Texture2D>("Branding/logo");
+            if (logo != null) VRGlass.Image(p, "Logo", logo, new Vector3(-1.15f, 0.52f, -0.01f), new Vector2(1.95f, 0.65f));
+            else VRGlass.Label(p, "A Better U", new Vector3(-1.15f, 0.52f, -0.02f), 0.024f, VRUi.Ink);
 
-            statusLabel = VRUi.Label(p, "", new Vector3(0, -0.57f, -0.02f), 0.0065f, VRUi.Muted);
-        }
+            VRGlass.Label(p, "Mind   ·   Movement   ·   Progress", new Vector3(-1.15f, 0.12f, -0.02f), 0.0105f, Teal);
+            VRGlass.Label(p, "Your complete wellness platform\nin virtual and real life.", new Vector3(-1.15f, -0.10f, -0.02f), 0.0085f, VRUi.Ink);
 
-        // Sign-in form with our own on-screen keyboard (the Quest system keyboard did not open reliably).
-        void ShowAccountForm()
-        {
-            var p = NewScreen(height: 2.0f);
-            VRUi.Label(p, "Sign in", new Vector3(0, 0.86f, -0.02f), 0.016f, VRUi.Teal);
+            VRGlass.Button(p, "Coach Login\nComing soon", new Vector3(-1.55f, -0.62f, -0.02f), new Vector2(0.74f, 0.46f), GlassStyle.Disabled, 0.0085f, null, 0.05f);
+            VRGlass.Button(p, "Gym Login\nComing soon", new Vector3(-0.75f, -0.62f, -0.02f), new Vector2(0.74f, 0.46f), GlassStyle.Disabled, 0.0085f, null, 0.05f);
 
-            emailField = VRUi.Button(p, "", new Vector3(0, 0.66f, -0.02f), new Vector2(1.6f, 0.15f), VRUi.Slate, VRUi.SlateHover, 0.009f, () => { editingPassword = false; RefreshFields(); });
-            passwordField = VRUi.Button(p, "", new Vector3(0, 0.47f, -0.02f), new Vector2(1.6f, 0.15f), VRUi.Slate, VRUi.SlateHover, 0.009f, () => { editingPassword = true; RefreshFields(); });
+            // Right column: the sign-in card.
+            const float cx = 1.2f;
+            VRGlass.Panel(p, "Card", new Vector3(cx, 0, 0.0f), new Vector2(1.55f, 1.85f), 0.07f, GlassStyle.Card, 1);
+            VRGlass.Label(p, "Welcome to", new Vector3(cx, 0.76f, -0.02f), 0.0095f, VRUi.Muted);
+            VRGlass.Label(p, "A Better U", new Vector3(cx, 0.64f, -0.02f), 0.021f, VRUi.Ink);
+            VRGlass.Label(p, "Sign in to continue your journey.", new Vector3(cx, 0.52f, -0.02f), 0.0072f, VRUi.Muted);
 
-            BuildKeyboard(p, 0.27f);
+            emailField = VRGlass.Button(p, "", new Vector3(cx, 0.34f, -0.02f), new Vector2(1.3f, 0.15f), GlassStyle.Secondary, 0.0085f,
+                () => { editingPassword = false; RefreshFields(); ShowKeyboard(); });
+            passwordField = VRGlass.Button(p, "", new Vector3(cx - 0.13f, 0.15f, -0.02f), new Vector2(1.04f, 0.15f), GlassStyle.Secondary, 0.0085f,
+                () => { editingPassword = true; RefreshFields(); ShowKeyboard(); });
+            showButton = VRGlass.Button(p, "Show", new Vector3(cx + 0.54f, 0.15f, -0.02f), new Vector2(0.24f, 0.15f), GlassStyle.Secondary, 0.0075f,
+                () => { showPassword = !showPassword; RefreshFields(); });
 
-            VRUi.Button(p, "Sign in", new Vector3(-0.33f, -0.50f, -0.02f), new Vector2(0.9f, 0.16f), VRUi.Teal, VRUi.TealHover, 0.011f, () => StartCoroutine(Login(judge: false)));
-            VRUi.Button(p, "Back", new Vector3(0.55f, -0.50f, -0.02f), new Vector2(0.5f, 0.16f), VRUi.Slate, VRUi.SlateHover, 0.009f, ShowLogin);
+            VRGlass.Button(p, "Sign In", new Vector3(cx, -0.08f, -0.02f), new Vector2(1.3f, 0.17f), GlassStyle.Primary, 0.011f,
+                () => StartCoroutine(Login(judge: false)));
 
-            statusLabel = VRUi.Label(p, "", new Vector3(0, -0.70f, -0.02f), 0.0065f, VRUi.Muted);
-            editingPassword = false;
+            VRGlass.Label(p, "or", new Vector3(cx, -0.24f, -0.02f), 0.0075f, VRUi.Muted);
+            VRGlass.Button(p, "Continue with Meta Quest  (coming soon)", new Vector3(cx, -0.38f, -0.02f), new Vector2(1.3f, 0.14f), GlassStyle.Disabled, 0.0072f, null);
+            VRGlass.Button(p, "Judge Instant Login", new Vector3(cx, -0.60f, -0.02f), new Vector2(1.3f, 0.18f), GlassStyle.Purple, 0.011f,
+                () => StartCoroutine(Login(judge: true)));
+
+            statusLabel = VRGlass.Label(p, "", new Vector3(cx, -0.78f, -0.02f), 0.0068f, VRUi.Muted);
             RefreshFields();
         }
 
-        void BuildKeyboard(Transform p, float topY)
-        {
-            string[] rows = { "1234567890", "qwertyuiop", "asdfghjkl@", "zxcvbnm._-" };
-            const float step = 0.15f, size = 0.13f;
+        // ── On-screen keyboard: appears when you select a field ─────────────────────────────────────────
 
+        void ShowKeyboard()
+        {
+            if (keyboardRoot != null) return;
+            letterKeys.Clear();
+
+            var go = new GameObject("Keyboard");
+            go.transform.position = new Vector3(0f, 0.55f, 1.9f);
+            go.transform.rotation = Quaternion.Euler(25f, 0f, 0f);   // leaned back so it is easy to reach and read
+            keyboardRoot = go.transform;
+            var k = keyboardRoot;
+
+            VRGlass.Panel(k, "Keyboard panel", new Vector3(0, 0, 0.02f), new Vector2(1.8f, 0.92f), 0.05f, GlassStyle.Panel, 0);
+
+            string[] rows = { "1234567890", "qwertyuiop", "asdfghjkl@", "zxcvbnm._-" };
+            const float step = 0.16f, size = 0.14f, top = 0.30f;
             for (int r = 0; r < rows.Length; r++)
             {
-                float y = topY - r * step;
+                float y = top - r * step;
                 float x0 = -(rows[r].Length - 1) * step / 2f;
                 for (int i = 0; i < rows[r].Length; i++)
                 {
                     char key = rows[r][i];                       // local copy so each button keeps its own character
-                    var button = VRUi.Button(p, key.ToString(), new Vector3(x0 + i * step, y, -0.02f), new Vector2(size, size),
-                        VRUi.Slate, VRUi.SlateHover, 0.009f, () => TypeChar(key));
+                    var button = VRGlass.Button(k, key.ToString(), new Vector3(x0 + i * step, y, -0.02f), new Vector2(size, size),
+                        GlassStyle.Secondary, 0.0095f, () => TypeChar(key), 0.03f, 1);
                     if (char.IsLetter(key)) letterKeys.Add(new KeyValuePair<VRButton, char>(button, key));
                 }
             }
 
-            float bottom = topY - rows.Length * step;
-            shiftButton = VRUi.Button(p, "Shift", new Vector3(-0.55f, bottom, -0.02f), new Vector2(0.45f, size), VRUi.Slate, VRUi.SlateHover, 0.008f, () => { shift = !shift; RefreshKeys(); });
-            VRUi.Button(p, "Delete", new Vector3(0.55f, bottom, -0.02f), new Vector2(0.45f, size), VRUi.Slate, VRUi.SlateHover, 0.008f, Backspace);
+            float bottom = top - rows.Length * step;
+            shiftButton = VRGlass.Button(k, "Shift", new Vector3(-0.60f, bottom, -0.02f), new Vector2(0.5f, size), GlassStyle.Secondary, 0.0085f,
+                () => { shift = !shift; RefreshKeys(); }, 0.03f, 1);
+            VRGlass.Button(k, "Delete", new Vector3(0.60f, bottom, -0.02f), new Vector2(0.5f, size), GlassStyle.Secondary, 0.0085f, Backspace, 0.03f, 1);
+            VRGlass.Button(k, "Done", new Vector3(0f, bottom, -0.02f), new Vector2(0.6f, size), GlassStyle.Primary, 0.0095f, CloseKeyboard, 0.03f, 1);
             RefreshKeys();
+        }
+
+        void CloseKeyboard()
+        {
+            if (keyboardRoot != null) Destroy(keyboardRoot.gameObject);
+            keyboardRoot = null;
+            letterKeys.Clear();
+            shiftButton = null;
         }
 
         void TypeChar(char c)
@@ -177,13 +199,18 @@ namespace ABetterU.Coach
             if (emailField != null)
                 emailField.SetLabel((editingPassword ? "  " : "> ") + (email.Length > 0 ? email : "Email"));
             if (passwordField != null)
-                passwordField.SetLabel((editingPassword ? "> " : "  ") + (password.Length > 0 ? new string('*', password.Length) : "Password"));
+            {
+                string shown = password.Length == 0 ? "Password" : showPassword ? password : new string('*', password.Length);
+                passwordField.SetLabel((editingPassword ? "> " : "  ") + shown);
+            }
+            if (showButton != null) showButton.SetLabel(showPassword ? "Hide" : "Show");
         }
 
         IEnumerator Login(bool judge)
         {
-            if (busy) yield break;
+            if (busy) yield break;                                  // no duplicate submissions
             busy = true;
+            CloseKeyboard();
             Say(judge ? "Signing in as the judge..." : "Signing in...");
 
             string error = null;
@@ -194,7 +221,7 @@ namespace ABetterU.Coach
             if (error != null)
             {
                 Debug.LogError("[Login] " + error);
-                Say(error.Length > 90 ? error.Substring(0, 90) + "..." : error);
+                Say("Sign-in failed. Check your details and try again.");
                 yield break;
             }
             Debug.Log($"[Login] signed in as {supabase.DisplayName ?? "user"} ({(judge ? "judge" : "own account")})");
@@ -207,19 +234,20 @@ namespace ABetterU.Coach
             if (statusLabel != null) statusLabel.text = message;
         }
 
-        // ── Hub (milestone 1: a welcome and the door into the gym; the live dashboard comes next) ──
+        // ── Hub (placeholder until the home dashboard milestone): a welcome and the door into the gym ──────
 
         void ShowHub()
         {
             Current = Stage.Hub;
-            var p = NewScreen();
+            var p = NewRoot(new Vector3(0f, 1.5f, 2.4f));
 
-            VRUi.Label(p, "Welcome,", new Vector3(0, 0.40f, -0.02f), 0.012f, VRUi.Muted);
-            VRUi.Label(p, supabase.DisplayName ?? "athlete", new Vector3(0, 0.26f, -0.02f), 0.022f, VRUi.Teal);
-            VRUi.Label(p, "You are signed in to your A Better U account.\nYour voice coach is ready.", new Vector3(0, 0.08f, -0.02f), 0.0075f, VRUi.Muted);
+            VRGlass.Panel(p, "Hub panel", new Vector3(0, 0, 0.03f), new Vector2(2.1f, 1.4f), 0.07f, GlassStyle.Panel, 0);
+            VRGlass.Label(p, "Welcome,", new Vector3(0, 0.45f, -0.02f), 0.012f, VRUi.Muted);
+            VRGlass.Label(p, supabase.DisplayName ?? "athlete", new Vector3(0, 0.30f, -0.02f), 0.024f, VRUi.Ink);
+            VRGlass.Label(p, "You are signed in to your A Better U account.\nYour voice coach is ready.", new Vector3(0, 0.08f, -0.02f), 0.0082f, VRUi.Muted);
 
-            VRUi.Button(p, "Enter the gym", new Vector3(0, -0.20f, -0.02f), new Vector2(1.5f, 0.22f), VRUi.Teal, VRUi.TealHover, 0.012f, EnterGym);
-            VRUi.Button(p, "Switch account", new Vector3(0, -0.46f, -0.02f), new Vector2(0.9f, 0.14f), VRUi.Slate, VRUi.SlateHover, 0.008f, SwitchAccount);
+            VRGlass.Button(p, "Enter the gym", new Vector3(0, -0.20f, -0.02f), new Vector2(1.5f, 0.2f), GlassStyle.Primary, 0.012f, EnterGym);
+            VRGlass.Button(p, "Switch account", new Vector3(0, -0.46f, -0.02f), new Vector2(0.9f, 0.14f), GlassStyle.Secondary, 0.0085f, SwitchAccount);
         }
 
         void SwitchAccount()
@@ -232,13 +260,14 @@ namespace ABetterU.Coach
         void EnterGym()
         {
             Destroy(pointer);
+            CloseKeyboard();
             if (screen != null) Destroy(screen.gameObject);
-            if (lobby != null) Destroy(lobby.gameObject);
+            if (retreat != null) { retreat.Teardown(); Destroy(retreat); }
             board.SetVisible(true);
             Current = Stage.Gym;
         }
 
-        // ── In-gym menu: the left Menu button opens it ──────────────────────────
+        // ── In-gym menu: the left Menu button opens it ──────────────────────────────────────────────────
 
         void Update()
         {
@@ -258,14 +287,13 @@ namespace ABetterU.Coach
             menuRoot.position = new Vector3(head.position.x, Mathf.Max(head.position.y - 0.05f, 1.1f), head.position.z) + forward * 1.3f;
             menuRoot.rotation = Quaternion.LookRotation(forward, Vector3.up);    // its +Z points away from you, so the text faces you
 
-            VRUi.Box(menuRoot, "Panel", new Vector3(0, 0, 0.03f), new Vector3(1.3f, 1.2f, 0.04f), VRUi.PanelBg);
-            VRUi.Box(menuRoot, "Accent", new Vector3(0, 0.57f, 0f), new Vector3(1.3f, 0.03f, 0.02f), VRUi.Teal);
-            VRUi.Label(menuRoot, "Menu", new Vector3(0, 0.45f, -0.02f), 0.016f, VRUi.Teal);
+            VRGlass.Panel(menuRoot, "Panel", new Vector3(0, 0, 0.03f), new Vector2(1.3f, 1.2f), 0.06f, GlassStyle.Panel, 0);
+            VRGlass.Label(menuRoot, "Menu", new Vector3(0, 0.46f, -0.02f), 0.016f, VRUi.Ink);
 
-            VRUi.Button(menuRoot, "Resume", new Vector3(0, 0.25f, -0.02f), new Vector2(1.0f, 0.15f), VRUi.Teal, VRUi.TealHover, 0.010f, CloseMenu);
-            VRUi.Button(menuRoot, "Back to hub", new Vector3(0, 0.05f, -0.02f), new Vector2(1.0f, 0.15f), VRUi.Slate, VRUi.SlateHover, 0.009f, BackToHub);
-            VRUi.Button(menuRoot, "Switch account", new Vector3(0, -0.15f, -0.02f), new Vector2(1.0f, 0.15f), VRUi.Slate, VRUi.SlateHover, 0.009f, LeaveToLogin);
-            VRUi.Button(menuRoot, "Exit app", new Vector3(0, -0.38f, -0.02f), new Vector2(1.0f, 0.15f), VRUi.Slate, VRUi.SlateHover, 0.009f, Application.Quit);
+            VRGlass.Button(menuRoot, "Resume", new Vector3(0, 0.25f, -0.02f), new Vector2(1.0f, 0.16f), GlassStyle.Primary, 0.010f, CloseMenu);
+            VRGlass.Button(menuRoot, "Back to hub", new Vector3(0, 0.05f, -0.02f), new Vector2(1.0f, 0.16f), GlassStyle.Secondary, 0.009f, BackToHub);
+            VRGlass.Button(menuRoot, "Switch account", new Vector3(0, -0.15f, -0.02f), new Vector2(1.0f, 0.16f), GlassStyle.Secondary, 0.009f, LeaveToLogin);
+            VRGlass.Button(menuRoot, "Exit app", new Vector3(0, -0.38f, -0.02f), new Vector2(1.0f, 0.16f), GlassStyle.Secondary, 0.009f, Application.Quit);
 
             pointer = gameObject.AddComponent<VRPointer>();
             pointer.Init(head);
