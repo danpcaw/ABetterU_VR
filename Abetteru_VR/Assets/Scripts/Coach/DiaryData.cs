@@ -28,7 +28,7 @@ namespace ABetterU.Coach
                                     "carbohydrate_g_100g,carbohydrate_g_serving,fat_g_100g,fat_g_serving";
             string day = Date.ToString("yyyy-MM-dd");
             string raw = null, err = null;
-            yield return db.Get($"food_log_entries?select=meal_slot,servings,quantity_g,created_at,food:food_id({foodCols})&log_date=eq.{day}&order=created_at.asc",
+            yield return db.Get($"food_log_entries?select=meal_slot,servings,quantity_g,created_at,food:food_id({foodCols}),{DashboardData.MealEmbed}&log_date=eq.{day}&order=created_at.asc",
                 r => raw = r, e => err = e);
 
             JArray rows = null;
@@ -43,23 +43,15 @@ namespace ABetterU.Coach
 
             foreach (var entry in rows)
             {
+                if (!DashboardData.EntryMacros(entry, out string itemName, out double kcal, out double protein, out double carbs, out double fat)) continue;
+                Kcal += kcal; Protein += protein; Carbs += carbs; Fat += fat;
+
                 var food = entry["food"];
-                if (food == null || food.Type == JTokenType.Null) continue;
-
-                double servingG = DashboardData.Num(food["serving_size_g"]) ?? 0;
-                double qty = DashboardData.Num(entry["quantity_g"]) ?? 0;
+                string brand = food != null && food.Type != JTokenType.Null ? (string)food["brand"] : null;
+                string name = itemName + (string.IsNullOrEmpty(brand) ? "" : $" ({brand})");
                 double servings = DashboardData.Num(entry["servings"]) ?? 0;
-                double grams = qty > 0 ? qty : (servings > 0 ? servings : 1) * (servingG > 0 ? servingG : 100);
-
-                double kcal = DashboardData.Portion(food, "energy_kcal", grams);
-                Kcal += kcal;
-                Protein += DashboardData.Portion(food, "protein_g", grams);
-                Carbs += DashboardData.Portion(food, "carbohydrate_g", grams);
-                Fat += DashboardData.Portion(food, "fat_g", grams);
-
-                string brand = (string)food["brand"];
-                string name = (string)food["name"] + (string.IsNullOrEmpty(brand) ? "" : $" ({brand})");
-                string amount = servings > 0 ? $"x{servings:0.##}" : $"{grams:0} g";
+                double qty = DashboardData.Num(entry["quantity_g"]) ?? 0;
+                string amount = servings > 0 ? $"x{servings:0.##}" : $"{qty:0} g";
 
                 Items.Add(new Item { Slot = (string)entry["meal_slot"], Name = name, Amount = amount, Kcal = kcal });
             }

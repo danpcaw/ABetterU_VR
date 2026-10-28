@@ -49,7 +49,12 @@ namespace ABetterU.Coach
         public void Bind(VoiceLoopTest v)
         {
             voice = v;
-            v.OnAssistant += (state, headline, detail) => { if (assistant != null) assistant.Set(state, headline, detail); };
+            v.OnAssistant += (state, headline, detail) =>
+            {
+                if (assistant == null) return;
+                assistant.Set(state, headline, detail);
+                if (state == AssistantState.Listening) { hintsDismissed = true; assistant.HideHints(); }   // they found the voice control
+            };
             v.OnSaved += _ => StartCoroutine(RefreshData());
         }
 
@@ -244,6 +249,8 @@ namespace ABetterU.Coach
             }
             Debug.Log($"[Login] signed in as {supabase.DisplayName ?? "user"} ({(judge ? "judge" : "own account")})");
             password = "";                      // do not keep the typed password around
+            isJudgeSession = judge;
+            hintsDismissed = false;
             ShowHome();
         }
 
@@ -287,8 +294,32 @@ namespace ABetterU.Coach
 
         void EnsureAssistant()
         {
-            if (assistant != null) return;
-            assistant = AssistantBar.Create(new Vector3(0f, 0.56f, 2.15f), Quaternion.Euler(14f, 0f, 0f));
+            if (assistant == null)
+                assistant = AssistantBar.Create(new Vector3(0f, 0.56f, 2.15f), Quaternion.Euler(14f, 0f, 0f));
+            ApplyHints();
+        }
+
+        // Judges get no briefing, so the judge login shows a "Try saying" strip until they speak once.
+        // These phrases are the ones used in headset tests; keep the list to things that really work.
+        static bool isJudgeSession, hintsDismissed;
+
+        void ApplyHints()
+        {
+            if (assistant == null) return;
+            if (!isJudgeSession || hintsDismissed) { assistant.HideHints(); return; }
+
+            switch (Current)
+            {
+                case Stage.Diary:
+                    assistant.SetHints(new[] { "Log my usual breakfast", "Log my chicken and rice bowl for dinner", "What can you do?" });
+                    break;
+                case Stage.Experiences:
+                    assistant.SetHints(new[] { "My knee is sore, build me a workout", "What can you do?" });
+                    break;
+                default:
+                    assistant.SetHints(new[] { "What can you do?", "Log a Big Mac for dinner", "My knee is sore, build me a workout", "Log my usual breakfast" });
+                    break;
+            }
         }
 
         // ── Home: greeting, today's summary and four destinations ───────────────────────────────────────

@@ -45,6 +45,16 @@ namespace ABetterU.Coach
              ""meal"":{""type"":""string"",""enum"":[""breakfast"",""lunch"",""dinner"",""snack""]},
              ""servings"":{""type"":""number"",""description"":""Number of servings, default 1""}},
             ""required"":[""food_id"",""meal""]}},
+          {""type"":""function"",""name"":""find_my_meals"",
+           ""description"":""List the user's own saved meals and combos (for example their usual breakfast), with kcal per serving. Call this when they refer to a meal they saved or 'my usual'. Returns meal_id values for log_meal."",
+           ""parameters"":{""type"":""object"",""properties"":{""query"":{""type"":""string"",""description"":""Optional words from the meal name; omit to list all""}}}},
+          {""type"":""function"",""name"":""log_meal"",
+           ""description"":""Log one of the user's saved meals to their food diary. meal_id must come from find_my_meals."",
+           ""parameters"":{""type"":""object"",""properties"":{
+             ""meal_id"":{""type"":""string""},
+             ""meal"":{""type"":""string"",""enum"":[""breakfast"",""lunch"",""dinner"",""snack""]},
+             ""servings"":{""type"":""number"",""description"":""Servings of the saved meal, default 1""}},
+            ""required"":[""meal_id"",""meal""]}},
           {""type"":""function"",""name"":""report_injury"",
            ""description"":""Save an injury or sore area the user says they have. Record only what they say; never diagnose."",
            ""parameters"":{""type"":""object"",""properties"":{
@@ -75,7 +85,9 @@ namespace ABetterU.Coach
             "If the user lists several foods, deal with every item: search for each, then call log_food once per item with the right number of servings " +
             "(for example 3 rations or 2 slices means servings 3 or 2). Never say an item is logged until log_food returned ok:true for that item, " +
             "and clearly name any item you could not find or log. " +
-            "Only say something is logged after log_food returns ok:true. The food search matches the food's own name and handles brand words itself, " +
+            "If the user mentions a saved meal, combo or 'my usual' something, call find_my_meals, pick the closest name, then call log_meal " +
+            "(not log_food) and say its logged_name and kcal. If find_my_meals has no match, say so and offer to log the foods separately. " +
+            "Only say something is logged after log_food or log_meal returns ok:true. The food search matches the food's own name and handles brand words itself, " +
             "so if it returns nothing, try once more with fewer, simpler words before telling the user it was not found. " +
             "Use the earlier conversation to understand short replies like yes or no. Do not start a workout unless the user asked for one. " +
             "Never invent calories or numbers; use only what tools return. " +
@@ -189,6 +201,8 @@ namespace ABetterU.Coach
             {
                 case "search_foods": yield return SearchFoods((string)args["query"], done); break;
                 case "log_food": yield return LogFood(args, done); break;
+                case "find_my_meals": yield return FindMyMeals((string)args["query"], done); break;
+                case "log_meal": yield return LogMeal(args, done); break;
                 case "report_injury": yield return ReportInjury(args, done); break;
                 case "build_workout": yield return BuildWorkout(args, done); break;
                 case "log_set": yield return LogSet(args, done); break;
@@ -308,6 +322,101 @@ namespace ABetterU.Coach
                 ["logged_brand"] = chosen["brand"],
                 ["kcal_per_serving"] = chosen["kcal_per_serving"],
                 ["meal"] = meal,
+                ["servings"] = servings,
+            }.ToString(Newtonsoft.Json.Formatting.None));
+        }
+
+        // Every saved meal find_my_meals has returned, so log_meal can only log a meal the database actually showed us.
+        readonly Dictionary<string, JObject> mealsSeen = new Dictionary<string, JObject>();
+
+        IEnumerator FindMyMeals(string query, Action<string> done)
+        {
+            const string foodCols = "serving_size_g,energy_kcal_100g,energy_kcal_serving";
+            string raw = null, err = null;
+            yield return supabase.Get(
+                $"meals?select=id,name,is_combo,servings,default_meal_slot,meal_ingredients(quantity_g,food:food_id({foodCols}))" +
+                $"&created_by_user_id=eq.{supabase.UserId}&is_active=eq.true&order=created_at.desc&limit=40",
+                r => raw = r, e => err = e);
+            if (err != null) { done(Fail(err)); yield break; }
+
+            var wanted = NormaliseQuery(query ?? "");
+            var rows = new JArray();
+            foreach (var m in JArray.Parse(raw))
+            {
+                string name = (string)m["name"];
+                string lower = name.ToLowerInvariant();
+                bool matches = true;
+                foreach (var w in wanted) if (w != "my" && w != "usual" && !lower.Contains(w)) { matches = false; break; }
+                // "my usual" alone should list everything; any other word must appear in the name.
+                if (!matches) continue;
+
+                // Same arithmetic as the dashboards: sum the ingredients, divide by the recipe's serving count.
+                double kcal = 0;
+                foreach (var ing in (JArray)m["meal_ingredients"])
+                {
+                    var food = ing["food"];
+                    if (food == null || food.Type == JTokenType.Null) continue;
+                    kcal += DashboardData.Portion(food, "energy_kcal", DashboardData.Num(ing["quantity_g"]) ?? 0);
+                }
+                double recipeServings = Math.Max(1, DashboardData.Num(m["servings"]) ?? 1);
+
+                var summary = new JObject
+                {
+                    ["meal_id"] = m["id"],
+                    ["name"] = name,
+                    ["is_combo"] = m["is_combo"],
+                    ["kcal_per_serving"] = Math.Round(kcal / recipeServings),
+                };
+                mealsSeen[(string)m["id"]] = summary;
+                rows.Add(summary);
+                if (rows.Count == 8) break;
+            }
+            done(new JObject { ["ok"] = true, ["meals"] = rows }.ToString(Newtonsoft.Json.Formatting.None));
+        }
+
+        IEnumerator LogMeal(JObject args, Action<string> done)
+        {
+            string mealId = (string)args["meal_id"];
+            if (string.IsNullOrEmpty(mealId) || !mealsSeen.TryGetValue(mealId, out JObject chosen))
+            {
+                done(Fail("meal_id was not returned by find_my_meals; call find_my_meals and use an id from its results"));
+                yield break;
+            }
+
+            string slot = (string)args["meal"];
+            if (slot != "breakfast" && slot != "lunch" && slot != "dinner" && slot != "snack")
+                slot = DefaultMealSlot(DateTime.Now);
+
+            double servings = args["servings"] != null ? (double)args["servings"] : 1.0;
+            if (servings <= 0 || servings > 20) servings = 1.0;
+
+            // Same row the web app's logMealToDiary writes: a meal entry carries servings only (no food_id, no quantity_g).
+            var row = new JObject
+            {
+                ["user_id"] = supabase.UserId,
+                ["log_date"] = DateTime.Now.ToString("yyyy-MM-dd"),
+                ["meal_slot"] = slot,
+                ["item_type"] = "meal",
+                ["meal_id"] = mealId,
+                ["servings"] = servings,
+                ["position"] = 0,
+                ["source"] = "ai_assistant",
+            };
+
+            string raw = null, err = null, sameMeal = null;
+            yield return supabase.Get($"food_log_entries?select=id&log_date=eq.{row["log_date"]}&meal_slot=eq.{slot}", r => sameMeal = r, e => err = e);
+            if (err == null && sameMeal != null) row["position"] = JArray.Parse(sameMeal).Count;
+            err = null;
+
+            yield return supabase.Insert("food_log_entries", row.ToString(Newtonsoft.Json.Formatting.None), r => raw = r, e => err = e);
+            if (err != null) { done(Fail(err)); yield break; }
+
+            done(new JObject
+            {
+                ["ok"] = true,
+                ["logged_name"] = chosen["name"],
+                ["kcal_per_serving"] = chosen["kcal_per_serving"],
+                ["meal"] = slot,
                 ["servings"] = servings,
             }.ToString(Newtonsoft.Json.Formatting.None));
         }

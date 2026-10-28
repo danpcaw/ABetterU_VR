@@ -307,6 +307,8 @@ namespace ABetterU.Coach
             {
                 case "search_foods": return "Searching your food database...";
                 case "log_food": return "Saving your meal...";
+                case "find_my_meals": return "Looking at your saved meals...";
+                case "log_meal": return "Saving your meal...";
                 case "report_injury": return "Saving your note...";
                 case "build_workout": return "Building your workout...";
                 case "log_set": return "Saving your set...";
@@ -320,6 +322,7 @@ namespace ABetterU.Coach
             switch (tool)
             {
                 case "log_food":
+                case "log_meal":
                     shortName = (string)result["logged_name"];
                     text = $"{shortName} logged to {(string)result["meal"]}";
                     break;

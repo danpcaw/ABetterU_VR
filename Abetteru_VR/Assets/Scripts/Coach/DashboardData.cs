@@ -59,7 +59,7 @@ namespace ABetterU.Coach
             const string foodCols = "name,serving_size_g,energy_kcal_100g,energy_kcal_serving,protein_g_100g,protein_g_serving," +
                                     "carbohydrate_g_100g,carbohydrate_g_serving,fat_g_100g,fat_g_serving";
             rows = null;
-            yield return Fetch(db, $"food_log_entries?select=meal_slot,servings,quantity_g,created_at,food:food_id({foodCols})&log_date=eq.{today}&order=created_at.desc", r => rows = r);
+            yield return Fetch(db, $"food_log_entries?select=meal_slot,servings,quantity_g,created_at,food:food_id({foodCols}),{MealEmbed}&log_date=eq.{today}&order=created_at.desc", r => rows = r);
             if (rows != null)
             {
                 Kcal = Protein = Carbs = Fat = 0;
@@ -67,19 +67,12 @@ namespace ABetterU.Coach
                 LatestMeal = null;
                 foreach (var entry in rows)
                 {
-                    var food = entry["food"];
-                    if (food == null || food.Type == JTokenType.Null) continue;
+                    if (!EntryMacros(entry, out string itemName, out double k, out double p, out double c, out double f)) continue;
                     MealsToday++;
-
-                    double servingG = Num(food["serving_size_g"]) ?? 0;
-                    double grams = (Num(entry["quantity_g"]) ?? 0) > 0 ? Num(entry["quantity_g"]).Value : (Num(entry["servings"]) ?? 1) * (servingG > 0 ? servingG : 100);
-                    Kcal += Portion(food, "energy_kcal", grams);
-                    Protein += Portion(food, "protein_g", grams);
-                    Carbs += Portion(food, "carbohydrate_g", grams);
-                    Fat += Portion(food, "fat_g", grams);
+                    Kcal += k; Protein += p; Carbs += c; Fat += f;
 
                     if (LatestMeal == null)
-                        LatestMeal = $"{Capitalise((string)entry["meal_slot"])}: {(string)food["name"]}";
+                        LatestMeal = $"{Capitalise((string)entry["meal_slot"])}: {itemName}";
                 }
             }
 
@@ -147,6 +140,55 @@ namespace ABetterU.Coach
         }
 
         // ── Helpers ─────────────────────────────────────────────────────────────────────────────────────
+
+        // A diary row is either a single food (grams) or one of the user's saved meals (servings of the recipe).
+        // Both screens read rows selected with this embed and total them with EntryMacros, so they always agree.
+        const string MealNutrientCols = "serving_size_g,energy_kcal_100g,energy_kcal_serving,protein_g_100g,protein_g_serving," +
+                                        "carbohydrate_g_100g,carbohydrate_g_serving,fat_g_100g,fat_g_serving";
+        public const string MealEmbed = "item_type,meal:meal_id(name,servings,meal_ingredients(quantity_g,food:food_id(" + MealNutrientCols + ")))";
+
+        public static bool EntryMacros(JToken entry, out string name, out double kcal, out double protein, out double carbs, out double fat)
+        {
+            name = null; kcal = protein = carbs = fat = 0;
+
+            var food = entry["food"];
+            if (food != null && food.Type != JTokenType.Null)
+            {
+                double servingG = Num(food["serving_size_g"]) ?? 0;
+                double servings = Num(entry["servings"]) ?? 0;
+                double qty = Num(entry["quantity_g"]) ?? 0;
+                double grams = qty > 0 ? qty : (servings > 0 ? servings : 1) * (servingG > 0 ? servingG : 100);
+                kcal = Portion(food, "energy_kcal", grams);
+                protein = Portion(food, "protein_g", grams);
+                carbs = Portion(food, "carbohydrate_g", grams);
+                fat = Portion(food, "fat_g", grams);
+                name = (string)food["name"];
+                return true;
+            }
+
+            // Saved meal: add up its ingredients, then scale by servings eaten / servings the recipe makes
+            // (the web app's computeEntryNutrition does the same).
+            var meal = entry["meal"];
+            if (meal != null && meal.Type != JTokenType.Null && meal["meal_ingredients"] is JArray ingredients)
+            {
+                double eaten = Num(entry["servings"]) ?? 1;
+                double recipe = Math.Max(1, Num(meal["servings"]) ?? 1);
+                double scale = eaten / recipe;
+                foreach (var ing in ingredients)
+                {
+                    var f = ing["food"];
+                    if (f == null || f.Type == JTokenType.Null) continue;
+                    double grams = Num(ing["quantity_g"]) ?? 0;
+                    kcal += Portion(f, "energy_kcal", grams) * scale;
+                    protein += Portion(f, "protein_g", grams) * scale;
+                    carbs += Portion(f, "carbohydrate_g", grams) * scale;
+                    fat += Portion(f, "fat_g", grams) * scale;
+                }
+                name = (string)meal["name"];
+                return true;
+            }
+            return false;
+        }
 
         // Same rule as the web app's getFoodPortion: use per-100 g values, or derive them from per-serving values
         // using the serving weight (100 g when the food has none).

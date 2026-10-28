@@ -41,12 +41,17 @@ Impact 30 · Use of Meta AI tooling 25 (creative, beyond a basic integration) ·
 planning docs, a deploy script and an interface scaffold (`VoiceLoopController.cs` interfaces, an empty rep counter stub).
 All working functionality was written after kickoff. Say so in the README rather than let a judge find it.
 
+**Checked by Danny on Oct 28:** the rules allow preparation and setup before Oct 26, as long as coding does not start
+before Oct 26. The Oct 25 commit is prep (docs, deploy script, interface scaffold with stubs), so it is within the rules.
+Keep the one-line disclosure anyway; it costs nothing. Do not describe the scaffold as "no code": it holds interfaces and stubs.
+
 ## Open questions for the organisers (Discord #questions)
 1. Indie entry building a VR companion for my own existing production platform. The VR app, agent and a new database table are new; the web app, phone app and databases already existed. Is integrating with my own existing backend acceptable if the new work is clearly labelled?
 2. Is it fine to use non-Meta tools (Supabase, a Meta-owned speech service, an AI coding assistant) as long as Meta models are core to the product?
 
 ## To do
-- [ ] Send the questions above (or accept the risk knowingly).
+- [x] Pre-kickoff prep is allowed (checked Oct 28).
+- [ ] Send question 1 and 2 above in Discord #questions (still worth it: the existing-backend point is separate from the prep point).
 - [ ] README section "What is new vs existing" (copy the lists above).
 - [ ] Put an on-screen "Existing / New" label in the demo video.
 - [ ] Create the public GitHub repo, push, check it works logged out.

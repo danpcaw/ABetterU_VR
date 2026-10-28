@@ -59,8 +59,54 @@ namespace ABetterU.Coach
             orbRenderer.sharedMaterial.mainTexture = VRArt.Orb(core, core);
         }
 
+        // ── "Try saying" strip: a second, smaller glass bar under the assistant that cycles example phrases ──
+        // Shown to the judge login until they speak once. It only suggests; nothing here talks to the backend.
+        GameObject hintPanel;
+        TextMesh hintLabel;
+        string[] hints = new string[0];
+        int hintIndex;
+        float nextHintAt;
+
+        public void SetHints(string[] phrases)
+        {
+            hints = phrases ?? new string[0];
+            hintIndex = 0;
+            if (hints.Length == 0) { HideHints(); return; }
+
+            if (hintPanel == null)
+            {
+                hintPanel = new GameObject("TrySaying");
+                hintPanel.transform.SetParent(root, false);
+                hintPanel.transform.localPosition = new Vector3(0f, -0.55f, 0f);
+                VRGlass.Panel(hintPanel.transform, "HintBar", new Vector3(0, 0, 0.02f), new Vector2(2.3f, 0.30f), 0.12f, GlassStyle.Panel, 0);
+                VRGlass.Label(hintPanel.transform, "TRY SAYING", new Vector3(0f, 0.065f, -0.02f), 0.0066f, VRUi.Muted, TextAnchor.UpperCenter, TextAlignment.Center);
+                hintLabel = VRGlass.Label(hintPanel.transform, "", new Vector3(0f, -0.02f, -0.02f), 0.0105f, VRUi.Ink);
+            }
+            hintPanel.SetActive(true);
+            ShowHint();
+        }
+
+        public void HideHints()
+        {
+            if (hintPanel != null) hintPanel.SetActive(false);
+            hints = new string[0];
+        }
+
+        void ShowHint()
+        {
+            if (hintLabel == null || hints.Length == 0) return;
+            hintLabel.text = "“" + hints[hintIndex % hints.Length] + "”";
+            nextHintAt = Time.unscaledTime + 5f;
+        }
+
         void Update()
         {
+            if (hints.Length > 1 && hintPanel != null && Time.unscaledTime >= nextHintAt)
+            {
+                hintIndex++;
+                ShowHint();
+            }
+
             if (orb == null) return;
             // A gentle pulse while it is listening or working, so the orb reads as "alive".
             float pulse = state == AssistantState.Listening || state == AssistantState.Processing
