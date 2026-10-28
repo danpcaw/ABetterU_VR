@@ -114,8 +114,11 @@ namespace ABetterU.Coach
         /// The one-line coaching cue under the rep count. Pure display: it never changes how reps are counted.
         public static string PromptFor(float drop, float downFraction, bool inBottom, int reps, int target)
         {
-            // TODO(human): choose the cue for each phase of the rep (see the request in chat).
-            return inBottom ? "Stand tall" : "Lower slowly";
+            if (target > 0 && reps >= target) return "Target reached. Finish with left trigger";
+            if (inBottom) return "Now stand tall";
+            if (drop < 0.03f) return reps == 0 ? "Squat down to start" : "Lower slowly";
+            if (drop < downFraction) return "A little deeper";
+            return "Now stand tall";
         }
     }
 }
