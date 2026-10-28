@@ -85,6 +85,11 @@ namespace ABetterU.Coach
 
         IEnumerator Start()
         {
+            // Quest 3S: ask for a steady 72 Hz instead of leaving the rate to chance. Headroom matters here because the gym
+            // renders a second camera for the mirror, and a fixed rate also keeps the headset cooler in long sessions.
+            Application.targetFrameRate = 72;
+            QualitySettings.vSyncCount = 0;
+
             board = StatusBoard.Create(Camera.main != null ? Camera.main.transform : transform);
 
             var config = ModelApiConfig.Load();
