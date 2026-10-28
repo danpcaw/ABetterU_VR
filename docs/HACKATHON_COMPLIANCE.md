@@ -54,7 +54,7 @@ Keep the one-line disclosure anyway; it costs nothing. Do not describe the scaff
 |---|---|---|
 | 1 | Muse Spark (tool-calling agent) | Live in the headset |
 | 2 | Muse Voice Transcribe | Live in the headset |
-| 3 | Muse Image (session card after a squat set) | Endpoint verified Oct 28 ($0.01 per image, about 8 s). Built into the set summary, **not yet seen on the headset**. Artwork only; the rep number is drawn by the app from the headset count. |
+| 3 | Muse Image (session card after a squat set) | Endpoint verified Oct 28 ($0.01 per image, about 8 s). Built into the set summary and **seen working on the headset (Oct 28)**. Artwork only; the rep number is drawn by the app from the headset count. |
 
 ## Open questions for the organisers (Discord #questions)
 1. Indie entry building a VR companion for my own existing production platform. The VR app, agent and a new database table are new; the web app, phone app and databases already existed. Is integrating with my own existing backend acceptable if the new work is clearly labelled?
@@ -63,7 +63,7 @@ Keep the one-line disclosure anyway; it costs nothing. Do not describe the scaff
 ## To do
 - [x] Pre-kickoff prep is allowed (checked Oct 28).
 - [ ] Send question 1 and 2 above in Discord #questions (still worth it: the existing-backend point is separate from the prep point).
-- [ ] README section "What is new vs existing" (copy the lists above).
+- [x] README section "New versus existing" written (Oct 28).
 - [ ] Put an on-screen "Existing / New" label in the demo video.
 - [ ] Create the public GitHub repo, push, check it works logged out.
 - [x] Third Meta tool: Muse Image session card built (verify on headset, then confirm the count with the organisers). Optional fourth: SAM 3.1 if time allows around Nov 2.
