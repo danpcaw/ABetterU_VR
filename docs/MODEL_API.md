@@ -105,3 +105,22 @@ git-ignored `ModelApiSecrets` asset for builds.
 2. `output[]` may hold a `message` with `phase:"commentary"` (a short spoken filler such as "Logging your breakfast, one sec.") plus a `function_call` item `{call_id,name,arguments(JSON string)}`.
 3. Run the tool, then POST again with `input` = original input + the `function_call` item (`type,call_id,name,arguments`) + `{type:"function_call_output",call_id,output:"<JSON string>"}`.
 4. The final `message` item is the reply. Same `minimal` effort and 800-token cap work.
+
+
+## Realtime transcription (tested Oct 28, from the Mac, not yet in the app)
+
+Official reference: https://dev.meta.ai/docs/api-reference/voice/realtime and https://dev.meta.ai/docs/speech-to-text
+
+- `wss://api.meta.ai/v1/asr/realtime?sessionId=<any id>`. The Authorization header is ignored. The **first text frame** is the handshake (within 10 s):
+  `{"authorization":{"accessToken":"Bearer <key>"},"audioEncoding":"PCM_24KHZ","model":"muse-voice-transcribe-1.0","mode":"ENDPOINTING","languageBias":["English"],"keywords":["Atlas","A Better U"]}`.
+  The ack is `{"sessionId":...}` (the only frame without a `type`).
+- Then raw 16-bit mono PCM as **binary frames, paced at real time** (the probe uses 80 ms frames). Docs: close code 1008 for "backlog or below-real-time ingress", so do not burst audio or stall. End with `{"type":"endStream"}` and read until the server closes with 1000.
+- `ENDPOINTING` mode sends `speechStart`, repeated partial `transcript` (final:false), `speechEnd`, then `speechComplete` with the cleaned transcript (key state on `turnId`). Also `audioProgress` events (ignore). Partials carry no turnId.
+- **Measured:** phrase "Hey Atlas, log my usual breakfast" (3.3 s of speech). Partial "Hey" at 0.8 s, "Hey Atlas," at 1.5 s, `speechComplete` **0.31 s after the speech ended**. The HTTP upload takes 2.0 to 2.5 s after speech ends, so realtime saves about 2 s per turn.
+- Node's built-in `WebSocket` failed (error 1006, no detail); the `ws` npm package connected fine. In Unity use `System.Net.WebSockets.ClientWebSocket` (untested on Quest).
+- Probe script: `scripts/realtime-asr-probe.mjs`.
+
+### Unity integration plan (not started)
+1. `RealtimeTranscriber` using `ClientWebSocket`. Open a session when the local speech detector fires, stream 16 kHz mic audio resampled to 24 kHz (or test `PCM_16KHZ`), 80 ms frames at real-time pace.
+2. Unknowns to test: whether a short burst of pre-roll audio at the start trips the 1008 pacing rule; handshake time on the Quest; whether to keep one session open (send silence frames while the assistant speaks) or open one per phrase; pricing for streaming (check the Pricing and rate limits page).
+3. Use partials to spot "Atlas" early; act on `speechComplete`. Keep the HTTP upload path as the fallback.
