@@ -35,7 +35,7 @@ namespace ABetterU.Coach
 
         // ── Lean and look-down: form feedback from head position only (the Quest cannot see the back or knees). ──
         // Rep counting above is unchanged; these only drive the on-screen cue and the summary. Starting thresholds, tune on-device.
-        public float leanLimitMetres = 0.30f;     // neck this far forward of where you stood = leaning forward
+        public float leanLimitMetres = 0.20f;     // neck this far forward of where you stood = leaning forward
         public float lookDownLimitDeg = 40f;      // head pitched this far below level = looking down at the floor
         public float LeanMetres { get; private set; }
         public float LookDownDegrees { get; private set; }
