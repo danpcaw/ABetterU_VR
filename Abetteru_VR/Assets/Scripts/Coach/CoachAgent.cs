@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -95,8 +96,9 @@ namespace ABetterU.Coach
             "For any food request, call find_my_meals AND search_foods together in the same step, never one after the other (the user does not have to say 'meal' or 'combo'). " +
             "If one of their saved meals matches, even loosely, such as 'toast and banana' matching a saved 'Toast and banana', call log_meal " +
             "(not log_food) and say its logged_name and kcal. Otherwise log the foods. " +
-            "If search_foods returns several different foods and the user did not name a brand, or the best match is unclear, call offer_choices with the 2 to 4 best food_ids instead of guessing, " +
-            "then say one short sentence asking them to pick one on screen, and do not log anything. If one result clearly matches what they said, or they named a brand, just log it. " +
+            "For a generic food with no brand (apple, banana, bread, chicken, rice) when search_foods returns two or more results, ALWAYS call offer_choices with the 2 to 4 best food_ids instead of choosing for them, " +
+            "then say one short sentence asking them to pick one on screen, and do not log anything. If they named a brand or a specific restaurant item (Big Mac, KFC wrap), or there is only one result, just log it. " +
+            "When a logged food shows grams (foods listed per 100 g are logged as 100 g per serving), say the grams so the user can correct them. " +
             "Speed matters: make every independent call in a single step. For several foods, search all of them in one step, then log all of them in one step. " +
             "Never split a request into separate foods when a saved meal covers it. " +
             "Only say something is logged after log_food or log_meal returns ok:true. The food search matches the food's own name and handles brand words itself, " +
@@ -238,25 +240,41 @@ namespace ABetterU.Coach
             for (int skip = 0; skip < words.Count && skip <= 2; skip++)
             {
                 usedQuery = string.Join(" ", words.GetRange(skip, words.Count - skip));
-                var body = new JObject { ["q"] = usedQuery, ["lim"] = 5, ["uid"] = supabase.UserId }.ToString(Newtonsoft.Json.Formatting.None);
+                var body = new JObject { ["q"] = usedQuery, ["lim"] = 30, ["uid"] = supabase.UserId }.ToString(Newtonsoft.Json.Formatting.None);
                 yield return supabase.Rpc("search_foods", body, r => raw = r, e => err = e);
                 if (err != null) { done(Fail(err)); yield break; }
                 if (JArray.Parse(raw).Count > 0) break;
             }
 
-            var rows = new JArray();
+            // The shared search ranks restaurant rows ahead of generic foods (alphabetical within a tier, then a small limit), so
+            // "apple" never reached the UK CoFID whole foods. For a generic query (no brand in it) put whole foods first here, and
+            // drop rows with no calorie data at all, because logging those would write 0 kcal.
+            var usable = new List<JToken>();
             foreach (var f in JArray.Parse(raw))
+                if ((DashboardData.Num(f["energy_kcal_100g"]) ?? 0) > 0 || (DashboardData.Num(f["energy_kcal_serving"]) ?? 0) > 0) usable.Add(f);
+
+            if (!QueryNamesABrand(usable, words))
+                usable = usable.OrderBy(f => SourceTier((string)f["source"])).ThenBy(f => IsRawVariant(f) ? 0 : 1).ToList();
+
+            var rows = new JArray();
+            foreach (var f in usable.Take(6))
             {
                 double? grams = EstimateServingGrams(f);
                 if (grams.HasValue) servingGrams[(string)f["id"]] = grams.Value;
+
+                // Foods listed only per 100 g (CoFID) are logged as 100 g per serving, so say exactly that.
+                double? kcalServing = DashboardData.Num(f["energy_kcal_serving"]);
+                double? kcal100 = DashboardData.Num(f["energy_kcal_100g"]);
+                bool per100Only = !grams.HasValue && !(kcalServing > 0);
                 var summary = new JObject
                 {
                     ["food_id"] = f["id"],
                     ["name"] = f["name"],
                     ["brand"] = f["brand"],
-                    ["serving"] = f["serving_name"],
-                    ["serving_g"] = f["serving_size_g"],
-                    ["kcal_per_serving"] = f["energy_kcal_serving"],
+                    ["source"] = f["source"],
+                    ["serving"] = per100Only ? "100 g" : f["serving_name"],
+                    ["serving_g"] = per100Only ? 100 : f["serving_size_g"],
+                    ["kcal_per_serving"] = per100Only ? kcal100 : (kcalServing ?? (kcal100.HasValue && grams.HasValue ? Math.Round(kcal100.Value * grams.Value / 100.0) : (double?)null)),
                 };
                 foodsSeen[(string)f["id"]] = summary;
                 rows.Add(summary);
@@ -266,6 +284,32 @@ namespace ABetterU.Coach
 
         /// Mirrors estimateServingGrams in the web app (src/lib/foods.ts): the serving weight if the food has one,
         /// else grams derived from kcal per serving vs per 100 g, else null (the web app then logs 100 g).
+        // Whole foods first for generic queries. Restaurant and meal-kit rows come last.
+        static int SourceTier(string source)
+        {
+            switch (source)
+            {
+                case "cofid": return 0;
+                case "supermarket": case "abetteru": case "manual": return 1;
+                case "off": return 2;
+                default: return 3;
+            }
+        }
+
+        static bool IsRawVariant(JToken f) => ((string)f["name"] ?? "").IndexOf(" raw", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        // True if a word the user said is a brand or restaurant in the results ("kfc", "tesco"), so the database's own order stays.
+        static bool QueryNamesABrand(List<JToken> rows, List<string> words)
+        {
+            foreach (var f in rows)
+            {
+                string brandText = ((string)f["brand"] ?? "") + " " + ((string)f["restaurant"] ?? "");
+                var brandWords = NormaliseQuery(brandText);
+                foreach (var w in words) if (w.Length >= 3 && brandWords.Contains(w)) return true;
+            }
+            return false;
+        }
+
         static double? EstimateServingGrams(JToken food)
         {
             double servingG = food["serving_size_g"]?.Type == JTokenType.Null ? 0 : (double?)food["serving_size_g"] ?? 0;
@@ -289,7 +333,7 @@ namespace ABetterU.Coach
 
         // ── Food picker: the agent shows options on screen; the user's tap logs one directly (no model round) ──
 
-        public struct Choice { public string FoodId, Name, Brand, Serving; public double? Kcal; }
+        public struct Choice { public string FoodId, Name, Brand, Serving, Source; public double? Kcal; }
 
         public event Action<List<Choice>> ChoicesOffered;
         public bool CanShowChoices;                     // false where there is no screen to show them (the gym)
@@ -312,6 +356,7 @@ namespace ABetterU.Coach
                         Name = (string)f["name"],
                         Brand = f["brand"] != null && f["brand"].Type != JTokenType.Null ? (string)f["brand"] : null,
                         Serving = f["serving"] != null && f["serving"].Type != JTokenType.Null ? (string)f["serving"] : null,
+                        Source = (string)f["source"],
                         Kcal = DashboardData.Num(f["kcal_per_serving"]),
                     });
                     if (list.Count == 4) break;
@@ -404,6 +449,7 @@ namespace ABetterU.Coach
                 ["kcal_per_serving"] = chosen["kcal_per_serving"],
                 ["meal"] = meal,
                 ["servings"] = servings,
+                ["grams"] = row["quantity_g"],
             }.ToString(Newtonsoft.Json.Formatting.None));
         }
 

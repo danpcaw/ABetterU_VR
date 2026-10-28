@@ -114,7 +114,7 @@ namespace ABetterU.Coach
             {
                 var c = choices[i];
                 string name = c.Name ?? "Food";
-                string line1 = string.IsNullOrEmpty(c.Brand) ? name : $"{name} - {c.Brand}";
+                string line1 = !string.IsNullOrEmpty(c.Brand) ? $"{name} - {c.Brand}" : c.Source == "cofid" ? $"{name} - generic" : name;
                 if (line1.Length > 44) line1 = line1.Substring(0, 41) + "...";
                 string line2 = (c.Kcal.HasValue ? $"{c.Kcal.Value:0} kcal" : "calories not listed") + (string.IsNullOrEmpty(c.Serving) ? "" : $" per {c.Serving}");
                 string foodId = c.FoodId;
