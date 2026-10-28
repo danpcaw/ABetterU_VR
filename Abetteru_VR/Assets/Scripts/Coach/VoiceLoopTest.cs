@@ -25,6 +25,7 @@ namespace ABetterU.Coach
 
         const int TargetReps = 10;
         SquatHud hud;
+        MuseImageClient museImage;
         bool busy, inSet;
         int lastShownReps = -1;
         float nextMeter;
@@ -50,6 +51,7 @@ namespace ABetterU.Coach
                 yield break;
             }
 
+            museImage = new MuseImageClient(config);
             asr = new MetaTranscribeClient(config);
             spark = new ModelApiClient(config);
             mic = gameObject.AddComponent<MicRecorder>();
@@ -160,6 +162,20 @@ namespace ABetterU.Coach
         // A form cue while squatting, from head position only: looking down is checked first, then leaning forward.
         string FormCue(float drop) => reps.BadForm ? "Keep straight and crouch down straight" : null;
 
+        // A shareable session card from Muse Image. It never blocks saving the set: if it fails the card is simply not shown.
+        IEnumerator MakeSessionCard(SquatHud forHud, int n)
+        {
+            forHud.ShowCardPending();
+            const string prompt = "Achievement card artwork for a bodyweight squat workout. Dark navy background with teal accents, " +
+                                  "a stylised athlete silhouette mid squat in the upper two thirds, flat vector style, centred, uncluttered. " +
+                                  "Leave the lower third empty. Absolutely no text, no letters and no numbers anywhere in the image.";
+            Texture2D art = null; string err = null;
+            yield return museImage.Generate(prompt, 768, t => art = t, e => err = e);
+            if (forHud == null) { if (art != null) Destroy(art); yield break; }    // a new set started meanwhile
+            if (art == null) { Debug.LogWarning("[MuseImage] card failed: " + err); forHud.HideCard(); yield break; }
+            forHud.ShowCard(art, n, n == 1 ? "SQUAT" : "SQUATS");
+        }
+
         IEnumerator BeginSet()
         {
             busy = true;
@@ -199,6 +215,7 @@ namespace ABetterU.Coach
 
             // The rep count comes from the headset, not from the user or the model.
             if (hud != null) hud.SetSummary(n, perRep, deepest, flagged, "Saving to your activity...", null);
+            if (hud != null) StartCoroutine(MakeSessionCard(hud, n));
             board.Show($"Set done: {n} reps.\nLogging...");
             lastSaved = null; savedNames.Clear();
             string turn = $"Context: the headset just counted a finished set: {n} bodyweight squat reps (exercise name: Bodyweight Squat). " +

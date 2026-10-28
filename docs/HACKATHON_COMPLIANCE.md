@@ -54,7 +54,7 @@ Keep the one-line disclosure anyway; it costs nothing. Do not describe the scaff
 |---|---|---|
 | 1 | Muse Spark (tool-calling agent) | Live in the headset |
 | 2 | Muse Voice Transcribe | Live in the headset |
-| 3 | Not yet secured. Wit.ai speech output is Meta-owned but is not a Muse model, so do not rely on it for this count. Candidates: Muse Image (shareable session card), SAM 3.1 (food on a plate), Muse Code (build a named piece and say so) | **Open: decide and ship one before Nov 4, then confirm the count with the organisers** |
+| 3 | Muse Image (session card after a squat set) | Endpoint verified Oct 28 ($0.01 per image, about 8 s). Built into the set summary, **not yet seen on the headset**. Artwork only; the rep number is drawn by the app from the headset count. |
 
 ## Open questions for the organisers (Discord #questions)
 1. Indie entry building a VR companion for my own existing production platform. The VR app, agent and a new database table are new; the web app, phone app and databases already existed. Is integrating with my own existing backend acceptable if the new work is clearly labelled?
@@ -66,4 +66,4 @@ Keep the one-line disclosure anyway; it costs nothing. Do not describe the scaff
 - [ ] README section "What is new vs existing" (copy the lists above).
 - [ ] Put an on-screen "Existing / New" label in the demo video.
 - [ ] Create the public GitHub repo, push, check it works logged out.
-- [ ] **Secure a third Meta tool (required, see tally above).** Cheapest first: Muse Image session card. Ask in Discord whether Wit.ai counts.
+- [x] Third Meta tool: Muse Image session card built (verify on headset, then confirm the count with the organisers). Optional fourth: SAM 3.1 if time allows around Nov 2.

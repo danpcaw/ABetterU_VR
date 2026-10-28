@@ -108,6 +108,40 @@ namespace ABetterU.Coach
             footer.text = detail + "Left trigger for another set";
         }
 
+        // ── Session card: art made by Muse Image beside the summary. The numbers on it are drawn by us from the headset's
+        // real count; the model is asked for artwork only, because it cannot be trusted to render exact text.
+        Transform cardRoot;
+        TextMesh cardStatus;
+        Texture2D cardTexture;
+
+        public void ShowCardPending()
+        {
+            HideCard();
+            cardRoot = new GameObject("SessionCard").transform;
+            cardRoot.SetParent(transform, false);
+            cardRoot.localPosition = new Vector3(1.28f, 0f, 0f);
+            VRGlass.Panel(cardRoot, "CardPanel", new Vector3(0, 0, 0.03f), new Vector2(0.95f, 1.1f), 0.07f, GlassStyle.Panel, 0);
+            cardStatus = VRGlass.Label(cardRoot, "Creating your\nsession card\nwith Muse Image...", new Vector3(0, 0.02f, -0.02f), 0.0125f, VRUi.Muted);
+        }
+
+        public void ShowCard(Texture2D art, int reps, string title)
+        {
+            if (cardRoot == null) return;
+            cardTexture = art;
+            if (cardStatus != null) cardStatus.gameObject.SetActive(false);
+            VRGlass.Image(cardRoot, "Art", art, new Vector3(0, 0.06f, -0.01f), new Vector2(0.84f, 0.84f), 1);
+            VRGlass.Label(cardRoot, reps.ToString(), new Vector3(0, -0.14f, -0.03f), 0.05f, new Color(0.30f, 0.96f, 0.86f), order: 8);
+            VRGlass.Label(cardRoot, title, new Vector3(0, -0.285f, -0.03f), 0.0115f, VRUi.Ink, order: 8);
+            VRGlass.Label(cardRoot, "Made with Muse Image", new Vector3(0, -0.49f, -0.02f), 0.0075f, VRUi.Muted);
+        }
+
+        public void HideCard()
+        {
+            if (cardRoot != null) Destroy(cardRoot.gameObject);
+            if (cardTexture != null) Destroy(cardTexture);
+            cardRoot = null; cardStatus = null; cardTexture = null;
+        }
+
         void SetBarVisible(bool on)
         {
             track.gameObject.SetActive(on);
