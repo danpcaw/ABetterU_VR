@@ -44,7 +44,8 @@ namespace ABetterU.Coach
            ""parameters"":{""type"":""object"",""properties"":{
              ""food_id"":{""type"":""string""},
              ""meal"":{""type"":""string"",""enum"":[""breakfast"",""lunch"",""dinner"",""snack""]},
-             ""servings"":{""type"":""number"",""description"":""Number of servings, default 1""}},
+             ""servings"":{""type"":""number"",""description"":""Number of servings, default 1""},
+             ""grams"":{""type"":""number"",""description"":""Weight in grams when the user gave a weight (for example 100 grams of chips). Pass this instead of servings.""}},
             ""required"":[""food_id"",""meal""]}},
           {""type"":""function"",""name"":""find_my_meals"",
            ""description"":""List the user's own saved meals and combos (for example their usual breakfast), with kcal per serving. Call this when they refer to a meal they saved or 'my usual'. Returns meal_id values for log_meal."",
@@ -64,6 +65,11 @@ namespace ABetterU.Coach
              ""meal"":{""type"":""string"",""enum"":[""breakfast"",""lunch"",""dinner"",""snack""]},
              ""servings"":{""type"":""number"",""description"":""Servings the user asked for, default 1. The user can also change the amount on screen.""}},
             ""required"":[""meal""]}},
+          {""type"":""function"",""name"":""go_to"",
+           ""description"":""Open a screen in the app. Destinations: home; my_world (the profile, nutrition, today's activity and wellbeing notes cards, so 'wellness card' means my_world); food_diary; my_experiences; virtual_gym. Only say you opened something after this returns ok."",
+           ""parameters"":{""type"":""object"",""properties"":{
+             ""destination"":{""type"":""string"",""enum"":[""home"",""my_world"",""food_diary"",""my_experiences"",""virtual_gym""]}},
+            ""required"":[""destination""]}},
           {""type"":""function"",""name"":""report_injury"",
            ""description"":""Save an injury or sore area the user says they have. Record only what they say; never diagnose."",
            ""parameters"":{""type"":""object"",""properties"":{
@@ -97,6 +103,9 @@ namespace ABetterU.Coach
             "For any food request, call find_my_meals AND search_foods together in the same step, never one after the other (the user does not have to say 'meal' or 'combo'). " +
             "If one of their saved meals matches, even loosely, such as 'toast and banana' matching a saved 'Toast and banana', call log_meal " +
             "(not log_food) and say its logged_name and kcal. Otherwise log the foods. " +
+            "You can open screens with go_to: home, my_world (profile, nutrition, today's activity and wellbeing cards, so 'wellness card' means my_world), food_diary, my_experiences and virtual_gym. " +
+            "Only say you opened something after go_to returned ok:true. My Community and Discover are coming soon: say so, do not pretend to open them. " +
+            "If the user gives a weight in grams, pass grams to log_food, not servings. " +
             "For a generic food with no brand (apple, banana, bread, chicken, rice) when search_foods returns two or more results, ALWAYS call offer_choices with the best food_ids (up to 10 if there are that many) instead of choosing for them, " +
             "then say one short sentence asking them to pick one on screen, and do not log anything. If they named a brand or a specific restaurant item (Big Mac, KFC wrap), or there is only one result, just log it. " +
             "If the user asks to see, list or browse a restaurant's or brand's foods, or asks for options or alternatives, search with just the restaurant or brand name (for example McDonald's, not a dish), then call offer_choices with show_all true so they can page through everything. " +
@@ -225,6 +234,7 @@ namespace ABetterU.Coach
                 case "find_my_meals": yield return FindMyMeals((string)args["query"], done); break;
                 case "log_meal": yield return LogMeal(args, done); break;
                 case "offer_choices": done(OfferChoices(args)); break;
+                case "go_to": done(GoTo(args)); break;
                 case "report_injury": yield return ReportInjury(args, done); break;
                 case "build_workout": yield return BuildWorkout(args, done); break;
                 case "log_set": yield return LogSet(args, done); break;
@@ -350,6 +360,18 @@ namespace ABetterU.Coach
             return words;
         }
 
+        // ── Navigation: the app opens the screen; the agent may only say so after this returned ok ──
+
+        public Func<string, bool> Navigate;      // set by the voice loop; true only if the screen really opened
+
+        string GoTo(JObject args)
+        {
+            string dest = (string)args["destination"];
+            if (Navigate == null || string.IsNullOrEmpty(dest)) return Fail("opening screens is not available");
+            if (!Navigate(dest)) return Fail("that screen cannot be opened from here");
+            return new JObject { ["ok"] = true, ["opened"] = dest }.ToString(Newtonsoft.Json.Formatting.None);
+        }
+
         // ── Food picker: the agent shows options on screen; the user's tap logs one directly (no model round) ──
 
         public struct Choice { public string FoodId, Name, Brand, Serving, Source; public double? Kcal; }
@@ -460,6 +482,15 @@ namespace ABetterU.Coach
             // exactly as LogFoodSheet does: estimated serving weight, else 100 g per unit.
             double gramsPerUnit = servingGrams.TryGetValue(foodId, out double g) ? g : 100.0;
             row["quantity_g"] = Math.Round(gramsPerUnit * servings, 1);
+
+            // A weight the user said ("100 grams of chips") is stored as that weight; servings is derived for display.
+            double gramsRequested = args["grams"] != null && args["grams"].Type != JTokenType.Null ? (double)args["grams"] : 0;
+            if (gramsRequested > 0 && gramsRequested <= 5000)
+            {
+                servings = Math.Round(gramsRequested / gramsPerUnit, 2);
+                row["servings"] = servings;
+                row["quantity_g"] = Math.Round(gramsRequested, 1);
+            }
 
             // Order within the meal: after whatever is already there.
             string raw = null, err = null, sameMeal = null;

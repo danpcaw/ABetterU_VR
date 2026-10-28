@@ -182,6 +182,21 @@ namespace ABetterU.Coach
             if (pickerAmountLabel != null) pickerAmountLabel.text = ServingsText();
         }
 
+        /// Opens a screen by name for the voice agent. Returns false if it cannot be opened from here, so the agent never claims it did.
+        public bool NavigateTo(string destination)
+        {
+            if (Current == Stage.Login || Current == Stage.Gym) return false;
+            switch (destination)
+            {
+                case "home": ShowHome(); return true;
+                case "my_world": ShowMyWorld(); return true;
+                case "food_diary": ShowDiary(); return true;
+                case "my_experiences": ShowExperiences(); return true;
+                case "virtual_gym": EnterGym(); return true;
+                default: return false;
+            }
+        }
+
         /// True while the pointer is resting on a button, so voice capture can ignore the trigger.
         public bool PointerOverButton => pointer != null && pointer.HoveringButton;
 
@@ -407,7 +422,7 @@ namespace ABetterU.Coach
             switch (Current)
             {
                 case Stage.Diary:
-                    assistant.SetHints(new[] { "Log my usual breakfast", "Log an apple for a snack", "Show me McDonald's foods", "What can you do?" });
+                    assistant.SetHints(new[] { "Log my usual breakfast", "Show me McDonald's foods", "Open my food diary", "What can you do?" });
                     break;
                 case Stage.Experiences:
                     assistant.SetHints(new[] { "My knee is sore, build me a workout", "What can you do?" });

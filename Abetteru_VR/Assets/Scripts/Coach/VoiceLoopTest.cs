@@ -33,7 +33,7 @@ namespace ABetterU.Coach
             { "search_foods", "Searching the food database. It's a big one, so bear with me." },
             { "build_workout", "Building your workout." },
         };
-        bool narrated;
+        bool narrated, navigatedThisTurn;
 
         // Hands-free: say the wake name ("Hey Atlas") and then the request. The trigger still works as a fallback.
         public static string WakeName = "Atlas";
@@ -119,6 +119,7 @@ namespace ABetterU.Coach
             supabase = AppFlow.Session ?? (AppFlow.Session = new SupabaseClient(config));
             agent = new CoachAgent(config, supabase);
             agent.ToolSucceeded += OnToolSucceeded;
+            agent.Navigate = dest => flow != null && flow.NavigateTo(dest);
             agent.ChoicesOffered += (list, servings) => OnChoices?.Invoke(list, servings);
 
             flow = gameObject.AddComponent<AppFlow>();
@@ -445,6 +446,7 @@ namespace ABetterU.Coach
             lastSaved = null;
             savedNames.Clear();
             narrated = false;
+            navigatedThisTurn = false;
             OnChoices?.Invoke(null, 1.0);                                  // a new request replaces any picker still on screen
             agent.CanShowChoices = flow != null && flow.Current != AppFlow.Stage.Gym;
 
@@ -483,6 +485,13 @@ namespace ABetterU.Coach
             {
                 Debug.LogWarning("[VoiceLoop] Reply claimed a save but no write succeeded. Replacing it. Original: " + reply);
                 reply = "I wasn't able to save that, so nothing has been logged. Could you try again?";
+            }
+
+            // Same rule for opening screens: if the reply says it opened something but go_to never succeeded, replace it.
+            if (!navigatedThisTurn && ClaimsOpen(reply))
+            {
+                Debug.LogWarning("[VoiceLoop] Reply claimed to open something but go_to did not succeed. Original: " + reply);
+                reply = "I couldn't open that. I can open Home, My World, your food diary, My Experiences or the virtual gym.";
             }
 
             board.Show($"You: {Wrap(heard)}\n\nCoach: {Wrap(reply)}\n\nASR {tAsr:0.0}s  Spark {tSpark:0.0}s");
@@ -524,6 +533,7 @@ namespace ABetterU.Coach
                 case "report_injury": return "Saving your note...";
                 case "build_workout": return "Building your workout...";
                 case "log_set": return "Saving your set...";
+                case "go_to": return "Opening that...";
                 default: return "Working on it...";
             }
         }
@@ -533,6 +543,9 @@ namespace ABetterU.Coach
             string text = null, shortName = null;
             switch (tool)
             {
+                case "go_to":
+                    navigatedThisTurn = true;
+                    break;
                 case "log_food":
                 case "log_meal":
                     shortName = (string)result["logged_name"];
@@ -563,6 +576,15 @@ namespace ABetterU.Coach
             if (string.IsNullOrEmpty(reply)) return false;
             bool claims = Regex.IsMatch(reply, @"\b(logged|saved|recorded|added)\b", RegexOptions.IgnoreCase);
             bool denies = Regex.IsMatch(reply, @"\b(not|nothing|couldn'?t|could not|can'?t|cannot|unable|wasn'?t|didn'?t|failed)\b|n't", RegexOptions.IgnoreCase);
+            return claims && !denies;
+        }
+
+        // True if the reply says it is opening or taking the user somewhere (and is not a refusal).
+        static bool ClaimsOpen(string reply)
+        {
+            if (string.IsNullOrEmpty(reply)) return false;
+            bool claims = Regex.IsMatch(reply, @"\b(opening|i'?ll open|i'?ve opened|i have opened|taking you (to|into)|let'?s go (to|into)|heading (to|into))\b", RegexOptions.IgnoreCase);
+            bool denies = Regex.IsMatch(reply, @"\b(not|couldn'?t|could not|can'?t|cannot|unable|coming soon)\b|n't", RegexOptions.IgnoreCase);
             return claims && !denies;
         }
 
