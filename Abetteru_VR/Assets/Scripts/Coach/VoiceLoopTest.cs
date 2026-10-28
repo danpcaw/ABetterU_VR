@@ -62,6 +62,8 @@ namespace ABetterU.Coach
 
         /// The dashboard's assistant bar subscribes to this. (state, headline, detail)
         public Action<AssistantState, string, string> OnAssistant;
+        /// Raised when the agent offers a short list of foods to tap (null clears it). The dashboard draws the picker.
+        public Action<List<CoachAgent.Choice>> OnChoices;
         /// Raised with a short confirmation after the backend confirmed a write (food, injury note, set).
         public Action<string> OnSaved;
 
@@ -98,6 +100,7 @@ namespace ABetterU.Coach
             supabase = AppFlow.Session ?? (AppFlow.Session = new SupabaseClient(config));
             agent = new CoachAgent(config, supabase);
             agent.ToolSucceeded += OnToolSucceeded;
+            agent.ChoicesOffered += list => OnChoices?.Invoke(list);
 
             flow = gameObject.AddComponent<AppFlow>();
             flow.Bind(this);
@@ -188,6 +191,31 @@ namespace ABetterU.Coach
             if (pressed == null) return false;
             Debug.Log($"[Input] {pressed} pressed (busy={busy}, inSet={inSet})");
             return true;
+        }
+
+        /// The user tapped a food in the picker: log it directly, then confirm only what the backend confirmed.
+        public void ChooseFood(string foodId) => StartCoroutine(ChooseRoutine(foodId));
+
+        IEnumerator ChooseRoutine(string foodId)
+        {
+            while (busy) yield return null;                            // let a reply that is still being spoken finish first
+            busy = true;
+            lastSaved = null; savedNames.Clear();
+            Report(AssistantState.Processing, "Saving...", "");
+            string result = null;
+            yield return agent.LogChosen(foodId, r => result = r);
+            if (savedNames.Count > 0)
+            {
+                Report(AssistantState.Done, "Saved", lastSaved);
+                readyAt = Time.unscaledTime + 8f;
+            }
+            else
+            {
+                Debug.LogWarning("[VoiceLoop] picker log failed: " + result);
+                Report(AssistantState.Error, "Couldn't save that", "Please try again.");
+                readyAt = Time.unscaledTime + 7f;
+            }
+            busy = false;
         }
 
         // A form cue while squatting, from head position only: looking down is checked first, then leaning forward.
@@ -288,6 +316,8 @@ namespace ABetterU.Coach
             lastSaved = null;
             savedNames.Clear();
             narrated = false;
+            OnChoices?.Invoke(null);                                  // a new request replaces any picker still on screen
+            agent.CanShowChoices = flow != null && flow.Current != AppFlow.Stage.Gym;
             float t0 = Time.realtimeSinceStartup;
             board.Show("Transcribing...");
             Report(AssistantState.Processing, "Transcribing...", "");

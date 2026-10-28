@@ -55,6 +55,13 @@ namespace ABetterU.Coach
              ""meal"":{""type"":""string"",""enum"":[""breakfast"",""lunch"",""dinner"",""snack""]},
              ""servings"":{""type"":""number"",""description"":""Servings of the saved meal, default 1""}},
             ""required"":[""meal_id"",""meal""]}},
+          {""type"":""function"",""name"":""offer_choices"",
+           ""description"":""Show the user a short list of foods on screen to tap, when search_foods returned several different foods and they did not name a brand, or the best match is unclear. food_ids must come from search_foods (2 to 4). Nothing is logged until the user taps one."",
+           ""parameters"":{""type"":""object"",""properties"":{
+             ""food_ids"":{""type"":""array"",""items"":{""type"":""string""}},
+             ""meal"":{""type"":""string"",""enum"":[""breakfast"",""lunch"",""dinner"",""snack""]},
+             ""servings"":{""type"":""number"",""description"":""Servings the user asked for, default 1""}},
+            ""required"":[""food_ids"",""meal""]}},
           {""type"":""function"",""name"":""report_injury"",
            ""description"":""Save an injury or sore area the user says they have. Record only what they say; never diagnose."",
            ""parameters"":{""type"":""object"",""properties"":{
@@ -88,6 +95,8 @@ namespace ABetterU.Coach
             "For any food request, call find_my_meals AND search_foods together in the same step, never one after the other (the user does not have to say 'meal' or 'combo'). " +
             "If one of their saved meals matches, even loosely, such as 'toast and banana' matching a saved 'Toast and banana', call log_meal " +
             "(not log_food) and say its logged_name and kcal. Otherwise log the foods. " +
+            "If search_foods returns several different foods and the user did not name a brand, or the best match is unclear, call offer_choices with the 2 to 4 best food_ids instead of guessing, " +
+            "then say one short sentence asking them to pick one on screen, and do not log anything. If one result clearly matches what they said, or they named a brand, just log it. " +
             "Speed matters: make every independent call in a single step. For several foods, search all of them in one step, then log all of them in one step. " +
             "Never split a request into separate foods when a saved meal covers it. " +
             "Only say something is logged after log_food or log_meal returns ok:true. The food search matches the food's own name and handles brand words itself, " +
@@ -210,6 +219,7 @@ namespace ABetterU.Coach
                 case "log_food": yield return LogFood(args, done); break;
                 case "find_my_meals": yield return FindMyMeals((string)args["query"], done); break;
                 case "log_meal": yield return LogMeal(args, done); break;
+                case "offer_choices": done(OfferChoices(args)); break;
                 case "report_injury": yield return ReportInjury(args, done); break;
                 case "build_workout": yield return BuildWorkout(args, done); break;
                 case "log_set": yield return LogSet(args, done); break;
@@ -275,6 +285,70 @@ namespace ABetterU.Coach
             foreach (var w in cleaned.ToString().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
                 words.Add(w == "barbecue" || w == "barbeque" ? "bbq" : w);
             return words;
+        }
+
+        // ── Food picker: the agent shows options on screen; the user's tap logs one directly (no model round) ──
+
+        public struct Choice { public string FoodId, Name, Brand, Serving; public double? Kcal; }
+
+        public event Action<List<Choice>> ChoicesOffered;
+        public bool CanShowChoices;                     // false where there is no screen to show them (the gym)
+        string pendingMeal = "snack";
+        double pendingServings = 1.0;
+
+        string OfferChoices(JObject args)
+        {
+            if (!CanShowChoices) return Fail("there is no screen for choices here; pick the best match yourself and call log_food");
+
+            var list = new List<Choice>();
+            if (args["food_ids"] is JArray ids)
+                foreach (var idToken in ids)
+                {
+                    string id = (string)idToken;
+                    if (id == null || !foodsSeen.TryGetValue(id, out JObject f)) continue;
+                    list.Add(new Choice
+                    {
+                        FoodId = id,
+                        Name = (string)f["name"],
+                        Brand = f["brand"] != null && f["brand"].Type != JTokenType.Null ? (string)f["brand"] : null,
+                        Serving = f["serving"] != null && f["serving"].Type != JTokenType.Null ? (string)f["serving"] : null,
+                        Kcal = DashboardData.Num(f["kcal_per_serving"]),
+                    });
+                    if (list.Count == 4) break;
+                }
+            if (list.Count < 2) return Fail("need at least 2 food_ids that search_foods returned");
+
+            string meal = (string)args["meal"];
+            pendingMeal = meal == "breakfast" || meal == "lunch" || meal == "dinner" || meal == "snack" ? meal : DefaultMealSlot(DateTime.Now);
+            double servings = args["servings"] != null ? (double)args["servings"] : 1.0;
+            pendingServings = servings > 0 && servings <= 20 ? servings : 1.0;
+
+            ChoicesOffered?.Invoke(list);
+            return new JObject { ["ok"] = true, ["shown"] = list.Count, ["note"] = "The options are on screen. Ask the user to pick one; nothing has been logged." }
+                .ToString(Newtonsoft.Json.Formatting.None);
+        }
+
+        /// The user tapped an option. Logs it exactly as log_food would, and remembers it so the next spoken turn knows.
+        public IEnumerator LogChosen(string foodId, Action<string> done)
+        {
+            var args = new JObject { ["food_id"] = foodId, ["meal"] = pendingMeal, ["servings"] = pendingServings };
+            string result = null;
+            yield return LogFood(args, r => result = r);
+            Debug.Log($"[Agent] picker log_food -> {result}");
+
+            JObject parsed = null;
+            try { parsed = JObject.Parse(result); } catch (Exception) { /* not JSON: treated as a failure below */ }
+            if (parsed != null && (bool?)parsed["ok"] == true)
+            {
+                ToolSucceeded?.Invoke("log_food", parsed);
+                history.Add(new JObject
+                {
+                    ["role"] = "assistant",
+                    ["content"] = new JArray { new JObject { ["type"] = "output_text", ["text"] = $"The user chose {(string)parsed["logged_name"]} on screen and it was logged to {pendingMeal}." } },
+                });
+                while (history.Count > MaxHistoryMessages) history.RemoveAt(0);
+            }
+            done(result);
         }
 
         IEnumerator LogFood(JObject args, Action<string> done)

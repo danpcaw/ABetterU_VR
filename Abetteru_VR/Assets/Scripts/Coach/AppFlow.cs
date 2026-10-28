@@ -56,6 +56,7 @@ namespace ABetterU.Coach
                 if (state == AssistantState.Listening) { hintsDismissed = true; assistant.HideHints(); }   // they found the voice control
             };
             v.OnSaved += _ => StartCoroutine(RefreshData());
+            v.OnChoices += ShowPicker;
         }
 
         public void Init(SupabaseClient supabase, StatusBoard board)
@@ -87,12 +88,50 @@ namespace ABetterU.Coach
             if (supabase.SignedIn) { hintsDismissed = false; ShowHome(); } else ShowLogin();    // already signed in: we came back from the gym menu
         }
 
+        // ── Food picker: the agent offers a few foods; a tap logs one (no model call). Closed by any stage change. ──
+        Transform picker;
+
+        void ClosePicker()
+        {
+            if (picker != null) Destroy(picker.gameObject);
+            picker = null;
+        }
+
+        void ShowPicker(List<CoachAgent.Choice> choices)
+        {
+            ClosePicker();
+            if (choices == null || choices.Count == 0 || Current == Stage.Gym || Current == Stage.Login) return;
+
+            const float rowH = 0.23f;
+            float h = 0.50f + choices.Count * rowH + 0.20f;
+            picker = new GameObject("FoodPicker").transform;
+            picker.position = new Vector3(0f, 1.4f, 1.95f);
+
+            VRGlass.Panel(picker, "Panel", new Vector3(0, 0, 0.03f), new Vector2(2.3f, h), 0.06f, GlassStyle.Panel, 20);
+            VRGlass.Label(picker, "Which one did you mean?", new Vector3(0, h / 2 - 0.17f, -0.02f), 0.0125f, VRUi.Ink, order: 24);
+
+            for (int i = 0; i < choices.Count; i++)
+            {
+                var c = choices[i];
+                string name = c.Name ?? "Food";
+                string line1 = string.IsNullOrEmpty(c.Brand) ? name : $"{name} - {c.Brand}";
+                if (line1.Length > 44) line1 = line1.Substring(0, 41) + "...";
+                string line2 = (c.Kcal.HasValue ? $"{c.Kcal.Value:0} kcal" : "calories not listed") + (string.IsNullOrEmpty(c.Serving) ? "" : $" per {c.Serving}");
+                string foodId = c.FoodId;
+                VRGlass.Button(picker, line1 + "\n" + line2, new Vector3(0, h / 2 - 0.46f - i * rowH, -0.02f), new Vector2(2.05f, 0.2f),
+                    GlassStyle.Secondary, 0.0085f, () => { ClosePicker(); voice.ChooseFood(foodId); }, 0.04f, 22);
+            }
+            VRGlass.Button(picker, "None of these", new Vector3(0, -h / 2 + 0.14f, -0.02f), new Vector2(0.9f, 0.14f),
+                GlassStyle.Secondary, 0.0078f, ClosePicker, 0.04f, 22);
+        }
+
         /// True while the pointer is resting on a button, so voice capture can ignore the trigger.
         public bool PointerOverButton => pointer != null && pointer.HoveringButton;
 
         Transform NewRoot(Vector3 position)
         {
             if (screen != null) Destroy(screen.gameObject);
+            ClosePicker();
             CloseKeyboard();
             statusLabel = null; emailField = null; passwordField = null; showButton = null;
 
