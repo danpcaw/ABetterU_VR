@@ -131,7 +131,9 @@ namespace ABetterU.Coach
                 };
 
                 string raw = null, err = null;
+                float tStep = Time.realtimeSinceStartup;
                 yield return Post(body.ToString(Newtonsoft.Json.Formatting.None), r => raw = r, e => err = e);
+                Debug.Log($"[Timing] spark call {step + 1}: {Time.realtimeSinceStartup - tStep:0.00}s");
                 if (err != null) { onError(err); yield break; }
 
                 JArray output = JObject.Parse(raw)["output"] as JArray;
@@ -155,7 +157,9 @@ namespace ABetterU.Coach
                         input.Add(new JObject { ["type"] = "function_call", ["call_id"] = callId, ["name"] = name, ["arguments"] = args });
 
                         string result = null;
+                        float tTool = Time.realtimeSinceStartup;
                         yield return RunTool(name, args, r => result = r);
+                        Debug.Log($"[Timing] tool {name}: {Time.realtimeSinceStartup - tTool:0.00}s");
                         Debug.Log($"[Agent] {name}({args}) -> {result}");
 
                         // Tell the UI about every tool that really succeeded, so "Saved" is only ever shown after the backend said ok.

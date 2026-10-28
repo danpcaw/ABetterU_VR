@@ -23,6 +23,9 @@ namespace ABetterU.Coach
         AppFlow flow;
         RepCounter reps;
 
+        // Spoken the moment the words are recognised, so the user hears a response well before the real reply is ready.
+        static readonly string[] Acks = { "Okay.", "Sure.", "One moment." };
+        int ackIndex;
         const int TargetReps = 10;
         SquatHud hud;
         MuseImageClient museImage;
@@ -58,6 +61,7 @@ namespace ABetterU.Coach
 
             tts = gameObject.AddComponent<WitSpeaker>();
             tts.Init(config);
+            StartCoroutine(tts.Prefetch(Acks));
 
             board.Show("Allow the microphone\nwhen asked...");
             yield return mic.EnsurePermission();
@@ -286,6 +290,7 @@ namespace ABetterU.Coach
                 yield break;
             }
 
+            if (tts != null && tts.PlayCached(Acks[ackIndex++ % Acks.Length])) Debug.Log("[Timing] acknowledgement played");
             board.Show($"You: {Wrap(heard)}\n\nThinking...");
             Report(AssistantState.Processing, $"You said: \"{heard}\"", "Working on it...");
 
@@ -327,6 +332,7 @@ namespace ABetterU.Coach
             bool spoken = false;
             tts.Speak(reply, () => spoken = true);
             while (!spoken) yield return null;
+            Debug.Log($"[Timing] turn: asr {tAsr:0.00}s, agent {tSpark:0.00}s, speech started {tts.FirstAudioDelay:0.00}s after reply, speech to reply-heard total {Time.realtimeSinceStartup - t0:0.00}s");
 
             // "Saved" appears only if the backend confirmed a write during this turn, and lists exactly what was written.
             if (savedNames.Count > 0)

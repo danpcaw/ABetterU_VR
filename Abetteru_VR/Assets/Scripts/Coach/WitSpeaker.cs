@@ -36,6 +36,30 @@ namespace ABetterU.Coach
             source.volume = 1f;
         }
 
+        // Short phrases fetched once at startup so they can play instantly (no network) while a slow reply is still being made.
+        readonly Dictionary<string, AudioClip> cache = new Dictionary<string, AudioClip>();
+        public float FirstAudioDelay { get; private set; }   // seconds from Speak() to the first sentence starting to play
+
+        public IEnumerator Prefetch(params string[] phrases)
+        {
+            foreach (var phrase in phrases)
+            {
+                if (cache.ContainsKey(phrase)) continue;
+                AudioClip clip = null;
+                yield return Fetch(phrase, c => clip = c);
+                if (clip != null) cache[phrase] = clip;
+            }
+        }
+
+        /// Plays a prefetched phrase immediately. Returns false if it is not cached or something is already playing.
+        public bool PlayCached(string phrase)
+        {
+            if (!cache.TryGetValue(phrase, out var clip) || source.isPlaying) return false;
+            source.clip = clip;
+            source.Play();
+            return true;
+        }
+
         public void Speak(string text, Action onDone = null)
         {
             if (!Ready || string.IsNullOrWhiteSpace(text)) { onDone?.Invoke(); return; }
@@ -45,6 +69,8 @@ namespace ABetterU.Coach
         IEnumerator SpeakRoutine(string text, Action onDone)
         {
             IsSpeaking = true;
+            float tStart = Time.realtimeSinceStartup;
+            while (source.isPlaying) yield return null;     // let a short acknowledgement finish first
             var parts = SplitIntoSentences(text);
             var clips = new AudioClip[parts.Count];
             var finished = new bool[parts.Count];
@@ -61,6 +87,7 @@ namespace ABetterU.Coach
                 if (clips[i] == null) continue;
                 source.clip = clips[i];
                 source.Play();
+                if (i == 0) FirstAudioDelay = Time.realtimeSinceStartup - tStart;
                 while (source.isPlaying) yield return null;
             }
 
