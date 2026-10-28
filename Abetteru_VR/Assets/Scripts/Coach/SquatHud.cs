@@ -70,7 +70,7 @@ namespace ABetterU.Coach
             }
 
             // A form cue (leaning, looking down) takes over the line while it applies; otherwise the phase cue.
-            prompt.text = VRUi.Wrap(formCue ?? PromptFor(drop, downFraction, inBottom, reps, target), PromptWidth, 2);
+            prompt.text = VRUi.Wrap(formCue ?? PromptFor(drop, downFraction, inBottom, reps, target), PromptWidth, 3);
             prompt.color = formCue != null ? Amber : inBottom ? Green : VRUi.Ink;
 
             SetBarVisible(true);
@@ -102,7 +102,7 @@ namespace ABetterU.Coach
             if (reps > 0)
             {
                 detail = $"{secondsPerRep:0.0} s per rep  -  deepest {deepestFraction * 100f:0}%\n" +
-                         (flaggedReps > 0 ? $"Head leaned or dipped on {flaggedReps} of {reps}\n" : "Head position steady on every rep\n");
+                         (flaggedReps > 0 ? $"{flaggedReps} leaning movement{(flaggedReps == 1 ? "" : "s")} not counted\n" : "");
             }
             footer.transform.localPosition = new Vector3(0, -0.40f, -0.02f);
             footer.text = detail + "Left trigger for another set";

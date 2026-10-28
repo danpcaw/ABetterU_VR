@@ -158,13 +158,7 @@ namespace ABetterU.Coach
         }
 
         // A form cue while squatting, from head position only: looking down is checked first, then leaning forward.
-        string FormCue(float drop)
-        {
-            if (drop < 0.04f) return null;
-            if (reps.LookingDown) return "Eyes forward";
-            if (reps.LeaningForward) return "Chest up, hips back";
-            return null;
-        }
+        string FormCue(float drop) => reps.BadForm ? "Keep straight and crouch down straight" : null;
 
         IEnumerator BeginSet()
         {

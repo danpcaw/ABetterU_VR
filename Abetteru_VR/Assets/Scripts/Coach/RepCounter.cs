@@ -40,8 +40,11 @@ namespace ABetterU.Coach
         public float LeanMetres { get; private set; }
         public float LookDownDegrees { get; private set; }
         public bool LeaningForward => LeanMetres > leanLimitMetres;
+        public bool LeaningBack => LeanMetres < -leanLimitMetres;
         public bool LookingDown => LookDownDegrees > lookDownLimitDeg;
-        public int FlaggedReps { get; private set; }     // reps in which the head leaned or dipped past the limits
+        /// True while the body is out of line (leaning either way or head tilted down) during a squat.
+        public bool BadForm => CurrentDrop > 0.04f && (LeaningForward || LeaningBack || LookingDown);
+        public int FlaggedReps { get; private set; }     // movements NOT counted because the head leaned or dipped
         Vector3 standingPos, standingForward = Vector3.forward;
         bool repFlagged;
 
@@ -106,15 +109,17 @@ namespace ABetterU.Coach
             Vector3 away = NeckPoint() - standingPos; away.y = 0f;
             LeanMetres = Vector3.Dot(away, standingForward);
             LookDownDegrees = -Mathf.Asin(Mathf.Clamp(head.forward.y, -1f, 1f)) * Mathf.Rad2Deg;
-            if (dropFraction > 0.04f && (LeaningForward || LookingDown)) repFlagged = true;   // judged only while actually squatting
+            if (BadForm) repFlagged = true;   // judged only while actually squatting
+            else if (!inBottom && dropFraction < 0.03f) repFlagged = false;   // stood back up without a rep: start the next one clean
 
             bool wasInBottom = inBottom;
             bool repDone = DetectRepStep(dropFraction, ref inBottom);
-            if (!wasInBottom && inBottom) DepthCue();   // the moment the squat is deep enough to count
+            if (!wasInBottom && inBottom && !BadForm) DepthCue();   // the moment the squat is deep enough to count
             if (repDone)
             {
-                if (repFlagged) FlaggedReps++;
+                bool rejected = repFlagged;     // leaned or tilted at any point: bending over is not a squat
                 repFlagged = false;
+                if (rejected) { FlaggedReps++; lastRepTime = Time.time; return; }
                 RepCount++;
                 SecondsPerRep = (Time.time - lastRepTime) / 1f;
                 lastRepTime = Time.time;
