@@ -75,7 +75,7 @@ namespace ABetterU.Coach
         /// The dashboard's assistant bar subscribes to this. (state, headline, detail)
         public Action<AssistantState, string, string> OnAssistant;
         /// Raised when the agent offers a short list of foods to tap (null clears it). The dashboard draws the picker.
-        public Action<List<CoachAgent.Choice>> OnChoices;
+        public Action<List<CoachAgent.Choice>, double> OnChoices;
         /// Raised with a short confirmation after the backend confirmed a write (food, injury note, set).
         public Action<string> OnSaved;
 
@@ -105,6 +105,7 @@ namespace ABetterU.Coach
             mic = gameObject.AddComponent<MicRecorder>();
             hf = gameObject.AddComponent<HandsFreeListener>();
             hf.UtteranceReady += wav => { if (!busy) StartCoroutine(HandsFreeTurn(wav)); };
+            hf.SpeechStarted += () => { if (!busy) Report(AssistantState.Ready, "Hearing you...", ""); };
 
             tts = gameObject.AddComponent<WitSpeaker>();
             tts.Init(config);
@@ -118,7 +119,7 @@ namespace ABetterU.Coach
             supabase = AppFlow.Session ?? (AppFlow.Session = new SupabaseClient(config));
             agent = new CoachAgent(config, supabase);
             agent.ToolSucceeded += OnToolSucceeded;
-            agent.ChoicesOffered += list => OnChoices?.Invoke(list);
+            agent.ChoicesOffered += (list, servings) => OnChoices?.Invoke(list, servings);
 
             flow = gameObject.AddComponent<AppFlow>();
             flow.Bind(this);
@@ -213,16 +214,16 @@ namespace ABetterU.Coach
         }
 
         /// The user tapped a food in the picker: log it directly, then confirm only what the backend confirmed.
-        public void ChooseFood(string foodId) => StartCoroutine(ChooseRoutine(foodId));
+        public void ChooseFood(string foodId, double servings) => StartCoroutine(ChooseRoutine(foodId, servings));
 
-        IEnumerator ChooseRoutine(string foodId)
+        IEnumerator ChooseRoutine(string foodId, double servings)
         {
             while (busy) yield return null;                            // let a reply that is still being spoken finish first
             busy = true;
             lastSaved = null; savedNames.Clear();
             Report(AssistantState.Processing, "Saving...", "");
             string result = null;
-            yield return agent.LogChosen(foodId, r => result = r);
+            yield return agent.LogChosen(foodId, servings, r => result = r);
             if (savedNames.Count > 0)
             {
                 Report(AssistantState.Done, "Saved", lastSaved);
@@ -271,15 +272,25 @@ namespace ABetterU.Coach
             yield return asr.Transcribe(wav, t => heard = t, e => error = e);
             float tAsr = Time.realtimeSinceStartup - t0;
 
-            if (error != null) { Debug.LogWarning("[HandsFree] transcribe failed: " + error); busy = false; yield break; }
-            if (string.IsNullOrWhiteSpace(heard)) { busy = false; yield break; }
+            if (error != null || string.IsNullOrWhiteSpace(heard))
+            {
+                if (error != null) Debug.LogWarning("[HandsFree] transcribe failed: " + error);
+                Report(AssistantState.Ready, ReadyHeadline, ReadyDetail);
+                busy = false;
+                yield break;
+            }
 
             bool followUp = Time.unscaledTime < followUntil;
             bool woke = TryStripWake(heard, out string command);
             if (!woke && followUp) command = heard;
             Debug.Log($"[HandsFree] heard \"{heard}\" -> {(woke ? "wake name" : followUp ? "follow-up" : "ignored (no wake name)")}, transcribe {tAsr:0.0}s");
 
-            if (command == null) { busy = false; yield break; }       // not meant for us: dropped, nothing kept
+            if (command == null)                                       // not meant for us: dropped, nothing kept
+            {
+                Report(AssistantState.Ready, ReadyHeadline, ReadyDetail);
+                busy = false;
+                yield break;
+            }
 
             Report(AssistantState.Listening, "Heard you", "");        // also clears the judge's "Try saying" strip
 
@@ -434,7 +445,7 @@ namespace ABetterU.Coach
             lastSaved = null;
             savedNames.Clear();
             narrated = false;
-            OnChoices?.Invoke(null);                                  // a new request replaces any picker still on screen
+            OnChoices?.Invoke(null, 1.0);                                  // a new request replaces any picker still on screen
             agent.CanShowChoices = flow != null && flow.Current != AppFlow.Stage.Gym;
 
             if (tts != null && tts.PlayCached(Acks[ackIndex++ % Acks.Length])) Debug.Log("[Timing] acknowledgement played");

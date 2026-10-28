@@ -59,10 +59,11 @@ namespace ABetterU.Coach
           {""type"":""function"",""name"":""offer_choices"",
            ""description"":""Show the user a short list of foods on screen to tap, when search_foods returned several different foods and they did not name a brand, or the best match is unclear. food_ids must come from search_foods (2 to 10). Nothing is logged until the user taps one."",
            ""parameters"":{""type"":""object"",""properties"":{
-             ""food_ids"":{""type"":""array"",""items"":{""type"":""string""}},
+             ""food_ids"":{""type"":""array"",""items"":{""type"":""string""},""description"":""2 to 10 ids from search_foods. Omit when show_all is true.""},
+             ""show_all"":{""type"":""boolean"",""description"":""True to show everything the last search found, in pages of 10 (use when the user wants to browse a restaurant or brand).""},
              ""meal"":{""type"":""string"",""enum"":[""breakfast"",""lunch"",""dinner"",""snack""]},
-             ""servings"":{""type"":""number"",""description"":""Servings the user asked for, default 1""}},
-            ""required"":[""food_ids"",""meal""]}},
+             ""servings"":{""type"":""number"",""description"":""Servings the user asked for, default 1. The user can also change the amount on screen.""}},
+            ""required"":[""meal""]}},
           {""type"":""function"",""name"":""report_injury"",
            ""description"":""Save an injury or sore area the user says they have. Record only what they say; never diagnose."",
            ""parameters"":{""type"":""object"",""properties"":{
@@ -98,7 +99,7 @@ namespace ABetterU.Coach
             "(not log_food) and say its logged_name and kcal. Otherwise log the foods. " +
             "For a generic food with no brand (apple, banana, bread, chicken, rice) when search_foods returns two or more results, ALWAYS call offer_choices with the best food_ids (up to 10 if there are that many) instead of choosing for them, " +
             "then say one short sentence asking them to pick one on screen, and do not log anything. If they named a brand or a specific restaurant item (Big Mac, KFC wrap), or there is only one result, just log it. " +
-            "If the user asks to see, list or browse a restaurant's or brand's foods, or asks for options or alternatives, search for it and call offer_choices with up to 10 results. " +
+            "If the user asks to see, list or browse a restaurant's or brand's foods, or asks for options or alternatives, search with just the restaurant or brand name (for example McDonald's, not a dish), then call offer_choices with show_all true so they can page through everything. " +
             "If there is no exact match but similar foods exist (for example no plain Cheeseburger but a Double Cheeseburger and a Hamburger), say there is no exact match and offer those. " +
             "When a logged food shows grams (foods listed per 100 g are logged as 100 g per serving), say the grams so the user can correct them. " +
             "Speed matters: make every independent call in a single step. For several foods, search all of them in one step, then log all of them in one step. " +
@@ -231,6 +232,12 @@ namespace ABetterU.Coach
             }
         }
 
+        // Only the columns we use: the full row is about 2.4 KB, so a long result list was slow to download on the headset.
+        const string SearchRpc = "search_foods?select=id,name,brand,restaurant,source,serving_size_g,serving_name,energy_kcal_100g,energy_kcal_serving";
+
+        // Everything the last search found (best first), so the picker can show it all without asking the model again.
+        readonly List<JObject> lastSearchAll = new List<JObject>();
+
         IEnumerator SearchFoods(string query, Action<string> done)
         {
             if (string.IsNullOrWhiteSpace(query)) { done(Fail("query is required")); yield break; }
@@ -242,8 +249,8 @@ namespace ABetterU.Coach
             for (int skip = 0; skip < words.Count && skip <= 2; skip++)
             {
                 usedQuery = string.Join(" ", words.GetRange(skip, words.Count - skip));
-                var body = new JObject { ["q"] = usedQuery, ["lim"] = 40, ["uid"] = supabase.UserId }.ToString(Newtonsoft.Json.Formatting.None);
-                yield return supabase.Rpc("search_foods", body, r => raw = r, e => err = e);
+                var body = new JObject { ["q"] = usedQuery, ["lim"] = 100, ["uid"] = supabase.UserId }.ToString(Newtonsoft.Json.Formatting.None);
+                yield return supabase.Rpc(SearchRpc, body, r => raw = r, e => err = e);
                 if (err != null) { done(Fail(err)); yield break; }
                 if (JArray.Parse(raw).Count > 0) break;
             }
@@ -259,7 +266,8 @@ namespace ABetterU.Coach
                 usable = usable.OrderBy(f => SourceTier((string)f["source"])).ThenBy(f => IsRawVariant(f) ? 0 : 1).ToList();
 
             var rows = new JArray();
-            foreach (var f in usable.Take(10))
+            lastSearchAll.Clear();
+            foreach (var f in usable.Take(60))
             {
                 double? grams = EstimateServingGrams(f);
                 if (grams.HasValue) servingGrams[(string)f["id"]] = grams.Value;
@@ -279,9 +287,10 @@ namespace ABetterU.Coach
                     ["kcal_per_serving"] = per100Only ? kcal100 : (kcalServing ?? (kcal100.HasValue && grams.HasValue ? Math.Round(kcal100.Value * grams.Value / 100.0) : (double?)null)),
                 };
                 foodsSeen[(string)f["id"]] = summary;
-                rows.Add(summary);
+                lastSearchAll.Add(summary);
+                if (rows.Count < 10) rows.Add(summary);
             }
-            done(new JObject { ["ok"] = true, ["searched_as"] = usedQuery, ["results"] = rows }.ToString(Newtonsoft.Json.Formatting.None));
+            done(new JObject { ["ok"] = true, ["searched_as"] = usedQuery, ["total_found"] = lastSearchAll.Count, ["results"] = rows }.ToString(Newtonsoft.Json.Formatting.None));
         }
 
         /// Mirrors estimateServingGrams in the web app (src/lib/foods.ts): the serving weight if the food has one,
@@ -325,11 +334,19 @@ namespace ABetterU.Coach
 
         static List<string> NormaliseQuery(string query)
         {
+            // Apostrophes are dropped (not turned into spaces) and a possessive 's goes with them, so "McDonald's" becomes
+            // "mcdonald". Longer plurals are trimmed too ("mcdonalds" -> "mcdonald", "apples" -> "apple"): the search is a
+            // substring match, so the shorter form finds the stored "McDonald's" as well as the plural.
             var cleaned = new StringBuilder();
-            foreach (char c in query.ToLowerInvariant()) cleaned.Append(char.IsLetterOrDigit(c) ? c : ' ');
+            foreach (char c in query.ToLowerInvariant().Replace("\u2019s", "").Replace("'s", ""))
+                if (c != '\'' && c != '\u2019' && c != '\u2018') cleaned.Append(char.IsLetterOrDigit(c) ? c : ' ');
             var words = new List<string>();
-            foreach (var w in cleaned.ToString().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
-                words.Add(w == "barbecue" || w == "barbeque" ? "bbq" : w);
+            foreach (var w0 in cleaned.ToString().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string w = w0 == "barbecue" || w0 == "barbeque" ? "bbq" : w0;
+                if (w.Length >= 6 && w.EndsWith("s") && !w.EndsWith("ss")) w = w.Substring(0, w.Length - 1);
+                words.Add(w);
+            }
             return words;
         }
 
@@ -337,7 +354,7 @@ namespace ABetterU.Coach
 
         public struct Choice { public string FoodId, Name, Brand, Serving, Source; public double? Kcal; }
 
-        public event Action<List<Choice>> ChoicesOffered;
+        public event Action<List<Choice>, double> ChoicesOffered;
         public bool CanShowChoices;                     // false where there is no screen to show them (the gym)
         string pendingMeal = "snack";
         double pendingServings = 1.0;
@@ -347,37 +364,48 @@ namespace ABetterU.Coach
             if (!CanShowChoices) return Fail("there is no screen for choices here; pick the best match yourself and call log_food");
 
             var list = new List<Choice>();
-            if (args["food_ids"] is JArray ids)
-                foreach (var idToken in ids)
+            bool showAll = args["show_all"] != null && (bool?)args["show_all"] == true;
+            IEnumerable<JObject> source;
+            if (showAll)
+                source = lastSearchAll;
+            else
+            {
+                var picked = new List<JObject>();
+                if (args["food_ids"] is JArray ids)
+                    foreach (var idToken in ids)
+                        if (idToken != null && foodsSeen.TryGetValue((string)idToken, out JObject f)) picked.Add(f);
+                source = picked;
+            }
+
+            foreach (var f in source)
+            {
+                list.Add(new Choice
                 {
-                    string id = (string)idToken;
-                    if (id == null || !foodsSeen.TryGetValue(id, out JObject f)) continue;
-                    list.Add(new Choice
-                    {
-                        FoodId = id,
-                        Name = (string)f["name"],
-                        Brand = f["brand"] != null && f["brand"].Type != JTokenType.Null ? (string)f["brand"] : null,
-                        Serving = f["serving"] != null && f["serving"].Type != JTokenType.Null ? (string)f["serving"] : null,
-                        Source = (string)f["source"],
-                        Kcal = DashboardData.Num(f["kcal_per_serving"]),
-                    });
-                    if (list.Count == 10) break;
-                }
-            if (list.Count < 2) return Fail("need at least 2 food_ids that search_foods returned");
+                    FoodId = (string)f["food_id"],
+                    Name = (string)f["name"],
+                    Brand = f["brand"] != null && f["brand"].Type != JTokenType.Null ? (string)f["brand"] : null,
+                    Serving = f["serving"] != null && f["serving"].Type != JTokenType.Null ? (string)f["serving"] : null,
+                    Source = (string)f["source"],
+                    Kcal = DashboardData.Num(f["kcal_per_serving"]),
+                });
+                if (list.Count == 60) break;
+            }
+            if (list.Count < 2) return Fail("need at least 2 foods from search_foods to show");
 
             string meal = (string)args["meal"];
             pendingMeal = meal == "breakfast" || meal == "lunch" || meal == "dinner" || meal == "snack" ? meal : DefaultMealSlot(DateTime.Now);
             double servings = args["servings"] != null ? (double)args["servings"] : 1.0;
             pendingServings = servings > 0 && servings <= 20 ? servings : 1.0;
 
-            ChoicesOffered?.Invoke(list);
-            return new JObject { ["ok"] = true, ["shown"] = list.Count, ["note"] = "The options are on screen. Ask the user to pick one; nothing has been logged." }
+            ChoicesOffered?.Invoke(list, pendingServings);
+            return new JObject { ["ok"] = true, ["shown"] = list.Count, ["note"] = "The options are on screen with an amount stepper and page buttons. Ask the user to pick one; nothing has been logged." }
                 .ToString(Newtonsoft.Json.Formatting.None);
         }
 
         /// The user tapped an option. Logs it exactly as log_food would, and remembers it so the next spoken turn knows.
-        public IEnumerator LogChosen(string foodId, Action<string> done)
+        public IEnumerator LogChosen(string foodId, double servings, Action<string> done)
         {
+            if (servings > 0 && servings <= 20) pendingServings = servings;
             var args = new JObject { ["food_id"] = foodId, ["meal"] = pendingMeal, ["servings"] = pendingServings };
             string result = null;
             yield return LogFood(args, r => result = r);

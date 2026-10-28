@@ -19,13 +19,15 @@ namespace ABetterU.Coach
         const float PreRollSeconds = 0.4f;           // audio kept from before the speech was noticed, so the first word is not clipped
 
         public event Action<byte[]> UtteranceReady;
+        public event Action SpeechStarted;           // raised when sound that looks like speech begins (before it is known to be for us)
         public bool Listening { get; private set; }
 
         AudioClip clip;
         string device;
         int srcRate = OutRate, channels = 1, readPos;
 
-        float noiseFloor = 0.01f;                    // learned from quiet frames; speech must stand clear of it
+        float noiseFloor = 0.01f;
+        float peakRms, nextLog;                      // diagnostics: loudest frame since the last log line                    // learned from quiet frames; speech must stand clear of it
         bool inSpeech;
         int loudRun;
         float silentFor, speechSeconds;
@@ -112,8 +114,16 @@ namespace ABetterU.Coach
             double sumSq = 0;
             foreach (var x in chunk) sumSq += x * x;
             float rms = Mathf.Sqrt((float)(sumSq / chunk.Length));
-            float threshold = Mathf.Max(0.012f, noiseFloor * 3f);
+            float threshold = Mathf.Max(0.008f, noiseFloor * 2.5f);
             bool loud = rms > threshold;
+
+            peakRms = Mathf.Max(peakRms, rms);
+            if (Time.unscaledTime >= nextLog)
+            {
+                Debug.Log($"[HandsFree] listening: loudest {peakRms:0.000}, background {noiseFloor:0.000}, speech threshold {threshold:0.000}, {srcRate} Hz x{channels}");
+                peakRms = 0f;
+                nextLog = Time.unscaledTime + 4f;
+            }
 
             if (!inSpeech)
             {
@@ -122,7 +132,7 @@ namespace ABetterU.Coach
                 int keep = (int)(srcRate * PreRollSeconds);
                 if (preRoll.Count > keep) preRoll.RemoveRange(0, preRoll.Count - keep);
 
-                loudRun = loud ? loudRun + 1 : 0;
+                loudRun = loud ? loudRun + 1 : Mathf.Max(0, loudRun - 1);     // a brief dip inside a word does not reset it
                 if (loudRun * ChunkSeconds >= StartLoudSeconds)
                 {
                     inSpeech = true;
@@ -131,6 +141,8 @@ namespace ABetterU.Coach
                     preRoll.Clear();
                     silentFor = 0f;
                     speechSeconds = loudRun * ChunkSeconds;
+                    Debug.Log($"[HandsFree] speech started (level {rms:0.000}, threshold {threshold:0.000})");
+                    SpeechStarted?.Invoke();
                 }
                 return;
             }
@@ -148,6 +160,7 @@ namespace ABetterU.Coach
             float speech = speechSeconds, silence = silentFor;
             var samples = phrase.ToArray();
             ResetState();
+            Debug.Log($"[HandsFree] phrase ended: {speech:0.0}s of speech{(speech < MinSpeechSeconds ? ", too short, discarded" : ", sending to transcribe")}");
             if (speech < MinSpeechSeconds) return;
 
             // Keep only a short tail of the trailing silence.

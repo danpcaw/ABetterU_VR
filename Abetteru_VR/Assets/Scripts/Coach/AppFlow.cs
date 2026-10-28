@@ -88,26 +88,46 @@ namespace ABetterU.Coach
             if (supabase.SignedIn) { hintsDismissed = false; ShowHome(); } else ShowLogin();    // already signed in: we came back from the gym menu
         }
 
-        // ── Food picker: the agent offers a few foods; a tap logs one (no model call). Closed by any stage change. ──
+        // ── Food picker: the agent offers foods; the user picks an amount and taps one, which logs it (no model call). ──
+        // Pages of 10 (two columns), so a whole restaurant menu can be browsed. Closed by any stage change.
+        const int PickerPageSize = 10;
         Transform picker;
+        List<CoachAgent.Choice> pickerAll;
+        int pickerPage;
+        double pickerServings = 1.0;
 
         void ClosePicker()
         {
             if (picker != null) Destroy(picker.gameObject);
             picker = null;
+            pickerAll = null;
         }
 
-        void ShowPicker(List<CoachAgent.Choice> choices)
+        void ShowPicker(List<CoachAgent.Choice> choices, double servings)
         {
             ClosePicker();
             if (choices == null || choices.Count == 0 || Current == Stage.Gym || Current == Stage.Login) return;
+            pickerAll = choices;
+            pickerPage = 0;
+            pickerServings = servings > 0 ? servings : 1.0;
+            RenderPicker();
+        }
+
+        void RenderPicker()
+        {
+            if (picker != null) Destroy(picker.gameObject);
+            if (pickerAll == null) return;
+
+            int pages = (pickerAll.Count + PickerPageSize - 1) / PickerPageSize;
+            pickerPage = Mathf.Clamp(pickerPage, 0, pages - 1);
+            var page = pickerAll.GetRange(pickerPage * PickerPageSize, Mathf.Min(PickerPageSize, pickerAll.Count - pickerPage * PickerPageSize));
 
             // Up to 5 options sit in one column; 6 to 10 go in two columns so the panel stays a comfortable height.
-            bool two = choices.Count > 5;
-            int rows = two ? (choices.Count + 1) / 2 : choices.Count;
+            bool two = page.Count > 5;
+            int rows = two ? (page.Count + 1) / 2 : page.Count;
             const float rowH = 0.23f;
             float w = two ? 3.5f : 2.3f, btnW = two ? 1.62f : 2.05f;
-            float h = 0.50f + rows * rowH + 0.20f;
+            float h = 0.50f + rows * rowH + 0.32f;
             int maxChars = two ? 30 : 44;
 
             picker = new GameObject("FoodPicker").transform;
@@ -116,9 +136,9 @@ namespace ABetterU.Coach
             VRGlass.Panel(picker, "Panel", new Vector3(0, 0, 0.03f), new Vector2(w, h), 0.06f, GlassStyle.Panel, 20);
             VRGlass.Label(picker, "Which one did you mean?", new Vector3(0, h / 2 - 0.17f, -0.02f), 0.0125f, VRUi.Ink, order: 24);
 
-            for (int i = 0; i < choices.Count; i++)
+            for (int i = 0; i < page.Count; i++)
             {
-                var c = choices[i];
+                var c = page[i];
                 string name = c.Name ?? "Food";
                 string line1 = !string.IsNullOrEmpty(c.Brand) ? $"{name} - {c.Brand}" : c.Source == "cofid" ? $"{name} - generic" : name;
                 if (line1.Length > maxChars) line1 = line1.Substring(0, maxChars - 3) + "...";
@@ -128,10 +148,38 @@ namespace ABetterU.Coach
                 int col = two ? i % 2 : 0, row = two ? i / 2 : i;
                 float x = two ? (col == 0 ? -0.84f : 0.84f) : 0f;
                 VRGlass.Button(picker, line1 + "\n" + line2, new Vector3(x, h / 2 - 0.46f - row * rowH, -0.02f), new Vector2(btnW, 0.2f),
-                    GlassStyle.Secondary, two ? 0.0075f : 0.0085f, () => { ClosePicker(); voice.ChooseFood(foodId); }, 0.04f, 22);
+                    GlassStyle.Secondary, two ? 0.0075f : 0.0085f, () => { double amount = pickerServings; ClosePicker(); voice.ChooseFood(foodId, amount); }, 0.04f, 22);
             }
-            VRGlass.Button(picker, "None of these", new Vector3(0, -h / 2 + 0.14f, -0.02f), new Vector2(0.9f, 0.14f),
+
+            // Bottom row: how many (left), pages (middle), cancel (right).
+            float by = -h / 2 + 0.16f;
+            float lx = two ? -1.25f : -0.8f, rx = two ? 1.25f : 0.8f;
+            VRGlass.Button(picker, "-", new Vector3(lx - 0.36f, by, -0.02f), new Vector2(0.18f, 0.16f), GlassStyle.Secondary, 0.012f, () => StepServings(-0.5), 0.04f, 22);
+            var amountLabel = VRGlass.Label(picker, ServingsText(), new Vector3(lx, by, -0.02f), 0.0085f, VRUi.Ink, order: 24);
+            VRGlass.Button(picker, "+", new Vector3(lx + 0.36f, by, -0.02f), new Vector2(0.18f, 0.16f), GlassStyle.Secondary, 0.012f, () => StepServings(0.5), 0.04f, 22);
+            pickerAmountLabel = amountLabel;
+
+            if (pages > 1)
+            {
+                VRGlass.Button(picker, "Prev", new Vector3(-0.42f, by, -0.02f), new Vector2(0.4f, 0.16f), pickerPage > 0 ? GlassStyle.Secondary : GlassStyle.Disabled, 0.0085f,
+                    pickerPage > 0 ? (System.Action)(() => { pickerPage--; RenderPicker(); }) : null, 0.04f, 22);
+                VRGlass.Label(picker, $"Page {pickerPage + 1} of {pages}", new Vector3(0f, by, -0.02f), 0.0082f, VRUi.Muted, order: 24);
+                VRGlass.Button(picker, "Next", new Vector3(0.42f, by, -0.02f), new Vector2(0.4f, 0.16f), pickerPage < pages - 1 ? GlassStyle.Secondary : GlassStyle.Disabled, 0.0085f,
+                    pickerPage < pages - 1 ? (System.Action)(() => { pickerPage++; RenderPicker(); }) : null, 0.04f, 22);
+            }
+            VRGlass.Button(picker, "None of these", new Vector3(rx + (two ? 0.1f : 0.0f), by, -0.02f), new Vector2(two ? 0.9f : 0.8f, 0.16f),
                 GlassStyle.Secondary, 0.0078f, ClosePicker, 0.04f, 22);
+        }
+
+        TextMesh pickerAmountLabel;
+
+        // Foods listed per 100 g (UK CoFID) are logged as 100 g per serving, so a step of 0.5 is 50 g for those.
+        string ServingsText() => $"Amount: {pickerServings:0.#} serving{(pickerServings == 1.0 ? "" : "s")}";
+
+        void StepServings(double delta)
+        {
+            pickerServings = System.Math.Max(0.5, System.Math.Min(20.0, pickerServings + delta));
+            if (pickerAmountLabel != null) pickerAmountLabel.text = ServingsText();
         }
 
         /// True while the pointer is resting on a button, so voice capture can ignore the trigger.
