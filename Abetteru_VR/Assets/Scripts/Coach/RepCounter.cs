@@ -130,7 +130,14 @@ namespace ABetterU.Coach
                 repMaxLookDown = Mathf.Max(repMaxLookDown, LookDownDegrees);
             }
             if (BadForm) repFlagged = true;   // judged only while actually squatting
-            else if (!inBottom && dropFraction < 0.03f) repFlagged = false;   // stood back up without a rep: start the next one clean
+            else if (!inBottom && dropFraction < 0.03f)
+            {
+                // Stood back up without completing a rep: start the next one clean (flag and peaks).
+                if (repMaxLean > 0f || repMaxLookDown > 0f)
+                    Debug.Log($"[Squat] movement ignored (never reached counting depth): peak lean {repMaxLean:0.00} m, peak look-down {repMaxLookDown:0} deg{(repFlagged ? ", flagged" : "")}");
+                repFlagged = false;
+                repMaxLean = repMaxLookDown = 0f;
+            }
 
             bool wasInBottom = inBottom;
             bool repDone = DetectRepStep(dropFraction, ref inBottom);
