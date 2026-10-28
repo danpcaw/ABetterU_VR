@@ -380,14 +380,19 @@ namespace ABetterU.Coach
         {
             var p = NewRoot(new Vector3(0f, 1.62f, 2.8f));
 
-            // Navigation rail
-            VRGlass.Panel(p, "Rail", new Vector3(-1.85f, 0.15f, 0.03f), new Vector2(0.78f, 1.9f), 0.06f, GlassStyle.Panel, 0);
-            RailButton(p, "Home", 0.70f, GlassStyle.Secondary, ShowHome);
-            RailButton(p, "My World", 0.53f, GlassStyle.Primary, null);
-            RailButton(p, "My Community", 0.36f, GlassStyle.Disabled, null);
-            RailButton(p, "My Experiences", 0.19f, GlassStyle.Secondary, ShowExperiences);
-            RailButton(p, "Discover", 0.02f, GlassStyle.Disabled, null);
-            RailButton(p, "Switch account", -0.62f, GlassStyle.Secondary, SwitchAccount);
+            // Navigation rail. It sits far to the user's left, so it is turned to face them; otherwise the buttons,
+            // which float in front of the panel, look shifted sideways by perspective.
+            var rail = new GameObject("Rail").transform;
+            rail.SetParent(p, false);
+            rail.localPosition = new Vector3(-1.85f, 0.15f, 0f);
+            rail.localRotation = Quaternion.Euler(0f, -Mathf.Atan2(1.85f, 2.8f) * Mathf.Rad2Deg, 0f);
+            VRGlass.Panel(rail, "Rail panel", new Vector3(0f, 0f, 0.03f), new Vector2(0.78f, 1.9f), 0.06f, GlassStyle.Panel, 0);
+            RailButton(rail, "Home", 0.55f, GlassStyle.Secondary, ShowHome);
+            RailButton(rail, "My World", 0.38f, GlassStyle.Primary, null);
+            RailButton(rail, "My Community", 0.21f, GlassStyle.Disabled, null);
+            RailButton(rail, "My Experiences", 0.04f, GlassStyle.Secondary, ShowExperiences);
+            RailButton(rail, "Discover", -0.13f, GlassStyle.Disabled, null);
+            RailButton(rail, "Switch account", -0.77f, GlassStyle.Secondary, SwitchAccount);
 
             VRGlass.Label(p, "My World", new Vector3(-1.4f, 1.02f, -0.02f), 0.02f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
             VRGlass.Label(p, "Your wellbeing, connected.", new Vector3(-1.4f, 0.88f, -0.02f), 0.0085f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
@@ -409,8 +414,9 @@ namespace ABetterU.Coach
             BuildWellbeingCard(Card(p, new Vector3(1.075f, -0.25f, 0f), new Vector2(0.85f, 0.95f)));
         }
 
-        void RailButton(Transform p, string text, float y, GlassStyle style, Action onClick) =>
-            VRGlass.Button(p, text, new Vector3(-1.85f, y, -0.02f), new Vector2(0.66f, 0.13f), style, 0.0075f, onClick, 0.04f);
+        // y is relative to the rail's own centre; x is 0 so the buttons are centred on the rail panel.
+        void RailButton(Transform rail, string text, float y, GlassStyle style, Action onClick) =>
+            VRGlass.Button(rail, text, new Vector3(0f, y, -0.02f), new Vector2(0.66f, 0.13f), style, 0.0075f, onClick, 0.04f);
 
         static Transform Card(Transform p, Vector3 pos, Vector2 size)
         {

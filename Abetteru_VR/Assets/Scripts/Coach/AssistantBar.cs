@@ -26,13 +26,14 @@ namespace ABetterU.Coach
         void Build(Transform parent)
         {
             root = parent;
-            VRGlass.Panel(root, "Bar", new Vector3(0, 0, 0.02f), new Vector2(3.3f, 0.62f), 0.12f, GlassStyle.Panel, 0);
+            VRGlass.Panel(root, "Bar", new Vector3(0, 0, 0.02f), new Vector2(3.1f, 0.62f), 0.12f, GlassStyle.Panel, 0);
 
-            orb = VRGlass.Image(root, "Orb", VRArt.Orb(Color.cyan, Color.cyan), new Vector3(-1.38f, 0f, -0.01f), new Vector2(0.46f, 0.46f), 2);
+            // The orb sits in the left corner and the text is centred in the bar, so the whole bar reads as centred.
+            orb = VRGlass.Image(root, "Orb", VRArt.Orb(Color.cyan, Color.cyan), new Vector3(-1.27f, 0f, -0.01f), new Vector2(0.46f, 0.46f), 2);
             orbRenderer = orb.GetComponent<Renderer>();
 
-            headline = VRGlass.Label(root, "", new Vector3(-1.05f, 0.14f, -0.02f), 0.0125f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
-            detail = VRGlass.Label(root, "", new Vector3(-1.05f, -0.07f, -0.02f), 0.0082f, VRUi.Muted, TextAnchor.UpperLeft, TextAlignment.Left);
+            headline = VRGlass.Label(root, "", new Vector3(0.15f, 0.14f, -0.02f), 0.0125f, VRUi.Ink);
+            detail = VRGlass.Label(root, "", new Vector3(0.15f, -0.07f, -0.02f), 0.0082f, VRUi.Muted, TextAnchor.UpperCenter, TextAlignment.Center);
             Set(AssistantState.Ready, "Ask A Better U", "Hold right trigger to speak");
         }
 
@@ -41,7 +42,7 @@ namespace ABetterU.Coach
             state = s;
             if (headline == null) return;
             headline.text = VRUi.Wrap(title, 52, 1);
-            detail.text = VRUi.Wrap(body, 74, 2);
+            detail.text = VRUi.Wrap(body, 66, 2);
 
             Color core;
             switch (s)
