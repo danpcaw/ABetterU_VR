@@ -75,7 +75,7 @@ namespace ABetterU.Coach
         /// The dashboard's assistant bar subscribes to this. (state, headline, detail)
         public Action<AssistantState, string, string> OnAssistant;
         /// Raised when the agent offers a short list of foods to tap (null clears it). The dashboard draws the picker.
-        public Action<List<CoachAgent.Choice>, double> OnChoices;
+        public Action<List<CoachAgent.Choice>, double, double> OnChoices;
         /// Raised with a short confirmation after the backend confirmed a write (food, injury note, set).
         public Action<string> OnSaved;
 
@@ -120,7 +120,7 @@ namespace ABetterU.Coach
             agent = new CoachAgent(config, supabase);
             agent.ToolSucceeded += OnToolSucceeded;
             agent.Navigate = dest => flow != null && flow.NavigateTo(dest);
-            agent.ChoicesOffered += (list, servings) => OnChoices?.Invoke(list, servings);
+            agent.ChoicesOffered += (list, servings, grams) => OnChoices?.Invoke(list, servings, grams);
 
             flow = gameObject.AddComponent<AppFlow>();
             flow.Bind(this);
@@ -215,16 +215,16 @@ namespace ABetterU.Coach
         }
 
         /// The user tapped a food in the picker: log it directly, then confirm only what the backend confirmed.
-        public void ChooseFood(string foodId, double servings) => StartCoroutine(ChooseRoutine(foodId, servings));
+        public void ChooseFood(string foodId, double servings, double grams) => StartCoroutine(ChooseRoutine(foodId, servings, grams));
 
-        IEnumerator ChooseRoutine(string foodId, double servings)
+        IEnumerator ChooseRoutine(string foodId, double servings, double grams)
         {
             while (busy) yield return null;                            // let a reply that is still being spoken finish first
             busy = true;
             lastSaved = null; savedNames.Clear();
             Report(AssistantState.Processing, "Saving...", "");
             string result = null;
-            yield return agent.LogChosen(foodId, servings, r => result = r);
+            yield return agent.LogChosen(foodId, servings, grams, r => result = r);
             if (savedNames.Count > 0)
             {
                 Report(AssistantState.Done, "Saved", lastSaved);
@@ -447,7 +447,7 @@ namespace ABetterU.Coach
             savedNames.Clear();
             narrated = false;
             navigatedThisTurn = false;
-            OnChoices?.Invoke(null, 1.0);                                  // a new request replaces any picker still on screen
+            OnChoices?.Invoke(null, 1.0, 0.0);                                  // a new request replaces any picker still on screen
             agent.CanShowChoices = flow != null && flow.Current != AppFlow.Stage.Gym;
 
             if (tts != null && tts.PlayCached(Acks[ackIndex++ % Acks.Length])) Debug.Log("[Timing] acknowledgement played");

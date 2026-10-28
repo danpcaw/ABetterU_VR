@@ -94,7 +94,7 @@ namespace ABetterU.Coach
         Transform picker;
         List<CoachAgent.Choice> pickerAll;
         int pickerPage;
-        double pickerServings = 1.0;
+        double pickerServings = 1.0, pickerGrams = 0.0;     // grams > 0 when the user said a weight
 
         void ClosePicker()
         {
@@ -103,13 +103,14 @@ namespace ABetterU.Coach
             pickerAll = null;
         }
 
-        void ShowPicker(List<CoachAgent.Choice> choices, double servings)
+        void ShowPicker(List<CoachAgent.Choice> choices, double servings, double grams)
         {
             ClosePicker();
             if (choices == null || choices.Count == 0 || Current == Stage.Gym || Current == Stage.Login) return;
             pickerAll = choices;
             pickerPage = 0;
             pickerServings = servings > 0 ? servings : 1.0;
+            pickerGrams = grams > 0 ? grams : 0.0;
             RenderPicker();
         }
 
@@ -148,15 +149,15 @@ namespace ABetterU.Coach
                 int col = two ? i % 2 : 0, row = two ? i / 2 : i;
                 float x = two ? (col == 0 ? -0.84f : 0.84f) : 0f;
                 VRGlass.Button(picker, line1 + "\n" + line2, new Vector3(x, h / 2 - 0.46f - row * rowH, -0.02f), new Vector2(btnW, 0.2f),
-                    GlassStyle.Secondary, two ? 0.0075f : 0.0085f, () => { double amount = pickerServings; ClosePicker(); voice.ChooseFood(foodId, amount); }, 0.04f, 22);
+                    GlassStyle.Secondary, two ? 0.0075f : 0.0085f, () => { double amount = pickerServings, weight = pickerGrams; ClosePicker(); voice.ChooseFood(foodId, amount, weight); }, 0.04f, 22);
             }
 
             // Bottom row: how many (left), pages (middle), cancel (right).
             float by = -h / 2 + 0.16f;
             float lx = two ? -1.25f : -0.8f, rx = two ? 1.25f : 0.8f;
-            VRGlass.Button(picker, "-", new Vector3(lx - 0.36f, by, -0.02f), new Vector2(0.18f, 0.16f), GlassStyle.Secondary, 0.012f, () => StepServings(-0.5), 0.04f, 22);
+            VRGlass.Button(picker, "-", new Vector3(lx - 0.36f, by, -0.02f), new Vector2(0.18f, 0.16f), GlassStyle.Secondary, 0.012f, () => StepAmount(-1), 0.04f, 22);
             var amountLabel = VRGlass.Label(picker, ServingsText(), new Vector3(lx, by, -0.02f), 0.0085f, VRUi.Ink, order: 24);
-            VRGlass.Button(picker, "+", new Vector3(lx + 0.36f, by, -0.02f), new Vector2(0.18f, 0.16f), GlassStyle.Secondary, 0.012f, () => StepServings(0.5), 0.04f, 22);
+            VRGlass.Button(picker, "+", new Vector3(lx + 0.36f, by, -0.02f), new Vector2(0.18f, 0.16f), GlassStyle.Secondary, 0.012f, () => StepAmount(1), 0.04f, 22);
             pickerAmountLabel = amountLabel;
 
             if (pages > 1)
@@ -173,12 +174,15 @@ namespace ABetterU.Coach
 
         TextMesh pickerAmountLabel;
 
-        // Foods listed per 100 g (UK CoFID) are logged as 100 g per serving, so a step of 0.5 is 50 g for those.
-        string ServingsText() => $"Amount: {pickerServings:0.#} serving{(pickerServings == 1.0 ? "" : "s")}";
+        // In grams mode a step is 25 g; otherwise half a serving. Foods listed per 100 g (UK CoFID) count 100 g as one serving.
+        string ServingsText() => pickerGrams > 0
+            ? $"Amount: {pickerGrams:0} g"
+            : $"Amount: {pickerServings:0.#} serving{(pickerServings == 1.0 ? "" : "s")}";
 
-        void StepServings(double delta)
+        void StepAmount(int direction)
         {
-            pickerServings = System.Math.Max(0.5, System.Math.Min(20.0, pickerServings + delta));
+            if (pickerGrams > 0) pickerGrams = System.Math.Max(25.0, System.Math.Min(2000.0, pickerGrams + 25.0 * direction));
+            else pickerServings = System.Math.Max(0.5, System.Math.Min(20.0, pickerServings + 0.5 * direction));
             if (pickerAmountLabel != null) pickerAmountLabel.text = ServingsText();
         }
 

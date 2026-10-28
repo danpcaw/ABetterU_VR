@@ -63,7 +63,8 @@ namespace ABetterU.Coach
              ""food_ids"":{""type"":""array"",""items"":{""type"":""string""},""description"":""2 to 10 ids from search_foods. Omit when show_all is true.""},
              ""show_all"":{""type"":""boolean"",""description"":""True to show everything the last search found, in pages of 10 (use when the user wants to browse a restaurant or brand).""},
              ""meal"":{""type"":""string"",""enum"":[""breakfast"",""lunch"",""dinner"",""snack""]},
-             ""servings"":{""type"":""number"",""description"":""Servings the user asked for, default 1. The user can also change the amount on screen.""}},
+             ""servings"":{""type"":""number"",""description"":""Servings the user asked for, default 1. The user can also change the amount on screen.""},
+             ""grams"":{""type"":""number"",""description"":""Weight in grams if the user gave one (for example 100). Use this instead of servings.""}},
             ""required"":[""meal""]}},
           {""type"":""function"",""name"":""go_to"",
            ""description"":""Open a screen in the app. Destinations: home; my_world (the profile, nutrition, today's activity and wellbeing notes cards, so 'wellness card' means my_world); food_diary; my_experiences; virtual_gym. Only say you opened something after this returns ok."",
@@ -106,8 +107,10 @@ namespace ABetterU.Coach
             "You can open screens with go_to: home, my_world (profile, nutrition, today's activity and wellbeing cards, so 'wellness card' means my_world), food_diary, my_experiences and virtual_gym. " +
             "Only say you opened something after go_to returned ok:true. My Community and Discover are coming soon: say so, do not pretend to open them. " +
             "If the user gives a weight in grams, pass grams to log_food, not servings. " +
-            "For a generic food with no brand (apple, banana, bread, chicken, rice) when search_foods returns two or more results, ALWAYS call offer_choices with the best food_ids (up to 10 if there are that many) instead of choosing for them, " +
-            "then say one short sentence asking them to pick one on screen, and do not log anything. If they named a brand or a specific restaurant item (Big Mac, KFC wrap), or there is only one result, just log it. " +
+            "Whenever search_foods returns two or more results that could be what the user meant (different products or variants, such as McCain Naked Oven Chips and McCain Straight Cut Chips), " +
+            "ALWAYS call offer_choices with the best food_ids (up to 10) instead of choosing for them, even if they named a brand, then say one short sentence asking them to pick one on screen and do not log anything. " +
+            "Pass servings or grams (if they gave a weight) to offer_choices so the amount is already set. " +
+            "Only log straight away when there is exactly one result, or exactly one result's name is what they asked for. " +
             "If the user asks to see, list or browse a restaurant's or brand's foods, or asks for options or alternatives, search with just the restaurant or brand name (for example McDonald's, not a dish), then call offer_choices with show_all true so they can page through everything. " +
             "If there is no exact match but similar foods exist (for example no plain Cheeseburger but a Double Cheeseburger and a Hamburger), say there is no exact match and offer those. " +
             "When a logged food shows grams (foods listed per 100 g are logged as 100 g per serving), say the grams so the user can correct them. " +
@@ -411,10 +414,10 @@ namespace ABetterU.Coach
 
         public struct Choice { public string FoodId, Name, Brand, Serving, Source; public double? Kcal; }
 
-        public event Action<List<Choice>, double> ChoicesOffered;
+        public event Action<List<Choice>, double, double> ChoicesOffered;
         public bool CanShowChoices;                     // false where there is no screen to show them (the gym)
         string pendingMeal = "snack";
-        double pendingServings = 1.0;
+        double pendingServings = 1.0, pendingGrams = 0.0;
 
         string OfferChoices(JObject args)
         {
@@ -453,17 +456,20 @@ namespace ABetterU.Coach
             pendingMeal = meal == "breakfast" || meal == "lunch" || meal == "dinner" || meal == "snack" ? meal : DefaultMealSlot(DateTime.Now);
             double servings = args["servings"] != null ? (double)args["servings"] : 1.0;
             pendingServings = servings > 0 && servings <= 20 ? servings : 1.0;
+            double grams = args["grams"] != null && args["grams"].Type != JTokenType.Null ? (double)args["grams"] : 0;
+            pendingGrams = grams > 0 && grams <= 5000 ? grams : 0;
 
-            ChoicesOffered?.Invoke(list, pendingServings);
+            ChoicesOffered?.Invoke(list, pendingServings, pendingGrams);
             return new JObject { ["ok"] = true, ["shown"] = list.Count, ["note"] = "The options are on screen with an amount stepper and page buttons. Ask the user to pick one; nothing has been logged." }
                 .ToString(Newtonsoft.Json.Formatting.None);
         }
 
         /// The user tapped an option. Logs it exactly as log_food would, and remembers it so the next spoken turn knows.
-        public IEnumerator LogChosen(string foodId, double servings, Action<string> done)
+        public IEnumerator LogChosen(string foodId, double servings, double grams, Action<string> done)
         {
             if (servings > 0 && servings <= 20) pendingServings = servings;
             var args = new JObject { ["food_id"] = foodId, ["meal"] = pendingMeal, ["servings"] = pendingServings };
+            if (grams > 0) args["grams"] = grams;                 // the weight the user chose wins; servings is derived from it
             string result = null;
             yield return LogFood(args, r => result = r);
             Debug.Log($"[Agent] picker log_food -> {result}");
