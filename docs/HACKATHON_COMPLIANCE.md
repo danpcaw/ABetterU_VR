@@ -59,8 +59,8 @@ Keep the one-line disclosure anyway; it costs nothing. Do not describe the scaff
 Also: from Oct 28 Muse Code is used for implementation and as a second reviewer (stated in the README). It can be listed as a further Meta tool once it has produced code that is committed; say only what it actually did.
 
 ## Open questions for the organisers (Discord #questions)
-1. Indie entry building a VR companion for my own existing production platform. The VR app, agent and a new database table are new; the web app, phone app and databases already existed. Is integrating with my own existing backend acceptable if the new work is clearly labelled?
-2. Is it fine to use non-Meta tools (Supabase, a Meta-owned speech service, an AI coding assistant) as long as Meta models are core to the product?
+1. Indie entry building a VR companion for my own existing production platform. The VR app, agent and a new database table are new; the web app, phone app and databases already existed. The platform is owned by my limited company (A Better U Ltd), but I entered as an individual on the Indie track with my personal account, and the app lists the company as publisher. Is integrating with my own existing backend acceptable if the new work is clearly labelled, and is the company name on the app a problem for an Indie entry?
+2. Is it fine to use non-Meta tools (Supabase, a Meta-owned speech service, an AI coding assistant) as long as Meta models are core to the product? Does Wit.ai (Meta-owned) count as one of the required Meta AI tools, or only the Muse models?
 
 ## To do
 - [x] Pre-kickoff prep is allowed (checked Oct 28).
