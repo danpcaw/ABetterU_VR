@@ -107,7 +107,8 @@ namespace ABetterU.Coach
             "You can open screens with go_to: home, my_world (profile, nutrition, today's activity and wellbeing cards, so 'wellness card' means my_world), food_diary, my_experiences and virtual_gym. " +
             "Only say you opened something after go_to returned ok:true. My Community and Discover are coming soon: say so, do not pretend to open them. " +
             "If the user gives a weight in grams, pass grams to log_food, not servings. " +
-            "Whenever search_foods returns two or more results that could be what the user meant (different products or variants, such as McCain Naked Oven Chips and McCain Straight Cut Chips), " +
+            "If search_foods returns exact_match_food_id, the user named exactly that food: log it straight away with log_food and do not offer choices. " +
+            "Otherwise, whenever search_foods returns two or more results that could be what the user meant (different products or variants, such as McCain Naked Oven Chips and McCain Straight Cut Chips), " +
             "ALWAYS call offer_choices with the best food_ids (up to 10) instead of choosing for them, even if they named a brand, then say one short sentence asking them to pick one on screen and do not log anything. " +
             "Pass servings or grams (if they gave a weight) to offer_choices so the amount is already set. " +
             "Only log straight away when there is exactly one result, or exactly one result's name is what they asked for. " +
@@ -304,6 +305,8 @@ namespace ABetterU.Coach
             if (!QueryNamesABrand(usable, words))
                 usable = usable.OrderBy(f => SourceTier((string)f["source"])).ThenBy(f => IsRawVariant(f) ? 0 : 1).ToList();
 
+            usable = DedupeSameProduct(usable);
+
             var rows = new JArray();
             lastSearchAll.Clear();
             foreach (var f in usable.Take(60))
@@ -329,11 +332,36 @@ namespace ABetterU.Coach
                 lastSearchAll.Add(summary);
                 if (rows.Count < 10) rows.Add(summary);
             }
-            done(new JObject { ["ok"] = true, ["searched_as"] = usedQuery, ["total_found"] = lastSearchAll.Count, ["results"] = rows }.ToString(Newtonsoft.Json.Formatting.None));
+            // If exactly one food is named exactly what the user said (apart from its brand), say so, so the agent logs it without asking.
+            string exactId = null; int exactCount = 0;
+            foreach (var f in usable.Take(60))
+            {
+                var nameWords = new HashSet<string>(NormaliseQuery((string)f["name"] ?? ""));
+                var brandWords = new HashSet<string>(NormaliseQuery(((string)f["brand"] ?? "") + " " + ((string)f["restaurant"] ?? "")));
+                var core = words.Where(w => !brandWords.Contains(w)).ToList();
+                if (core.Count > 0 && nameWords.SetEquals(core)) { exactId = (string)f["id"]; exactCount++; }
+            }
+            var result = new JObject { ["ok"] = true, ["searched_as"] = usedQuery, ["total_found"] = lastSearchAll.Count, ["results"] = rows };
+            if (exactCount == 1) result["exact_match_food_id"] = exactId;
+            done(result.ToString(Newtonsoft.Json.Formatting.None));
         }
 
         /// Mirrors estimateServingGrams in the web app (src/lib/foods.ts): the serving weight if the food has one,
         /// else grams derived from kcal per serving vs per 100 g, else null (the web app then logs 100 g).
+        // The same product often exists from several sources (restaurant list, our own entry). Keep one of each, best first.
+        static List<JToken> DedupeSameProduct(List<JToken> rows)
+        {
+            var seen = new HashSet<string>();
+            var kept = new List<JToken>();
+            foreach (var f in rows)
+            {
+                double kcal = DashboardData.Num(f["energy_kcal_serving"]) ?? DashboardData.Num(f["energy_kcal_100g"]) ?? 0;
+                string key = string.Join(" ", NormaliseQuery((string)f["name"] ?? "")) + "|" + ((string)f["brand"] ?? "").ToLowerInvariant() + "|" + Math.Round(kcal);
+                if (seen.Add(key)) kept.Add(f);
+            }
+            return kept;
+        }
+
         // True if every word appears somewhere in the food's name, brand or restaurant (apostrophes ignored).
         static bool ContainsAllWords(JToken f, List<string> words)
         {
