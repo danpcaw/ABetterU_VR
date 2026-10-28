@@ -47,6 +47,7 @@ namespace ABetterU.Coach
         public int FlaggedReps { get; private set; }     // movements NOT counted because the head leaned or dipped
         Vector3 standingPos, standingForward = Vector3.forward;
         bool repFlagged;
+        float repMaxLean, repMaxLookDown;     // peaks within the current rep, logged to tune the limits
 
         float standingHeight;
         float lastRepTime, setStartedAt;
@@ -106,9 +107,28 @@ namespace ABetterU.Coach
             CurrentDrop = dropFraction;
             if (dropFraction > DeepestDrop) DeepestDrop = dropFraction;
 
-            Vector3 away = NeckPoint() - standingPos; away.y = 0f;
-            LeanMetres = Vector3.Dot(away, standingForward);
+            // Re-baseline while upright, so stepping back or forward between reps cannot hide a lean (or fake one).
+            // It only follows small drift (under 10 cm), so a slow lean forward is never absorbed into "standing".
+            Vector3 neck = NeckPoint();
+            Vector3 away = neck - standingPos; away.y = 0f;
+            float lean = Vector3.Dot(away, standingForward);
+            if (!inBottom && dropFraction < 0.03f && Mathf.Abs(lean) < 0.10f)
+            {
+                float k = 1f - Mathf.Exp(-4f * Time.deltaTime);
+                standingPos = Vector3.Lerp(standingPos, new Vector3(neck.x, standingPos.y, neck.z), k);
+                Vector3 f = head.parent != null ? head.parent.InverseTransformDirection(head.forward) : head.forward;
+                f.y = 0f;
+                if (f.sqrMagnitude > 0.01f) standingForward = Vector3.Slerp(standingForward, f.normalized, k).normalized;
+                away = neck - standingPos; away.y = 0f;
+                lean = Vector3.Dot(away, standingForward);
+            }
+            LeanMetres = lean;
             LookDownDegrees = -Mathf.Asin(Mathf.Clamp(head.forward.y, -1f, 1f)) * Mathf.Rad2Deg;
+            if (dropFraction > 0.04f)
+            {
+                repMaxLean = Mathf.Max(repMaxLean, Mathf.Abs(LeanMetres));
+                repMaxLookDown = Mathf.Max(repMaxLookDown, LookDownDegrees);
+            }
             if (BadForm) repFlagged = true;   // judged only while actually squatting
             else if (!inBottom && dropFraction < 0.03f) repFlagged = false;   // stood back up without a rep: start the next one clean
 
@@ -119,6 +139,8 @@ namespace ABetterU.Coach
             {
                 bool rejected = repFlagged;     // leaned or tilted at any point: bending over is not a squat
                 repFlagged = false;
+                Debug.Log($"[Squat] {(rejected ? "REJECTED" : "counted")}: deepest {DeepestDrop * 100f:0}%, peak lean {repMaxLean:0.00} m (limit {leanLimitMetres:0.00}), peak look-down {repMaxLookDown:0} deg (limit {lookDownLimitDeg:0})");
+                repMaxLean = repMaxLookDown = 0f;
                 if (rejected) { FlaggedReps++; lastRepTime = Time.time; return; }
                 RepCount++;
                 SecondsPerRep = (Time.time - lastRepTime) / 1f;

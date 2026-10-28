@@ -167,7 +167,7 @@ namespace ABetterU.Coach
         {
             forHud.ShowCardPending();
             const string prompt = "Achievement card artwork for a bodyweight squat workout. Dark navy background with teal accents, " +
-                                  "a stylised athlete silhouette mid squat in the upper two thirds, flat vector style, centred, uncluttered. " +
+                                  "a stylised athlete silhouette mid squat in the upper two thirds, flat vector style, the athlete exactly centred horizontally, uncluttered. " +
                                   "Leave the lower third empty. Absolutely no text, no letters and no numbers anywhere in the image.";
             Texture2D art = null; string err = null;
             yield return museImage.Generate(prompt, 768, t => art = t, e => err = e);
