@@ -1,0 +1,71 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using Newtonsoft.Json.Linq;
+using UnityEngine;
+
+namespace ABetterU.Coach
+{
+    /// One day of the user's food diary, read from their real food_log_entries. Totals use the same calorie
+    /// arithmetic as the dashboards (DashboardData.Portion), so the numbers match the web app.
+    public class DiaryData
+    {
+        public struct Item { public string Slot, Name, Amount; public double Kcal; }
+
+        public DateTime Date = DateTime.Now.Date;
+        public bool Loading, Loaded, HadError;
+        public readonly List<Item> Items = new List<Item>();
+        public double Kcal, Protein, Carbs, Fat;
+
+        public IEnumerator Load(SupabaseClient db, DateTime date)
+        {
+            Date = date.Date;
+            Loading = true; Loaded = false; HadError = false;
+            Items.Clear();
+            Kcal = Protein = Carbs = Fat = 0;
+
+            const string foodCols = "name,brand,serving_size_g,energy_kcal_100g,energy_kcal_serving,protein_g_100g,protein_g_serving," +
+                                    "carbohydrate_g_100g,carbohydrate_g_serving,fat_g_100g,fat_g_serving";
+            string day = Date.ToString("yyyy-MM-dd");
+            string raw = null, err = null;
+            yield return db.Get($"food_log_entries?select=meal_slot,servings,quantity_g,created_at,food:food_id({foodCols})&log_date=eq.{day}&order=created_at.asc",
+                r => raw = r, e => err = e);
+
+            JArray rows = null;
+            if (err == null) { try { rows = JArray.Parse(raw); } catch (Exception) { /* handled below */ } }
+            if (rows == null)
+            {
+                Debug.LogWarning($"[Diary] load failed for {day}: {err}");
+                HadError = true;
+                Loading = false; Loaded = true;
+                yield break;
+            }
+
+            foreach (var entry in rows)
+            {
+                var food = entry["food"];
+                if (food == null || food.Type == JTokenType.Null) continue;
+
+                double servingG = DashboardData.Num(food["serving_size_g"]) ?? 0;
+                double qty = DashboardData.Num(entry["quantity_g"]) ?? 0;
+                double servings = DashboardData.Num(entry["servings"]) ?? 0;
+                double grams = qty > 0 ? qty : (servings > 0 ? servings : 1) * (servingG > 0 ? servingG : 100);
+
+                double kcal = DashboardData.Portion(food, "energy_kcal", grams);
+                Kcal += kcal;
+                Protein += DashboardData.Portion(food, "protein_g", grams);
+                Carbs += DashboardData.Portion(food, "carbohydrate_g", grams);
+                Fat += DashboardData.Portion(food, "fat_g", grams);
+
+                string brand = (string)food["brand"];
+                string name = (string)food["name"] + (string.IsNullOrEmpty(brand) ? "" : $" ({brand})");
+                string amount = servings > 0 ? $"x{servings:0.##}" : $"{grams:0} g";
+
+                Items.Add(new Item { Slot = (string)entry["meal_slot"], Name = name, Amount = amount, Kcal = kcal });
+            }
+
+            Loading = false;
+            Loaded = true;
+        }
+    }
+}

@@ -11,7 +11,7 @@ namespace ABetterU.Coach
     /// Also owns the in-gym menu (left Menu button). VoiceLoopTest builds the gym when this enters Stage.Gym.
     public class AppFlow : MonoBehaviour
     {
-        public enum Stage { Login, Home, MyWorld, Experiences, Gym }
+        public enum Stage { Login, Home, MyWorld, Diary, Experiences, Gym }
         public Stage Current { get; private set; } = Stage.Login;
 
         /// True while the in-gym menu is open, so the right trigger clicks menu buttons instead of starting the mic.
@@ -31,6 +31,8 @@ namespace ABetterU.Coach
         RetreatEnvironment retreat;
         AssistantBar assistant;
         readonly DashboardData data = new DashboardData();
+        readonly DiaryData diary = new DiaryData();
+        DateTime diaryDate = DateTime.Now.Date;
         bool refreshing, refreshAgain;
 
         Transform screen;                // the current screen; replaced as the stage changes
@@ -260,6 +262,7 @@ namespace ABetterU.Coach
             {
                 refreshAgain = false;
                 yield return data.Refresh(supabase, null);
+                if (Current == Stage.Diary && !diary.Loading) yield return diary.Load(supabase, diaryDate);   // a save may have changed the day on screen
             }
             while (refreshAgain);
             refreshing = false;
@@ -273,6 +276,7 @@ namespace ABetterU.Coach
             {
                 case Stage.Home: BuildHome(); break;
                 case Stage.MyWorld: BuildMyWorld(); break;
+                case Stage.Diary: BuildDiary(); break;
                 case Stage.Experiences: BuildExperiences(); break;
             }
         }
@@ -284,7 +288,7 @@ namespace ABetterU.Coach
         void EnsureAssistant()
         {
             if (assistant != null) return;
-            assistant = AssistantBar.Create(new Vector3(0f, 0.62f, 2.15f), Quaternion.Euler(14f, 0f, 0f));
+            assistant = AssistantBar.Create(new Vector3(0f, 0.56f, 2.15f), Quaternion.Euler(14f, 0f, 0f));
         }
 
         // ── Home: greeting, today's summary and four destinations ───────────────────────────────────────
@@ -438,6 +442,7 @@ namespace ABetterU.Coach
         void BuildNutritionCard(Transform c)
         {
             CardTitle(c, VRArt.IconKind.Apple, new Color(0.40f, 0.95f, 0.70f), "Today's Nutrition", 0.37f);
+            VRGlass.Button(c, "View Food Diary", new Vector3(0, -0.41f, -0.02f), new Vector2(0.8f, 0.11f), GlassStyle.Secondary, 0.0075f, ShowDiary, 0.035f);
 
             if (!data.Loaded) { VRGlass.Label(c, "Loading...", new Vector3(0, 0.1f, -0.02f), 0.009f, VRUi.Muted); return; }
             if (data.MealsToday == 0)
@@ -457,8 +462,7 @@ namespace ABetterU.Coach
             MacroRow(c, "Fat", data.Fat, -0.27f);
 
             if (!string.IsNullOrEmpty(data.LatestMeal))
-                VRGlass.Label(c, VRUi.Wrap(data.LatestMeal, 30, 1), new Vector3(0, -0.37f, -0.02f), 0.0082f, VRUi.Ink);
-            VRGlass.Label(c, "Full diary on the web and phone app", new Vector3(0, -0.44f, -0.02f), 0.0058f, VRUi.Muted);
+                VRGlass.Label(c, VRUi.Wrap(data.LatestMeal, 30, 1), new Vector3(0, -0.34f, -0.02f), 0.0082f, VRUi.Ink);
         }
 
         static void MacroRow(Transform c, string name, double grams, float y)
@@ -511,6 +515,119 @@ namespace ABetterU.Coach
                 y -= 0.20f;
             }
             VRGlass.Label(c, "Used to shape your workouts", new Vector3(0, -0.44f, -0.02f), 0.0062f, VRUi.Muted);
+        }
+
+        // ── Food Diary: one day at a time, with previous/next day buttons ───────────────────────────────
+
+        static readonly string[] SlotOrder = { "breakfast", "lunch", "dinner", "snack" };
+
+        void ShowDiary()
+        {
+            Current = Stage.Diary;
+            EnsureAssistant();
+            diaryDate = DateTime.Now.Date;
+            BuildDiary();
+            StartCoroutine(LoadDiary());
+        }
+
+        IEnumerator LoadDiary()
+        {
+            yield return diary.Load(supabase, diaryDate);
+            if (Current == Stage.Diary) BuildDiary();
+        }
+
+        void GoToDay(int offsetDays)
+        {
+            if (diary.Loading) return;                                  // finish the current load first
+            diaryDate = diaryDate.AddDays(offsetDays);
+            if (diaryDate > DateTime.Now.Date) diaryDate = DateTime.Now.Date;
+            BuildDiary();
+            StartCoroutine(LoadDiary());
+        }
+
+        static string DayTitle(DateTime d)
+        {
+            int days = (DateTime.Now.Date - d.Date).Days;
+            return days == 0 ? "Today" : days == 1 ? "Yesterday" : d.ToString("dddd d MMM");
+        }
+
+        void BuildDiary()
+        {
+            var p = NewRoot(new Vector3(0f, 1.6f, 2.7f));
+            VRGlass.Panel(p, "Panel", new Vector3(0, 0, 0.04f), new Vector2(3.6f, 1.9f), 0.08f, GlassStyle.Panel, 0);
+
+            VRGlass.Label(p, "Food Diary", new Vector3(-1.62f, 0.8f, -0.02f), 0.019f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+            bool canGoBack = !diary.Loading;
+            bool canGoForward = !diary.Loading && diaryDate < DateTime.Now.Date;
+            VRGlass.Button(p, "< Previous", new Vector3(-0.55f, 0.8f, -0.02f), new Vector2(0.5f, 0.14f), canGoBack ? GlassStyle.Secondary : GlassStyle.Disabled, 0.0085f, () => GoToDay(-1), 0.04f);
+            VRGlass.Label(p, DayTitle(diaryDate), new Vector3(0.2f, 0.8f, -0.02f), 0.0145f, VRUi.Ink);
+            VRGlass.Button(p, "Next >", new Vector3(0.95f, 0.8f, -0.02f), new Vector2(0.5f, 0.14f), canGoForward ? GlassStyle.Secondary : GlassStyle.Disabled, 0.0085f, () => GoToDay(1), 0.04f);
+            VRGlass.Button(p, "My World", new Vector3(1.5f, 0.8f, -0.02f), new Vector2(0.5f, 0.14f), GlassStyle.Secondary, 0.0085f, ShowMyWorld, 0.04f);
+
+            // Left: the entries, grouped by meal
+            const float left = -1.62f, right = 0.45f, rowH = 0.095f;
+            if (!diary.Loaded)
+            {
+                VRGlass.Label(p, "Loading...", new Vector3(-0.6f, 0.2f, -0.02f), 0.0105f, VRUi.Muted);
+            }
+            else if (diary.HadError)
+            {
+                VRGlass.Label(p, "Couldn't load this day.\nTry again in a moment.", new Vector3(-0.6f, 0.2f, -0.02f), 0.0095f, VRUi.Muted);
+            }
+            else if (diary.Items.Count == 0)
+            {
+                VRGlass.Label(p, "Nothing logged on this day", new Vector3(-0.6f, 0.25f, -0.02f), 0.0115f, VRUi.Ink);
+                VRGlass.Label(p, "Tell your coach what you ate and it will appear here.", new Vector3(-0.6f, 0.12f, -0.02f), 0.0078f, VRUi.Muted);
+            }
+            else
+            {
+                float y = 0.58f;
+                int rows = 0;
+                const int maxRows = 14;
+                foreach (var slot in SlotOrder)
+                {
+                    double slotKcal = 0;
+                    var inSlot = new List<DiaryData.Item>();
+                    foreach (var item in diary.Items) if (item.Slot == slot) { inSlot.Add(item); slotKcal += item.Kcal; }
+                    if (inSlot.Count == 0) continue;
+
+                    if (rows >= maxRows) break;
+                    VRGlass.Label(p, Capitalise(slot), new Vector3(left, y, -0.02f), 0.0092f, Teal, TextAnchor.MiddleLeft, TextAlignment.Left);
+                    VRGlass.Label(p, $"{slotKcal:N0} kcal", new Vector3(right, y, -0.02f), 0.0085f, Teal, TextAnchor.MiddleRight, TextAlignment.Right);
+                    y -= rowH; rows++;
+
+                    foreach (var item in inSlot)
+                    {
+                        if (rows >= maxRows) break;
+                        VRGlass.Label(p, VRUi.Wrap($"{item.Name}  {item.Amount}", 52, 1), new Vector3(left + 0.05f, y, -0.02f), 0.0082f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+                        VRGlass.Label(p, $"{item.Kcal:N0}", new Vector3(right, y, -0.02f), 0.0082f, VRUi.Muted, TextAnchor.MiddleRight, TextAlignment.Right);
+                        y -= rowH; rows++;
+                    }
+                    y -= 0.03f;
+                }
+                if (rows >= maxRows) VRGlass.Label(p, "More entries are in the web and phone app.", new Vector3(left, -0.82f, -0.02f), 0.0068f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+            }
+
+            // Right: the day's totals
+            var t = new GameObject("Totals").transform;
+            t.SetParent(p, false);
+            t.localPosition = new Vector3(1.2f, -0.05f, 0f);
+            VRGlass.Panel(t, "Totals panel", new Vector3(0, 0, 0.02f), new Vector2(1.15f, 1.4f), 0.05f, GlassStyle.Card, 1);
+            VRGlass.Label(t, "Day total", new Vector3(0, 0.58f, -0.02f), 0.0105f, VRUi.Muted);
+
+            if (!diary.Loaded || diary.HadError || diary.Items.Count == 0)
+            {
+                VRGlass.Label(t, diary.Loaded && !diary.HadError ? "No entries" : "...", new Vector3(0, 0.2f, -0.02f), 0.012f, VRUi.Muted);
+                return;
+            }
+            VRGlass.Label(t, $"{diary.Kcal:N0}", new Vector3(0, 0.36f, -0.02f), 0.026f, VRUi.Ink);
+            bool goal = data.CalorieGoal.HasValue && data.CalorieGoal.Value > 0;
+            VRGlass.Label(t, goal ? $"of {data.CalorieGoal.Value:N0} kcal" : "kcal", new Vector3(0, 0.22f, -0.02f), 0.0085f, VRUi.Muted);
+            if (goal) VRGlass.Bar(t, new Vector3(0, 0.12f, -0.02f), 0.95f, 0.05f, (float)(diary.Kcal / data.CalorieGoal.Value));
+            MacroRow(t, "Protein", diary.Protein, -0.05f);
+            MacroRow(t, "Carbs", diary.Carbs, -0.17f);
+            MacroRow(t, "Fat", diary.Fat, -0.29f);
+            VRGlass.Label(t, $"{diary.Items.Count} item{(diary.Items.Count == 1 ? "" : "s")}", new Vector3(0, -0.52f, -0.02f), 0.0078f, VRUi.Muted);
         }
 
         // ── My Experiences: the way into the virtual gym ────────────────────────────────────────────────

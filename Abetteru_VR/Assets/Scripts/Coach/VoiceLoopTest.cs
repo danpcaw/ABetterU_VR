@@ -1,5 +1,7 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 
@@ -31,6 +33,7 @@ namespace ABetterU.Coach
         public Action<string> OnSaved;
 
         string lastSaved;                 // confirmation text for the turn in progress
+        readonly List<string> savedNames = new List<string>();   // short names of everything the backend confirmed this turn
         float readyAt;                    // when to return the assistant to "Ready" after Done or Error
 
         IEnumerator Start()
@@ -207,6 +210,7 @@ namespace ABetterU.Coach
 
             busy = true;
             lastSaved = null;
+            savedNames.Clear();
             float t0 = Time.realtimeSinceStartup;
             board.Show("Transcribing...");
             Report(AssistantState.Processing, "Transcribing...", "");
@@ -263,17 +267,31 @@ namespace ABetterU.Coach
                 yield break;
             }
 
+            // Honesty check: the model sometimes says "logged" without ever calling the tool (seen Oct 28: three searches, no
+            // writes, "all logged"). If the reply claims a save but the backend confirmed nothing, replace it.
+            bool falseClaim = savedNames.Count == 0 && ClaimsSave(reply);
+            if (falseClaim)
+            {
+                Debug.LogWarning("[VoiceLoop] Reply claimed a save but no write succeeded. Replacing it. Original: " + reply);
+                reply = "I wasn't able to save that, so nothing has been logged. Could you try again?";
+            }
+
             board.Show($"You: {Wrap(heard)}\n\nCoach: {Wrap(reply)}\n\nASR {tAsr:0.0}s  Spark {tSpark:0.0}s");
-            Report(AssistantState.Speaking, "A Better U", reply);
+            Report(falseClaim ? AssistantState.Error : AssistantState.Speaking, falseClaim ? "Nothing was saved" : "A Better U", reply);
 
             bool spoken = false;
             tts.Speak(reply, () => spoken = true);
             while (!spoken) yield return null;
 
-            // "Saved" appears only if the backend confirmed a write during this turn.
-            if (lastSaved != null)
+            // "Saved" appears only if the backend confirmed a write during this turn, and lists exactly what was written.
+            if (savedNames.Count > 0)
             {
-                Report(AssistantState.Done, "Saved", lastSaved);
+                Report(AssistantState.Done, "Saved", savedNames.Count == 1 ? lastSaved : $"{savedNames.Count} saved: {string.Join(", ", savedNames)}");
+                readyAt = Time.unscaledTime + 8f;
+            }
+            else if (falseClaim)
+            {
+                Report(AssistantState.Error, "Nothing was saved", "Hold right trigger and try again.");
                 readyAt = Time.unscaledTime + 8f;
             }
             else Report(AssistantState.Ready, "Ask A Better U", "Hold right trigger to speak");
@@ -298,26 +316,39 @@ namespace ABetterU.Coach
 
         void OnToolSucceeded(string tool, JObject result)
         {
-            string text = null;
+            string text = null, shortName = null;
             switch (tool)
             {
                 case "log_food":
-                    text = $"{(string)result["logged_name"]} logged to {(string)result["meal"]}";
+                    shortName = (string)result["logged_name"];
+                    text = $"{shortName} logged to {(string)result["meal"]}";
                     break;
                 case "report_injury":
                 {
                     string side = (string)result["side"];
                     string area = ((string)result["body_area"] ?? "area").Replace('_', ' ');
-                    text = ((bool?)result["already_recorded"] == true ? "Already noted: " : "Noted: ") + (side != null ? side + " " : "") + area;
+                    shortName = (side != null ? side + " " : "") + area;
+                    text = ((bool?)result["already_recorded"] == true ? "Already noted: " : "Noted: ") + shortName;
                     break;
                 }
                 case "log_set":
+                    shortName = $"{(int)result["reps"]} reps {(string)result["logged_exercise"]}";
                     text = $"{(int)result["reps"]} reps of {(string)result["logged_exercise"]} saved to your activity";
                     break;
             }
             if (text == null) return;
             lastSaved = text;
+            savedNames.Add(shortName);
             OnSaved?.Invoke(text);
+        }
+
+        // True if the reply says something was logged or saved, and is not a refusal or a "could not" message.
+        static bool ClaimsSave(string reply)
+        {
+            if (string.IsNullOrEmpty(reply)) return false;
+            bool claims = Regex.IsMatch(reply, @"\b(logged|saved|recorded|added)\b", RegexOptions.IgnoreCase);
+            bool denies = Regex.IsMatch(reply, @"\b(not|nothing|couldn'?t|could not|can'?t|cannot|unable|wasn'?t|didn'?t|failed)\b|n't", RegexOptions.IgnoreCase);
+            return claims && !denies;
         }
 
         static string Short(string s, int max = 120) => s.Length > max ? s.Substring(0, max) + "..." : s;

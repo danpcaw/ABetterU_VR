@@ -13,7 +13,7 @@ namespace ABetterU.Coach
     /// Tools: search_foods (read) and log_food (write). The coach may only say "logged" after log_food returns ok.
     public class CoachAgent
     {
-        const int MaxSteps = 5;
+        const int MaxSteps = 10;          // a sentence with several foods needs a search and a log for each
 
         readonly ModelApiConfig config;
         readonly SupabaseClient supabase;
@@ -72,6 +72,9 @@ namespace ABetterU.Coach
             "branded or not (the user's speech may drop a brand word). Never pick an item whose name lacks a key word the user said; " +
             "if no result clearly matches, say so and ask. Do not search again once a result already matches. " +
             "After logging, say the exact logged_name, its brand and kcal_per_serving aloud. " +
+            "If the user lists several foods, deal with every item: search for each, then call log_food once per item with the right number of servings " +
+            "(for example 3 rations or 2 slices means servings 3 or 2). Never say an item is logged until log_food returned ok:true for that item, " +
+            "and clearly name any item you could not find or log. " +
             "Only say something is logged after log_food returns ok:true. The food search matches the food's own name and handles brand words itself, " +
             "so if it returns nothing, try once more with fewer, simpler words before telling the user it was not found. " +
             "Use the earlier conversation to understand short replies like yes or no. Do not start a workout unless the user asked for one. " +

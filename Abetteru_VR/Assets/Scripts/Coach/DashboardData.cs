@@ -150,7 +150,7 @@ namespace ABetterU.Coach
 
         // Same rule as the web app's getFoodPortion: use per-100 g values, or derive them from per-serving values
         // using the serving weight (100 g when the food has none).
-        static double Portion(JToken food, string nutrient, double grams)
+        public static double Portion(JToken food, string nutrient, double grams)
         {
             double per100 = Num(food[nutrient + "_100g"]) ?? 0;
             double perServing = Num(food[nutrient + "_serving"]) ?? -1;
@@ -161,7 +161,7 @@ namespace ABetterU.Coach
             return effective100 * grams / 100.0;
         }
 
-        static double? Num(JToken t)
+        public static double? Num(JToken t)
         {
             if (t == null || t.Type == JTokenType.Null) return null;
             if (t.Type == JTokenType.Integer || t.Type == JTokenType.Float) return (double)t;
