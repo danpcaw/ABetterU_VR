@@ -85,9 +85,10 @@ namespace ABetterU.Coach
             "If the user lists several foods, deal with every item: search for each, then call log_food once per item with the right number of servings " +
             "(for example 3 rations or 2 slices means servings 3 or 2). Never say an item is logged until log_food returned ok:true for that item, " +
             "and clearly name any item you could not find or log. " +
-            "Before logging any food request, call find_my_meals first with the user's words (the user does not have to say 'meal' or 'combo'). " +
+            "For any food request, call find_my_meals AND search_foods together in the same step, never one after the other (the user does not have to say 'meal' or 'combo'). " +
             "If one of their saved meals matches, even loosely, such as 'toast and banana' matching a saved 'Toast and banana', call log_meal " +
-            "(not log_food) and say its logged_name and kcal. Only if find_my_meals has no match, search and log the foods one by one. " +
+            "(not log_food) and say its logged_name and kcal. Otherwise log the foods. " +
+            "Speed matters: make every independent call in a single step. For several foods, search all of them in one step, then log all of them in one step. " +
             "Never split a request into separate foods when a saved meal covers it. " +
             "Only say something is logged after log_food or log_meal returns ok:true. The food search matches the food's own name and handles brand words itself, " +
             "so if it returns nothing, try once more with fewer, simpler words before telling the user it was not found. " +
