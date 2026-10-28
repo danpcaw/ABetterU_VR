@@ -26,6 +26,33 @@ namespace ABetterU.Coach
         // Spoken the moment the words are recognised, so the user hears a response well before the real reply is ready.
         static readonly string[] Acks = { "Okay.", "Sure.", "One moment." };
         int ackIndex;
+
+        // Spoken while a slow tool runs. True statements about what is happening, played once per turn from cached clips.
+        static readonly Dictionary<string, string> Narrations = new Dictionary<string, string>
+        {
+            { "search_foods", "Searching the food database. It's a big one, so bear with me." },
+            { "build_workout", "Building your workout." },
+        };
+        bool narrated;
+
+        static string[] PrefetchList()
+        {
+            var all = new List<string>(Acks);
+            all.AddRange(Narrations.Values);
+            return all.ToArray();
+        }
+
+        void Narrate(string progress)
+        {
+            if (narrated || tts == null) return;
+            int close = progress.IndexOf(']');
+            if (!progress.StartsWith("[") || close < 2) return;
+            if (Narrations.TryGetValue(progress.Substring(1, close - 1), out var phrase) && tts.PlayCached(phrase))
+            {
+                narrated = true;
+                Debug.Log("[Timing] narration played");
+            }
+        }
         const int TargetReps = 10;
         SquatHud hud;
         MuseImageClient museImage;
@@ -61,7 +88,7 @@ namespace ABetterU.Coach
 
             tts = gameObject.AddComponent<WitSpeaker>();
             tts.Init(config);
-            StartCoroutine(tts.Prefetch(Acks));
+            StartCoroutine(tts.Prefetch(PrefetchList()));
 
             board.Show("Allow the microphone\nwhen asked...");
             yield return mic.EnsurePermission();
@@ -260,6 +287,7 @@ namespace ABetterU.Coach
             busy = true;
             lastSaved = null;
             savedNames.Clear();
+            narrated = false;
             float t0 = Time.realtimeSinceStartup;
             board.Show("Transcribing...");
             Report(AssistantState.Processing, "Transcribing...", "");
@@ -300,6 +328,7 @@ namespace ABetterU.Coach
             if (supabase != null && supabase.SignedIn)
                 yield return agent.Run(userTurn, p =>
                 {
+                    Narrate(p);
                     board.Show($"You: {Wrap(heard)}\n\n{Wrap(p)}");
                     Report(AssistantState.Processing, $"You said: \"{heard}\"", Friendly(p));
                 }, r => reply = r, e => error = e);
