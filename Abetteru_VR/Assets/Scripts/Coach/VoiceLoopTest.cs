@@ -45,12 +45,15 @@ namespace ABetterU.Coach
         float listenAfter, followUntil;
         Regex wakeRegex;
         const string WakeYes = "Yes?";
+        const string AckHello = "Hi there.", AckThanks = "No problem.";
 
         static string[] PrefetchList()
         {
             var all = new List<string>(Acks);
             all.AddRange(Narrations.Values);
             all.Add(WakeYes);
+            all.Add(AckHello);
+            all.Add(AckThanks);
             return all.ToArray();
         }
 
@@ -242,6 +245,16 @@ namespace ABetterU.Coach
                 readyAt = Time.unscaledTime + 7f;
             }
             busy = false;
+        }
+
+        // A greeting should not get "Okay." back. Tasks keep the neutral acknowledgements.
+        string PickAck(string heard)
+        {
+            string h = (heard ?? "").ToLowerInvariant();
+            // Strip the wake name so "hi Atlas, how you doing" still counts as a greeting.
+            if (Regex.IsMatch(h, @"^\W*(hey|hi|hello|good (morning|afternoon|evening))\b") && !Regex.IsMatch(h, @"\b(log|add|open|show|take|build|search|find|record|save)\b")) return AckHello;
+            if (Regex.IsMatch(h, @"^\W*(thanks|thank you|cheers|good thank|great thank)\b")) return AckThanks;
+            return Acks[ackIndex++ % Acks.Length];
         }
 
         // ── Hands-free ──────────────────────────────────────────────────────────────────────────────────
@@ -455,7 +468,7 @@ namespace ABetterU.Coach
             OnChoices?.Invoke(null, 1.0, 0.0);                                  // a new request replaces any picker still on screen
             agent.CanShowChoices = flow != null && flow.Current != AppFlow.Stage.Gym;
 
-            if (tts != null && tts.PlayCached(Acks[ackIndex++ % Acks.Length])) Debug.Log("[Timing] acknowledgement played");
+            if (tts != null && tts.PlayCached(PickAck(heard))) Debug.Log("[Timing] acknowledgement played");
             board.Show($"You: {Wrap(heard)}\n\nThinking...");
             Report(AssistantState.Processing, $"You said: \"{heard}\"", "Working on it...");
 
