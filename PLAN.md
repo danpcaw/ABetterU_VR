@@ -91,6 +91,13 @@ go to a final round where judges watch the demo videos live.
 - **Make one real:** Social Post Creator. After a set, the coach writes a caption from the real logged data, plus a Muse Image card (targets Best Creative Build, $5K).
 - **Honesty rule:** teasers are always labelled ROADMAP on screen and in the voiceover. The submission states: existing = A Better U web app; new = this VR voice agent. The web app is our credibility edge, not something to hide.
 
+## Stretch: graphics polish (after the guided squat HUD and session summary)
+
+- **Food photos** in the diary and Nutrition card: `foods.image_url` already exists, load with UnityWebRequestTexture and cache.
+- **Exercise visuals** on the squat screen and the workout the coach builds: `exercise_library` has thumbnail and animation URLs.
+- Mannequin look, gym warmed up to match the retreat (lighting, sunset window), roadmap wall.
+- Data gaps are not agent faults: if a brand is missing from `foods` (e.g. Tesco bacon), the coach should say so, which it now does.
+
 ## Cut order (if evenings run short)
 
 0. Roadmap wall / teasers (above)
