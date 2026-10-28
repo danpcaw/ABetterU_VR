@@ -256,7 +256,33 @@ namespace ABetterU.Coach
             // returns nothing. Normalise, then retry with up to two leading words dropped ("kfc bbq mini wrap" -> "mini wrap").
             var words = NormaliseQuery(query);
             string raw = "[]", err = null, usedQuery = query;
-            for (int skip = 0; skip < words.Count && skip <= 2; skip++)
+            // Brand and product words live in different columns ("McCain" is the brand, "chips" is in the name), and the database
+            // matches a whole phrase inside one column, so "mccain chips" finds nothing. For several words, fetch by one word
+            // (longest first) and keep only rows whose name, brand and restaurant together contain every word.
+            bool matchedByWords = false;
+            if (words.Count >= 2)
+            {
+                foreach (var anchor in words.Where(w => w.Length >= 3).Distinct().OrderByDescending(w => w.Length).Take(3).ToList())
+                {
+                    var anchorBody = new JObject { ["q"] = anchor, ["lim"] = 100, ["uid"] = supabase.UserId }.ToString(Newtonsoft.Json.Formatting.None);
+                    string anchorRaw = null, anchorErr = null;
+                    yield return supabase.Rpc(SearchRpc, anchorBody, r => anchorRaw = r, e => anchorErr = e);
+                    if (anchorErr != null) { done(Fail(anchorErr)); yield break; }
+
+                    var matches = new JArray();
+                    foreach (var f in JArray.Parse(anchorRaw))
+                        if (ContainsAllWords(f, words)) matches.Add(f);
+                    if (matches.Count > 0)
+                    {
+                        raw = matches.ToString(Newtonsoft.Json.Formatting.None);
+                        usedQuery = string.Join(" ", words);
+                        matchedByWords = true;
+                        break;
+                    }
+                }
+            }
+
+            for (int skip = 0; !matchedByWords && skip < words.Count && skip <= 2; skip++)
             {
                 usedQuery = string.Join(" ", words.GetRange(skip, words.Count - skip));
                 var body = new JObject { ["q"] = usedQuery, ["lim"] = 100, ["uid"] = supabase.UserId }.ToString(Newtonsoft.Json.Formatting.None);
@@ -305,6 +331,15 @@ namespace ABetterU.Coach
 
         /// Mirrors estimateServingGrams in the web app (src/lib/foods.ts): the serving weight if the food has one,
         /// else grams derived from kcal per serving vs per 100 g, else null (the web app then logs 100 g).
+        // True if every word appears somewhere in the food's name, brand or restaurant (apostrophes ignored).
+        static bool ContainsAllWords(JToken f, List<string> words)
+        {
+            string text = (((string)f["name"] ?? "") + " " + ((string)f["brand"] ?? "") + " " + ((string)f["restaurant"] ?? ""))
+                .ToLowerInvariant().Replace("'", "").Replace("\u2019", "");
+            foreach (var w in words) if (!text.Contains(w)) return false;
+            return true;
+        }
+
         // Whole foods first for generic queries. Restaurant and meal-kit rows come last.
         static int SourceTier(string source)
         {
