@@ -53,6 +53,8 @@ Tools Muse Spark can call, each writing to the signed-in user's real A Better U 
 
 **How it was built:** with Claude Code as the coding assistant, directed and tested by the developer on a real Quest 3S. Parts of the code were written by the developer, including the rep-detection step.
 
+**Muse Code:** from Oct 28, Muse Code (Meta) is also used on the project, both implementing changes and as a second pair of eyes reviewing the repo. Its reviews so far caught submission risks such as a duplicate scene and uncommitted build settings.
+
 More detail in [docs/HACKATHON_COMPLIANCE.md](docs/HACKATHON_COMPLIANCE.md).
 
 ## Known limits

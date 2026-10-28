@@ -56,6 +56,8 @@ Keep the one-line disclosure anyway; it costs nothing. Do not describe the scaff
 | 2 | Muse Voice Transcribe | Live in the headset |
 | 3 | Muse Image (session card after a squat set) | Endpoint verified Oct 28 ($0.01 per image, about 8 s). Built into the set summary and **seen working on the headset (Oct 28)**. Artwork only; the rep number is drawn by the app from the headset count. |
 
+Also: from Oct 28 Muse Code is used for implementation and as a second reviewer (stated in the README). It can be listed as a further Meta tool once it has produced code that is committed; say only what it actually did.
+
 ## Open questions for the organisers (Discord #questions)
 1. Indie entry building a VR companion for my own existing production platform. The VR app, agent and a new database table are new; the web app, phone app and databases already existed. Is integrating with my own existing backend acceptable if the new work is clearly labelled?
 2. Is it fine to use non-Meta tools (Supabase, a Meta-owned speech service, an AI coding assistant) as long as Meta models are core to the product?
