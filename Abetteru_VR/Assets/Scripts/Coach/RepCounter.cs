@@ -14,6 +14,9 @@ namespace ABetterU.Coach
         public float CurrentDrop { get; private set; }   // live drop below standing, as a fraction (for the depth meter)
         public int RepCount { get; private set; }
         public float SecondsPerRep { get; private set; }
+        public bool InBottom => inBottom;                // true from passing the "down" line until back up
+        public float DeepestDrop { get; private set; }   // deepest drop this set, as a fraction (for the summary card)
+        public float SetSeconds => Time.time - setStartedAt;
 
         // Depth thresholds as a FRACTION of the user's standing head height, so they scale with the person.
         // About 0.20 is a half squat (35 cm on a 1.65 m headset height), about 0.33 is a full squat (55 cm).
@@ -29,7 +32,7 @@ namespace ABetterU.Coach
         }
 
         float standingHeight;
-        float lastRepTime;
+        float lastRepTime, setStartedAt;
         bool inBottom;
 
         // The Meta camera rig prefab defaults to EyeLevel tracking, where head height reads ~0 at app start
@@ -66,8 +69,9 @@ namespace ABetterU.Coach
             if (n > 0) standingHeight = sum / n;
             Debug.Log($"[Squat] calibrated standing neck height {standingHeight:0.00} m (origin {(OVRManager.instance != null ? OVRManager.instance.trackingOriginType.ToString() : "n/a")})");
             RepCount = 0;
+            DeepestDrop = 0f;
             inBottom = false;
-            lastRepTime = Time.time;
+            lastRepTime = setStartedAt = Time.time;
         }
 
         void Update()
@@ -75,6 +79,7 @@ namespace ABetterU.Coach
             if (!Active) return;
             float dropFraction = (standingHeight - HeadHeight()) / Scale;
             CurrentDrop = dropFraction;
+            if (dropFraction > DeepestDrop) DeepestDrop = dropFraction;
             bool wasInBottom = inBottom;
             bool repDone = DetectRepStep(dropFraction, ref inBottom);
             if (!wasInBottom && inBottom) DepthCue();   // the moment the squat is deep enough to count

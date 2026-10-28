@@ -23,6 +23,8 @@ namespace ABetterU.Coach
         AppFlow flow;
         RepCounter reps;
 
+        const int TargetReps = 10;
+        SquatHud hud;
         bool busy, inSet;
         int lastShownReps = -1;
         float nextMeter;
@@ -105,8 +107,7 @@ namespace ABetterU.Coach
                         lastShownReps = reps.RepCount;
                         // Depth meter: the bar fills toward the "down" line; % is how far below standing you are.
                         float pct = Mathf.Max(0f, reps.CurrentDrop);
-                        int bars = Mathf.Clamp(Mathf.RoundToInt(pct / reps.downFraction * 10f), 0, 14);
-                        board.Show($"SQUAT SET\n\nReps: {lastShownReps}\n[{new string('#', Mathf.Min(bars, 10))}{new string('.', Mathf.Max(0, 10 - bars))}]{(bars >= 10 ? " DEEP" : "")}\ndepth {pct * 100f:0}% (need {reps.downFraction * 100f:0}%)\n\nPress LEFT TRIGGER\nwhen done.");
+                        if (hud != null) hud.SetLive(reps.RepCount, TargetReps, pct, reps.downFraction, reps.InBottom);
                     }
                     return;
                 }
@@ -161,6 +162,17 @@ namespace ABetterU.Coach
             busy = true;
             board.Show("Stand tall, look\nstraight ahead and\nstay still...");
             yield return reps.Calibrate(2f);
+
+            // Fix the HUD in the room, 1.5 m ahead of where the user stands, just below standing eye height.
+            var head = Camera.main != null ? Camera.main.transform : transform;
+            Vector3 fwd = head.forward; fwd.y = 0f;
+            fwd = fwd.sqrMagnitude < 0.01f ? Vector3.forward : fwd.normalized;
+            if (hud != null) Destroy(hud.gameObject);
+            hud = SquatHud.Create(new Vector3(head.position.x, Mathf.Max(head.position.y - 0.15f, 1.2f), head.position.z) + fwd * 1.5f,
+                                  Quaternion.LookRotation(fwd, Vector3.up));
+            hud.SetLive(0, TargetReps, 0f, reps.downFraction, false);
+            board.Show("SQUAT SET");
+
             reps.Active = true;
             inSet = true;
             busy = false;
@@ -173,14 +185,26 @@ namespace ABetterU.Coach
             inSet = false;
             busy = true;
             int n = reps.RepCount;
-            if (n == 0) { board.Show("No reps counted.\nPress LEFT TRIGGER to try again."); busy = false; yield break; }
+            float perRep = n > 0 ? reps.SetSeconds / n : 0f, deepest = reps.DeepestDrop;
+            if (n == 0)
+            {
+                if (hud != null) hud.SetSummary(0, 0f, deepest, "No reps counted. Squat past the line to count.", false);
+                board.Show("No reps counted.");
+                busy = false; yield break;
+            }
 
             // The rep count comes from the headset, not from the user or the model.
+            if (hud != null) hud.SetSummary(n, perRep, deepest, "Saving to your activity...", null);
             board.Show($"Set done: {n} reps.\nLogging...");
+            lastSaved = null; savedNames.Clear();
             string turn = $"Context: the headset just counted a finished set: {n} bodyweight squat reps (exercise name: Bodyweight Squat). " +
                           "Log it with log_set and reply briefly with what was recorded.";
             string reply = null, error = null;
             yield return agent.Run(turn, p => board.Show($"Set done: {n} reps.\n{Wrap(p)}"), r => reply = r, e => error = e);
+
+            // "Saved" is shown only if the backend confirmed log_set, never because the reply says so.
+            bool saved = savedNames.Count > 0;
+            if (hud != null) hud.SetSummary(n, perRep, deepest, saved ? lastSaved : "Not saved. Please try again.", saved);
 
             if (reply == null) { board.Show("Coach failed:\n" + Wrap(Short(error ?? "no reply", 160))); busy = false; yield break; }
             board.Show($"Set done: {n} reps.\n\nCoach: {Wrap(reply)}");
