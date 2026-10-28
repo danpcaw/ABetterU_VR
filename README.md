@@ -11,7 +11,7 @@ Not a chatbot in a headset: every spoken request ends in a verified write to a l
 | # | Meta tool | What it does in the app |
 |---|---|---|
 | 1 | **Muse Spark** (`muse-spark-1.3`, Meta Model API) | The tool-calling agent. Decides which action to take and talks the user through it. |
-| 2 | **Muse Voice Transcribe** (`muse-voice-transcribe-1.0`) | Turns the user's voice (hold right trigger) into text, with UK English and food/fitness keyword biasing. |
+| 2 | **Muse Voice Transcribe** (`muse-voice-transcribe-1.0`) | Turns the user's voice into text, with UK English and food/fitness keyword biasing. |
 | 3 | **Muse Image** (`muse-image-1.0`) | Makes the artwork for the session card after a squat set. The rep count on the card is drawn by the app from the headset's own count, never by the model. |
 
 Speech output uses Wit.ai (Meta-owned, a US voice). It is not counted above.
@@ -59,6 +59,7 @@ More detail in [docs/HACKATHON_COMPLIANCE.md](docs/HACKATHON_COMPLIANCE.md).
 
 ## Known limits
 
+- Hands-free uses "transcribe, then filter": while it is listening, each phrase you speak is sent to Muse Voice Transcribe, and the app acts only if it starts with "Atlas" (or follows a reply within 8 seconds). Other phrases are discarded and not kept. It is not on-device wake-word detection. Listening pauses while the assistant is thinking or speaking, during a squat set and on the login screen.
 - A voice turn takes about 6 seconds (speech to text, then Muse Spark, then speech out). Reducing it is the next engineering task.
 - Squat counting and the form check use head tracking only. Thresholds were tuned from logged on-device data (lean limit 15 cm) and may need adjusting for different body types.
 - The gym is built from simple shapes, and the voice is a US voice.
@@ -72,7 +73,7 @@ You need a Quest 3S in developer mode, Unity 6000.6.7f1 with Android Build Suppo
 2. Create `Assets/Resources/ModelApiSecrets` (Assets > Create > ABetterU > Model API Secrets). It is git-ignored. Fill in your Meta Model API key, Wit.ai token, Supabase URL and anon key, and the demo account's credentials for Judge Instant Login.
 3. Build for Android and sideload: `./scripts/deploy-quest.sh path/to/build.apk`.
 
-Controls: hold **right trigger** to talk; **left trigger** starts and ends a squat set; **left Menu** opens the in-gym menu.
+Controls: **hands-free** is the default. Say "Hey Atlas" and then your request, for example "Hey Atlas, log my usual breakfast". After a reply you can keep talking for about 8 seconds without saying the name again. As a fallback, **hold the right trigger** to talk. **Left trigger** starts and ends a squat set; **left Menu** opens the in-gym menu.
 
 ## Repo layout
 

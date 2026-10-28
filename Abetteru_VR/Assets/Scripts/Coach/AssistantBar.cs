@@ -36,7 +36,7 @@ namespace ABetterU.Coach
 
             headline = VRGlass.Label(root, "", new Vector3(0f, -0.02f, -0.02f), 0.0118f, VRUi.Ink);
             detail = VRGlass.Label(root, "", new Vector3(0f, -0.10f, -0.02f), 0.0078f, VRUi.Muted, TextAnchor.UpperCenter, TextAlignment.Center);
-            Set(AssistantState.Ready, "Ask A Better U", "Hold right trigger to speak");
+            Set(AssistantState.Ready, VoiceLoopTest.ReadyHeadline, VoiceLoopTest.ReadyDetail);
         }
 
         public void Set(AssistantState s, string title, string body)

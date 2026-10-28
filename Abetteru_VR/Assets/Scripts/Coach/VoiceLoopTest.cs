@@ -35,10 +35,22 @@ namespace ABetterU.Coach
         };
         bool narrated;
 
+        // Hands-free: say the wake name ("Hey Atlas") and then the request. The trigger still works as a fallback.
+        public static string WakeName = "Atlas";
+        public static string ReadyHeadline => $"Say \"Hey {WakeName}\"";
+        public const string ReadyDetail = "or hold the right trigger to speak";
+        const float FollowUpSeconds = 8f;                // after a reply, the next phrase needs no wake name
+        HandsFreeListener hf;
+        bool handsFree = true;
+        float listenAfter, followUntil;
+        Regex wakeRegex;
+        const string WakeYes = "Yes?";
+
         static string[] PrefetchList()
         {
             var all = new List<string>(Acks);
             all.AddRange(Narrations.Values);
+            all.Add(WakeYes);
             return all.ToArray();
         }
 
@@ -84,9 +96,15 @@ namespace ABetterU.Coach
             }
 
             museImage = new MuseImageClient(config);
+            WakeName = string.IsNullOrEmpty(config.wakeName) ? "Atlas" : config.wakeName;
+            // Optional "hey", then the name. "atlas" is also accepted as a few common mishearings.
+            wakeRegex = new Regex(@"^\W*(?:(?:hey|hi|hello|okay|ok)\W+)?(?:" + Regex.Escape(WakeName.ToLowerInvariant()) + @"|atlus|at las)\b[\s,.!?:;-]*(.*)$",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline);
             asr = new MetaTranscribeClient(config);
             spark = new ModelApiClient(config);
             mic = gameObject.AddComponent<MicRecorder>();
+            hf = gameObject.AddComponent<HandsFreeListener>();
+            hf.UtteranceReady += wav => { if (!busy) StartCoroutine(HandsFreeTurn(wav)); };
 
             tts = gameObject.AddComponent<WitSpeaker>();
             tts.Init(config);
@@ -122,6 +140,7 @@ namespace ABetterU.Coach
         void Update()
         {
             if (mic == null || flow == null) return;
+            HandsFreeTick();
             var stage = flow.Current;
             if (stage == AppFlow.Stage.Login) return;           // nothing to talk to until someone is signed in
             if (flow.MenuOpen) return;                          // the trigger is clicking menu buttons, not recording
@@ -154,14 +173,14 @@ namespace ABetterU.Coach
             if (readyAt > 0f && Time.unscaledTime >= readyAt && !mic.IsRecording)
             {
                 readyAt = 0f;
-                Report(AssistantState.Ready, "Ask A Better U", "Hold right trigger to speak");
+                Report(AssistantState.Ready, ReadyHeadline, ReadyDetail);
             }
 
             if (PressedDown())
             {
                 // On the dashboard a trigger pull while the laser is on a button is a click, never a recording.
                 if (!inGym && flow.PointerOverButton) { /* the pointer handles the click */ }
-                else if (mic.StartRecording())
+                else if (PauseHandsFree() && mic.StartRecording())
                 {
                     readyAt = 0f;
                     board.Show("Listening...");
@@ -216,6 +235,67 @@ namespace ABetterU.Coach
                 readyAt = Time.unscaledTime + 7f;
             }
             busy = false;
+        }
+
+        // ── Hands-free ──────────────────────────────────────────────────────────────────────────────────
+
+        // Listens only when nothing else needs the microphone or the speaker: not while thinking or speaking (so it cannot hear
+        // itself), not mid-set, not in the gym menu, not on the login screen, and not while the trigger is recording.
+        void HandsFreeTick()
+        {
+            if (hf == null) return;
+            bool allowed = handsFree && !busy && !inSet && !mic.IsRecording && !flow.MenuOpen
+                           && flow.Current != AppFlow.Stage.Login
+                           && Time.unscaledTime >= listenAfter && (tts == null || !tts.IsSpeaking);
+            if (allowed && !hf.Listening) hf.Resume();
+            else if (!allowed && hf.Listening) hf.Pause();
+        }
+
+        bool PauseHandsFree() { hf?.Pause(); return true; }
+
+        // True if the phrase starts with the wake name; rest is what followed it.
+        bool TryStripWake(string heard, out string rest)
+        {
+            rest = null;
+            var m = wakeRegex.Match(heard ?? "");
+            if (!m.Success) return false;
+            rest = m.Groups[1].Value.Trim();
+            return true;
+        }
+
+        IEnumerator HandsFreeTurn(byte[] wav)
+        {
+            busy = true;     // stops listening while we work; nothing is shown until we know the phrase was meant for us
+            float t0 = Time.realtimeSinceStartup;
+            string heard = null, error = null;
+            yield return asr.Transcribe(wav, t => heard = t, e => error = e);
+            float tAsr = Time.realtimeSinceStartup - t0;
+
+            if (error != null) { Debug.LogWarning("[HandsFree] transcribe failed: " + error); busy = false; yield break; }
+            if (string.IsNullOrWhiteSpace(heard)) { busy = false; yield break; }
+
+            bool followUp = Time.unscaledTime < followUntil;
+            bool woke = TryStripWake(heard, out string command);
+            if (!woke && followUp) command = heard;
+            Debug.Log($"[HandsFree] heard \"{heard}\" -> {(woke ? "wake name" : followUp ? "follow-up" : "ignored (no wake name)")}, transcribe {tAsr:0.0}s");
+
+            if (command == null) { busy = false; yield break; }       // not meant for us: dropped, nothing kept
+
+            Report(AssistantState.Listening, "Heard you", "");        // also clears the judge's "Try saying" strip
+
+            if (string.IsNullOrWhiteSpace(command))
+            {
+                // Only the name was said: answer, then wait for the request itself.
+                tts?.PlayCached(WakeYes);
+                followUntil = Time.unscaledTime + FollowUpSeconds;
+                listenAfter = Time.unscaledTime + 1.2f;                // let "Yes?" finish
+                Report(AssistantState.Listening, "I'm listening", "Go ahead");
+                readyAt = followUntil;
+                busy = false;
+                yield break;
+            }
+
+            yield return HeardTurn(command, t0, tAsr);
         }
 
         // A form cue while squatting, from head position only: looking down is checked first, then leaning forward.
@@ -313,11 +393,6 @@ namespace ABetterU.Coach
             }
 
             busy = true;
-            lastSaved = null;
-            savedNames.Clear();
-            narrated = false;
-            OnChoices?.Invoke(null);                                  // a new request replaces any picker still on screen
-            agent.CanShowChoices = flow != null && flow.Current != AppFlow.Stage.Gym;
             float t0 = Time.realtimeSinceStartup;
             board.Show("Transcribing...");
             Report(AssistantState.Processing, "Transcribing...", "");
@@ -347,6 +422,20 @@ namespace ABetterU.Coach
                 busy = false;
                 yield break;
             }
+
+            yield return HeardTurn(heard, t0, tAsr);
+        }
+
+        // Everything after the words are known: acknowledge, run the agent, speak, confirm. Shared by push-to-talk and the wake name.
+        IEnumerator HeardTurn(string heard, float t0, float tAsr)
+        {
+            busy = true;
+            string error = null;
+            lastSaved = null;
+            savedNames.Clear();
+            narrated = false;
+            OnChoices?.Invoke(null);                                  // a new request replaces any picker still on screen
+            agent.CanShowChoices = flow != null && flow.Current != AppFlow.Stage.Gym;
 
             if (tts != null && tts.PlayCached(Acks[ackIndex++ % Acks.Length])) Debug.Log("[Timing] acknowledgement played");
             board.Show($"You: {Wrap(heard)}\n\nThinking...");
@@ -404,7 +493,9 @@ namespace ABetterU.Coach
                 Report(AssistantState.Error, "Nothing was saved", "Hold right trigger and try again.");
                 readyAt = Time.unscaledTime + 8f;
             }
-            else Report(AssistantState.Ready, "Ask A Better U", "Hold right trigger to speak");
+            else Report(AssistantState.Ready, ReadyHeadline, ReadyDetail);
+            listenAfter = Time.unscaledTime + 0.7f;                  // do not hear our own voice fading out
+            followUntil = Time.unscaledTime + FollowUpSeconds;       // a natural reply needs no wake name
             busy = false;
         }
 

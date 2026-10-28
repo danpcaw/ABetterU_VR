@@ -86,7 +86,7 @@ namespace ABetterU.Coach
 
         // Quest mic levels are low (peak ~0.17 in testing). Quiet audio hurt transcription accuracy,
         // so lift the peak to ~0.8, with a gain cap so silence/noise isn't blown up.
-        static void Normalise(float[] samples, float peak)
+        public static void Normalise(float[] samples, float peak)
         {
             if (peak < 0.01f) return;
             float gain = Mathf.Min(0.8f / peak, 8f);
@@ -108,7 +108,7 @@ namespace ABetterU.Coach
         }
 
         // Linear interpolation: good enough for speech going to a transcriber.
-        static float[] Resample(float[] input, int fromRate, int toRate)
+        public static float[] Resample(float[] input, int fromRate, int toRate)
         {
             int outLength = (int)((long)input.Length * toRate / fromRate);
             var output = new float[outLength];

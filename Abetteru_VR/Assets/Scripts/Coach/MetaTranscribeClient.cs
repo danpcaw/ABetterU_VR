@@ -37,7 +37,7 @@ namespace ABetterU.Coach
             {
                 model = config.transcribeModel,
                 languageBias = config.transcribeLanguageBias,
-                keywords = config.transcribeKeywords,
+                keywords = KeywordsWithWakeName(),
             });
             var body = BuildMultipart(requestJson, wav);
 
@@ -60,6 +60,14 @@ namespace ABetterU.Coach
 
             var parsed = JsonUtility.FromJson<AsrResponse>(req.downloadHandler.text);
             onText?.Invoke(parsed?.transcript?.Trim() ?? "");
+        }
+
+        // The saved settings asset keeps its old keyword list, so add the wake name here: biasing fixed "Ember" and "Nova" in testing.
+        string[] KeywordsWithWakeName()
+        {
+            var list = new System.Collections.Generic.List<string>(config.transcribeKeywords ?? new string[0]);
+            if (!string.IsNullOrEmpty(config.wakeName) && !list.Contains(config.wakeName)) list.Add(config.wakeName);
+            return list.ToArray();
         }
 
         static byte[] BuildMultipart(string requestJson, byte[] wav)
