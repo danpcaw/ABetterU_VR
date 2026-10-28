@@ -77,10 +77,10 @@ namespace ABetterU.Coach
             {
                 hintPanel = new GameObject("TrySaying");
                 hintPanel.transform.SetParent(root, false);
-                hintPanel.transform.localPosition = new Vector3(0f, -0.55f, 0f);
-                VRGlass.Panel(hintPanel.transform, "HintBar", new Vector3(0, 0, 0.02f), new Vector2(2.3f, 0.30f), 0.12f, GlassStyle.Panel, 0);
-                VRGlass.Label(hintPanel.transform, "TRY SAYING", new Vector3(0f, 0.065f, -0.02f), 0.0066f, VRUi.Muted, TextAnchor.UpperCenter, TextAlignment.Center);
-                hintLabel = VRGlass.Label(hintPanel.transform, "", new Vector3(0f, -0.02f, -0.02f), 0.0105f, VRUi.Ink);
+                hintPanel.transform.localPosition = new Vector3(0f, -0.50f, 0f);
+                VRGlass.Panel(hintPanel.transform, "HintBar", new Vector3(0, 0, 0.02f), new Vector2(2.3f, 0.24f), 0.12f, GlassStyle.Panel, 0);
+                VRGlass.Label(hintPanel.transform, "TRY SAYING", new Vector3(0f, 0.05f, -0.02f), 0.0066f, VRUi.Muted, TextAnchor.UpperCenter, TextAlignment.Center);
+                hintLabel = VRGlass.Label(hintPanel.transform, "", new Vector3(0f, -0.025f, -0.02f), 0.0105f, VRUi.Ink);
             }
             hintPanel.SetActive(true);
             ShowHint();

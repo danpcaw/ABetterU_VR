@@ -107,7 +107,7 @@ namespace ABetterU.Coach
                         lastShownReps = reps.RepCount;
                         // Depth meter: the bar fills toward the "down" line; % is how far below standing you are.
                         float pct = Mathf.Max(0f, reps.CurrentDrop);
-                        if (hud != null) hud.SetLive(reps.RepCount, TargetReps, pct, reps.downFraction, reps.InBottom);
+                        if (hud != null) hud.SetLive(reps.RepCount, TargetReps, pct, reps.downFraction, reps.InBottom, FormCue(pct));
                     }
                     return;
                 }
@@ -157,6 +157,15 @@ namespace ABetterU.Coach
             return true;
         }
 
+        // A form cue while squatting, from head position only: looking down is checked first, then leaning forward.
+        string FormCue(float drop)
+        {
+            if (drop < 0.04f) return null;
+            if (reps.LookingDown) return "Eyes forward";
+            if (reps.LeaningForward) return "Chest up, hips back";
+            return null;
+        }
+
         IEnumerator BeginSet()
         {
             busy = true;
@@ -186,15 +195,16 @@ namespace ABetterU.Coach
             busy = true;
             int n = reps.RepCount;
             float perRep = n > 0 ? reps.SetSeconds / n : 0f, deepest = reps.DeepestDrop;
+            int flagged = reps.FlaggedReps;
             if (n == 0)
             {
-                if (hud != null) hud.SetSummary(0, 0f, deepest, "No reps counted. Squat past the line to count.", false);
+                if (hud != null) hud.SetSummary(0, 0f, deepest, 0, "No reps counted. Squat past the line to count.", false);
                 board.Show("No reps counted.");
                 busy = false; yield break;
             }
 
             // The rep count comes from the headset, not from the user or the model.
-            if (hud != null) hud.SetSummary(n, perRep, deepest, "Saving to your activity...", null);
+            if (hud != null) hud.SetSummary(n, perRep, deepest, flagged, "Saving to your activity...", null);
             board.Show($"Set done: {n} reps.\nLogging...");
             lastSaved = null; savedNames.Clear();
             string turn = $"Context: the headset just counted a finished set: {n} bodyweight squat reps (exercise name: Bodyweight Squat). " +
@@ -204,7 +214,7 @@ namespace ABetterU.Coach
 
             // "Saved" is shown only if the backend confirmed log_set, never because the reply says so.
             bool saved = savedNames.Count > 0;
-            if (hud != null) hud.SetSummary(n, perRep, deepest, saved ? lastSaved : "Not saved. Please try again.", saved);
+            if (hud != null) hud.SetSummary(n, perRep, deepest, flagged, saved ? "Saved to your activity" : "Not saved. Please try again.", saved);
 
             if (reply == null) { board.Show("Coach failed:\n" + Wrap(Short(error ?? "no reply", 160))); busy = false; yield break; }
             board.Show($"Set done: {n} reps.\n\nCoach: {Wrap(reply)}");

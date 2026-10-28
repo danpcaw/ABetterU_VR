@@ -8,6 +8,7 @@ namespace ABetterU.Coach
     public class SquatHud : MonoBehaviour
     {
         const float BarW = 1.2f, BarH = 0.07f;
+        const int PromptWidth = 22;             // characters per line that fit the panel at the prompt's size
         const float RangeBeyondLine = 1.5f;     // the bar's full width is 1.5x the depth that counts, so the line sits at two thirds
 
         static readonly Color Cyan = new Color(0.25f, 0.85f, 0.98f);
@@ -39,7 +40,7 @@ namespace ABetterU.Coach
             repNumber = VRGlass.Label(root, "0", new Vector3(0.06f, 0.20f, -0.02f), 0.075f, VRUi.Ink, TextAnchor.MiddleRight, TextAlignment.Right);
             repTarget = VRGlass.Label(root, "", new Vector3(0.11f, 0.17f, -0.02f), 0.026f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
 
-            prompt = VRGlass.Label(root, "", new Vector3(0, -0.10f, -0.02f), 0.0185f, VRUi.Ink);
+            prompt = VRGlass.Label(root, "", new Vector3(0, -0.10f, -0.02f), 0.0135f, VRUi.Ink);
 
             track = VRGlass.Solid(root, "Depth track", new Vector3(0, -0.27f, -0.01f), new Vector2(BarW, BarH), BarH / 2f,
                 new Color(0.13f, 0.17f, 0.24f, 1f), new Color(0.10f, 0.14f, 0.20f, 1f), 2);
@@ -57,7 +58,7 @@ namespace ABetterU.Coach
         }
 
         /// Called several times a second during a set.
-        public void SetLive(int reps, int target, float drop, float downFraction, bool inBottom)
+        public void SetLive(int reps, int target, float drop, float downFraction, bool inBottom, string formCue = null)
         {
             header.text = "SQUAT SET";
             repNumber.text = reps.ToString();
@@ -68,8 +69,9 @@ namespace ABetterU.Coach
                 shownReps = reps;
             }
 
-            prompt.text = PromptFor(drop, downFraction, inBottom, reps, target);
-            prompt.color = inBottom ? Green : VRUi.Ink;
+            // A form cue (leaning, looking down) takes over the line while it applies; otherwise the phase cue.
+            prompt.text = VRUi.Wrap(formCue ?? PromptFor(drop, downFraction, inBottom, reps, target), PromptWidth, 2);
+            prompt.color = formCue != null ? Amber : inBottom ? Green : VRUi.Ink;
 
             SetBarVisible(true);
             float range = downFraction * RangeBeyondLine;
@@ -81,20 +83,29 @@ namespace ABetterU.Coach
             marker.localPosition = new Vector3(-BarW / 2f + BarW / RangeBeyondLine, -0.27f, -0.03f);
             lineTag.transform.localPosition = new Vector3(marker.localPosition.x, -0.35f, -0.02f);
 
+            footer.transform.localPosition = new Vector3(0, -0.46f, -0.02f);
             footer.text = "Left trigger when you are done";
         }
 
         /// The card shown after the set. savedState: null while saving, true once the backend confirmed, false if it did not.
-        public void SetSummary(int reps, float secondsPerRep, float deepestFraction, string status, bool? savedState)
+        public void SetSummary(int reps, float secondsPerRep, float deepestFraction, int flaggedReps, string status, bool? savedState)
         {
             header.text = "SET COMPLETE";
             repNumber.text = reps.ToString();
             repTarget.text = reps == 1 ? "rep" : "reps";
             SetBarVisible(false);
 
-            prompt.text = status;
+            prompt.text = VRUi.Wrap(status, PromptWidth, 2);
             prompt.color = savedState == true ? Green : savedState == false ? Red : Amber;
-            footer.text = (reps > 0 ? $"{secondsPerRep:0.0} s per rep   -   deepest {deepestFraction * 100f:0}%\n" : "") + "Left trigger for another set";
+
+            string detail = "";
+            if (reps > 0)
+            {
+                detail = $"{secondsPerRep:0.0} s per rep  -  deepest {deepestFraction * 100f:0}%\n" +
+                         (flaggedReps > 0 ? $"Head leaned or dipped on {flaggedReps} of {reps}\n" : "Head position steady on every rep\n");
+            }
+            footer.transform.localPosition = new Vector3(0, -0.40f, -0.02f);
+            footer.text = detail + "Left trigger for another set";
         }
 
         void SetBarVisible(bool on)
@@ -114,7 +125,7 @@ namespace ABetterU.Coach
         /// The one-line coaching cue under the rep count. Pure display: it never changes how reps are counted.
         public static string PromptFor(float drop, float downFraction, bool inBottom, int reps, int target)
         {
-            if (target > 0 && reps >= target) return "Target reached. Finish with left trigger";
+            if (target > 0 && reps >= target) return "Target reached! Left trigger to finish";
             if (inBottom) return "Now stand tall";
             if (drop < 0.03f) return reps == 0 ? "Squat down to start" : "Lower slowly";
             if (drop < downFraction) return "A little deeper";

@@ -84,7 +84,7 @@ namespace ABetterU.Coach
             pointer = gameObject.AddComponent<VRPointer>();
             pointer.Init(cam != null ? cam.transform : transform);
 
-            if (supabase.SignedIn) ShowHome(); else ShowLogin();    // already signed in: we came back from the gym menu
+            if (supabase.SignedIn) { hintsDismissed = false; ShowHome(); } else ShowLogin();    // already signed in: we came back from the gym menu
         }
 
         /// True while the pointer is resting on a button, so voice capture can ignore the trigger.
@@ -295,7 +295,7 @@ namespace ABetterU.Coach
         void EnsureAssistant()
         {
             if (assistant == null)
-                assistant = AssistantBar.Create(new Vector3(0f, 0.56f, 2.15f), Quaternion.Euler(14f, 0f, 0f));
+                assistant = AssistantBar.Create(new Vector3(0f, 0.66f, 2.15f), Quaternion.Euler(14f, 0f, 0f));
             ApplyHints();
         }
 

@@ -25,11 +25,25 @@ namespace ABetterU.Coach
 
         // Height of the neck pivot, not the eyes: looking up or down swings the headset around the neck by a few cm,
         // which made borderline squats count only when the user tilted their head (found on-device Oct 27).
-        float HeadHeight()
+        Vector3 NeckPoint()
         {
             Vector3 neck = head.TransformPoint(new Vector3(0f, -0.10f, -0.08f));   // ~10 cm below and ~8 cm behind the eyes
-            return head.parent != null ? head.parent.InverseTransformPoint(neck).y : neck.y;
+            return head.parent != null ? head.parent.InverseTransformPoint(neck) : neck;
         }
+
+        float HeadHeight() => NeckPoint().y;
+
+        // ── Lean and look-down: form feedback from head position only (the Quest cannot see the back or knees). ──
+        // Rep counting above is unchanged; these only drive the on-screen cue and the summary. Starting thresholds, tune on-device.
+        public float leanLimitMetres = 0.30f;     // neck this far forward of where you stood = leaning forward
+        public float lookDownLimitDeg = 40f;      // head pitched this far below level = looking down at the floor
+        public float LeanMetres { get; private set; }
+        public float LookDownDegrees { get; private set; }
+        public bool LeaningForward => LeanMetres > leanLimitMetres;
+        public bool LookingDown => LookDownDegrees > lookDownLimitDeg;
+        public int FlaggedReps { get; private set; }     // reps in which the head leaned or dipped past the limits
+        Vector3 standingPos, standingForward = Vector3.forward;
+        bool repFlagged;
 
         float standingHeight;
         float lastRepTime, setStartedAt;
@@ -61,12 +75,20 @@ namespace ABetterU.Coach
             EnsureFloorLevel();
             yield return null;               // let the origin change take effect before sampling
             float sum = 0f; int n = 0;
+            Vector3 posSum = Vector3.zero;
             for (float t = 0f; t < seconds; t += Time.deltaTime)
             {
                 sum += HeadHeight(); n++;
+                posSum += NeckPoint();
                 yield return null;
             }
-            if (n > 0) standingHeight = sum / n;
+            if (n > 0) { standingHeight = sum / n; standingPos = posSum / n; }
+
+            // "Forward" is the way you faced while standing, in the rig's own space so it matches the neck points.
+            Vector3 f = head.parent != null ? head.parent.InverseTransformDirection(head.forward) : head.forward;
+            f.y = 0f;
+            standingForward = f.sqrMagnitude < 0.01f ? Vector3.forward : f.normalized;
+            FlaggedReps = 0; repFlagged = false;
             Debug.Log($"[Squat] calibrated standing neck height {standingHeight:0.00} m (origin {(OVRManager.instance != null ? OVRManager.instance.trackingOriginType.ToString() : "n/a")})");
             RepCount = 0;
             DeepestDrop = 0f;
@@ -80,11 +102,19 @@ namespace ABetterU.Coach
             float dropFraction = (standingHeight - HeadHeight()) / Scale;
             CurrentDrop = dropFraction;
             if (dropFraction > DeepestDrop) DeepestDrop = dropFraction;
+
+            Vector3 away = NeckPoint() - standingPos; away.y = 0f;
+            LeanMetres = Vector3.Dot(away, standingForward);
+            LookDownDegrees = -Mathf.Asin(Mathf.Clamp(head.forward.y, -1f, 1f)) * Mathf.Rad2Deg;
+            if (dropFraction > 0.04f && (LeaningForward || LookingDown)) repFlagged = true;   // judged only while actually squatting
+
             bool wasInBottom = inBottom;
             bool repDone = DetectRepStep(dropFraction, ref inBottom);
             if (!wasInBottom && inBottom) DepthCue();   // the moment the squat is deep enough to count
             if (repDone)
             {
+                if (repFlagged) FlaggedReps++;
+                repFlagged = false;
                 RepCount++;
                 SecondsPerRep = (Time.time - lastRepTime) / 1f;
                 lastRepTime = Time.time;
