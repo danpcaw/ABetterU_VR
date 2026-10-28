@@ -57,7 +57,7 @@ namespace ABetterU.Coach
              ""servings"":{""type"":""number"",""description"":""Servings of the saved meal, default 1""}},
             ""required"":[""meal_id"",""meal""]}},
           {""type"":""function"",""name"":""offer_choices"",
-           ""description"":""Show the user a short list of foods on screen to tap, when search_foods returned several different foods and they did not name a brand, or the best match is unclear. food_ids must come from search_foods (2 to 4). Nothing is logged until the user taps one."",
+           ""description"":""Show the user a short list of foods on screen to tap, when search_foods returned several different foods and they did not name a brand, or the best match is unclear. food_ids must come from search_foods (2 to 10). Nothing is logged until the user taps one."",
            ""parameters"":{""type"":""object"",""properties"":{
              ""food_ids"":{""type"":""array"",""items"":{""type"":""string""}},
              ""meal"":{""type"":""string"",""enum"":[""breakfast"",""lunch"",""dinner"",""snack""]},
@@ -96,8 +96,10 @@ namespace ABetterU.Coach
             "For any food request, call find_my_meals AND search_foods together in the same step, never one after the other (the user does not have to say 'meal' or 'combo'). " +
             "If one of their saved meals matches, even loosely, such as 'toast and banana' matching a saved 'Toast and banana', call log_meal " +
             "(not log_food) and say its logged_name and kcal. Otherwise log the foods. " +
-            "For a generic food with no brand (apple, banana, bread, chicken, rice) when search_foods returns two or more results, ALWAYS call offer_choices with the 2 to 4 best food_ids instead of choosing for them, " +
+            "For a generic food with no brand (apple, banana, bread, chicken, rice) when search_foods returns two or more results, ALWAYS call offer_choices with the best food_ids (up to 10 if there are that many) instead of choosing for them, " +
             "then say one short sentence asking them to pick one on screen, and do not log anything. If they named a brand or a specific restaurant item (Big Mac, KFC wrap), or there is only one result, just log it. " +
+            "If the user asks to see, list or browse a restaurant's or brand's foods, or asks for options or alternatives, search for it and call offer_choices with up to 10 results. " +
+            "If there is no exact match but similar foods exist (for example no plain Cheeseburger but a Double Cheeseburger and a Hamburger), say there is no exact match and offer those. " +
             "When a logged food shows grams (foods listed per 100 g are logged as 100 g per serving), say the grams so the user can correct them. " +
             "Speed matters: make every independent call in a single step. For several foods, search all of them in one step, then log all of them in one step. " +
             "Never split a request into separate foods when a saved meal covers it. " +
@@ -240,7 +242,7 @@ namespace ABetterU.Coach
             for (int skip = 0; skip < words.Count && skip <= 2; skip++)
             {
                 usedQuery = string.Join(" ", words.GetRange(skip, words.Count - skip));
-                var body = new JObject { ["q"] = usedQuery, ["lim"] = 30, ["uid"] = supabase.UserId }.ToString(Newtonsoft.Json.Formatting.None);
+                var body = new JObject { ["q"] = usedQuery, ["lim"] = 40, ["uid"] = supabase.UserId }.ToString(Newtonsoft.Json.Formatting.None);
                 yield return supabase.Rpc("search_foods", body, r => raw = r, e => err = e);
                 if (err != null) { done(Fail(err)); yield break; }
                 if (JArray.Parse(raw).Count > 0) break;
@@ -257,7 +259,7 @@ namespace ABetterU.Coach
                 usable = usable.OrderBy(f => SourceTier((string)f["source"])).ThenBy(f => IsRawVariant(f) ? 0 : 1).ToList();
 
             var rows = new JArray();
-            foreach (var f in usable.Take(6))
+            foreach (var f in usable.Take(10))
             {
                 double? grams = EstimateServingGrams(f);
                 if (grams.HasValue) servingGrams[(string)f["id"]] = grams.Value;
@@ -359,7 +361,7 @@ namespace ABetterU.Coach
                         Source = (string)f["source"],
                         Kcal = DashboardData.Num(f["kcal_per_serving"]),
                     });
-                    if (list.Count == 4) break;
+                    if (list.Count == 10) break;
                 }
             if (list.Count < 2) return Fail("need at least 2 food_ids that search_foods returned");
 

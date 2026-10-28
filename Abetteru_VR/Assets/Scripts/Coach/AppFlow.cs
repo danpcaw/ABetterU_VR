@@ -102,12 +102,18 @@ namespace ABetterU.Coach
             ClosePicker();
             if (choices == null || choices.Count == 0 || Current == Stage.Gym || Current == Stage.Login) return;
 
+            // Up to 5 options sit in one column; 6 to 10 go in two columns so the panel stays a comfortable height.
+            bool two = choices.Count > 5;
+            int rows = two ? (choices.Count + 1) / 2 : choices.Count;
             const float rowH = 0.23f;
-            float h = 0.50f + choices.Count * rowH + 0.20f;
+            float w = two ? 3.5f : 2.3f, btnW = two ? 1.62f : 2.05f;
+            float h = 0.50f + rows * rowH + 0.20f;
+            int maxChars = two ? 30 : 44;
+
             picker = new GameObject("FoodPicker").transform;
             picker.position = new Vector3(0f, 1.4f, 1.95f);
 
-            VRGlass.Panel(picker, "Panel", new Vector3(0, 0, 0.03f), new Vector2(2.3f, h), 0.06f, GlassStyle.Panel, 20);
+            VRGlass.Panel(picker, "Panel", new Vector3(0, 0, 0.03f), new Vector2(w, h), 0.06f, GlassStyle.Panel, 20);
             VRGlass.Label(picker, "Which one did you mean?", new Vector3(0, h / 2 - 0.17f, -0.02f), 0.0125f, VRUi.Ink, order: 24);
 
             for (int i = 0; i < choices.Count; i++)
@@ -115,11 +121,14 @@ namespace ABetterU.Coach
                 var c = choices[i];
                 string name = c.Name ?? "Food";
                 string line1 = !string.IsNullOrEmpty(c.Brand) ? $"{name} - {c.Brand}" : c.Source == "cofid" ? $"{name} - generic" : name;
-                if (line1.Length > 44) line1 = line1.Substring(0, 41) + "...";
+                if (line1.Length > maxChars) line1 = line1.Substring(0, maxChars - 3) + "...";
                 string line2 = (c.Kcal.HasValue ? $"{c.Kcal.Value:0} kcal" : "calories not listed") + (string.IsNullOrEmpty(c.Serving) ? "" : $" per {c.Serving}");
                 string foodId = c.FoodId;
-                VRGlass.Button(picker, line1 + "\n" + line2, new Vector3(0, h / 2 - 0.46f - i * rowH, -0.02f), new Vector2(2.05f, 0.2f),
-                    GlassStyle.Secondary, 0.0085f, () => { ClosePicker(); voice.ChooseFood(foodId); }, 0.04f, 22);
+
+                int col = two ? i % 2 : 0, row = two ? i / 2 : i;
+                float x = two ? (col == 0 ? -0.84f : 0.84f) : 0f;
+                VRGlass.Button(picker, line1 + "\n" + line2, new Vector3(x, h / 2 - 0.46f - row * rowH, -0.02f), new Vector2(btnW, 0.2f),
+                    GlassStyle.Secondary, two ? 0.0075f : 0.0085f, () => { ClosePicker(); voice.ChooseFood(foodId); }, 0.04f, 22);
             }
             VRGlass.Button(picker, "None of these", new Vector3(0, -h / 2 + 0.14f, -0.02f), new Vector2(0.9f, 0.14f),
                 GlassStyle.Secondary, 0.0078f, ClosePicker, 0.04f, 22);
@@ -350,7 +359,7 @@ namespace ABetterU.Coach
             switch (Current)
             {
                 case Stage.Diary:
-                    assistant.SetHints(new[] { "Log my usual breakfast", "Log my chicken and rice bowl for dinner", "What can you do?" });
+                    assistant.SetHints(new[] { "Log my usual breakfast", "Log an apple for a snack", "Show me McDonald's foods", "What can you do?" });
                     break;
                 case Stage.Experiences:
                     assistant.SetHints(new[] { "My knee is sore, build me a workout", "What can you do?" });
