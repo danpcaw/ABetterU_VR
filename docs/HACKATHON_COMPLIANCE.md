@@ -45,6 +45,17 @@ All working functionality was written after kickoff. Say so in the README rather
 before Oct 26. The Oct 25 commit is prep (docs, deploy script, interface scaffold with stubs), so it is within the rules.
 Keep the one-line disclosure anyway; it costs nothing. Do not describe the scaffold as "no code": it holds interfaces and stubs.
 
+**Confirmed by Danny on Oct 28 (Discord and Meta AI documentation):**
+- Building with Claude Code, Muse Code or Codex is all fine, **as long as the project uses at least 3 Meta AI tools within the platform.**
+- Judges will open the app and use **Judge Instant Login**, so the button stays and appears in the demo video. Nothing in the rules asks for a pre-authenticated or login-free build.
+
+### Meta tool tally (the "at least 3" requirement)
+| # | Meta tool | Status |
+|---|---|---|
+| 1 | Muse Spark (tool-calling agent) | Live in the headset |
+| 2 | Muse Voice Transcribe | Live in the headset |
+| 3 | Not yet secured. Wit.ai speech output is Meta-owned but is not a Muse model, so do not rely on it for this count. Candidates: Muse Image (shareable session card), SAM 3.1 (food on a plate), Muse Code (build a named piece and say so) | **Open: decide and ship one before Nov 4, then confirm the count with the organisers** |
+
 ## Open questions for the organisers (Discord #questions)
 1. Indie entry building a VR companion for my own existing production platform. The VR app, agent and a new database table are new; the web app, phone app and databases already existed. Is integrating with my own existing backend acceptable if the new work is clearly labelled?
 2. Is it fine to use non-Meta tools (Supabase, a Meta-owned speech service, an AI coding assistant) as long as Meta models are core to the product?
@@ -55,4 +66,4 @@ Keep the one-line disclosure anyway; it costs nothing. Do not describe the scaff
 - [ ] README section "What is new vs existing" (copy the lists above).
 - [ ] Put an on-screen "Existing / New" label in the demo video.
 - [ ] Create the public GitHub repo, push, check it works logged out.
-- [ ] Consider a third Meta model (Muse Image for a shareable session card) for the Meta-tooling score and the Best Creative Build bonus.
+- [ ] **Secure a third Meta tool (required, see tally above).** Cheapest first: Muse Image session card. Ask in Discord whether Wit.ai counts.
