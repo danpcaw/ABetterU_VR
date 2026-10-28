@@ -39,7 +39,8 @@ namespace ABetterU.Coach
         // Wit.ai (Meta-owned). Paste the Wit SERVER access token here (this asset is git-ignored).
         // Verified Oct 26: POST /synthesize, Accept audio/raw = 24 kHz 16-bit mono PCM, ~0.7 s to first byte.
         public string witToken = "";
-        public string witVoice = "wit$Cooper";   // US voices: Cooper, Charlie, Cody (male); Rebecca, Remi (female)
+        public string witVoice = "wit$Rebecca";  // US voices: Cooper, Charlie, Cody (male); Rebecca, Remi (female)
+        public string wakeName = "Atlas";        // the name the hands-free assistant answers to ("Hey Atlas"); chosen Oct 28 after a transcription test
         public string witStyle = "default";      // default | soft | formal | fast | projected (varies by voice)
         public string witVersion = "20240304";
 
