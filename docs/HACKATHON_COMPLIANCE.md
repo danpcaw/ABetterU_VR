@@ -29,7 +29,7 @@ Track: **Indie Developer** (solo). Theme: **Build for Your World**.
 The guide says the project must **incorporate** Meta's models, and lists Muse Code as an optional way to "code faster".
 So the requirement is about the product (and Stage 1 mentions using them "to build the project"). We satisfy both
 readings of the product requirement. Using Muse Code for coding is optional. If it is used, say so; do not claim it wrote
-code it did not. Claude Code was used as a coding assistant on this project and should be disclosed honestly.
+code it did not. Claude Code was used as a coding assistant on this project and is disclosed. So are the other tools, as stated by the developer on Oct 29: Muse Code (Meta) from Oct 28 and OpenAI Codex, which also contributed some changes on Oct 29. The git history marks only the Claude Code work (a co-author line); changes from the other tools were committed under the developer's name without a marker, so the README says so.
 
 ### Judging rubric (Stage 2, 0 to 10 each)
 Impact 30 · Use of Meta AI tooling 25 (creative, beyond a basic integration) · Technical depth 20 · Demo 25.
