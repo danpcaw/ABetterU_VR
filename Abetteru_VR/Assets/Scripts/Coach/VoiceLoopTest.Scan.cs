@@ -23,7 +23,24 @@ namespace ABetterU.Coach
             public string FoodId, MatchedName;
             public double? Kcal;                          // for Grams, from the database match
             public bool Dropped;                          // the user removed it
+
+            // The best few database entries for this food, best first. The user can tap to swap to the next one.
+            public readonly List<PlateCandidate> Candidates = new List<PlateCandidate>();
+            public int Choice;
+
+            public void Choose(int index)
+            {
+                if (Candidates.Count == 0) return;
+                Choice = ((index % Candidates.Count) + Candidates.Count) % Candidates.Count;
+                var c = Candidates[Choice];
+                FoodId = c.FoodId; MatchedName = c.Label;
+                Kcal = c.KcalPerServing.HasValue && c.ServingG > 0 ? Math.Round(c.KcalPerServing.Value * Grams / c.ServingG.Value) : (double?)null;
+            }
+
+            public void Next() => Choose(Choice + 1);
         }
+
+        public struct PlateCandidate { public string FoodId, Label; public double? KcalPerServing, ServingG; }
 
         public sealed class PlateResult { public string Error; public readonly List<PlateItem> Items = new List<PlateItem>(); }
 
@@ -85,6 +102,21 @@ namespace ABetterU.Coach
             // dehydrated potato powder first. Look at the top results and prefer the ordinary food: if the full name finds nothing, try
             // its last word ("grilled chicken" then "chicken"), and mark down powders, mixes, sauces and the like unless they were asked for.
             progress("Matching your food database...");
+
+            // What this person has logged before: a food they have eaten is more likely to be the one they mean than a lookalike.
+            var used = new Dictionary<string, int>();
+            string history = null;
+            yield return supabase.Get("food_log_entries?select=food_id&food_id=not.is.null&order=created_at.desc&limit=300", r => history = r, e => { });
+            try
+            {
+                foreach (var row in JArray.Parse(history))
+                {
+                    string id = (string)row["food_id"];
+                    if (id != null) used[id] = used.TryGetValue(id, out var n) ? n + 1 : 1;
+                }
+            }
+            catch (Exception) { /* no history is fine: ranking falls back to generic entries first */ }
+
             foreach (var item in result.Items)
             {
                 var words = item.Name.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
@@ -101,18 +133,32 @@ namespace ABetterU.Coach
                         var list = j["results"] as JArray;
                         if (list == null || list.Count == 0) continue;
                         string exact = (string)j["exact_match_food_id"];
-                        JToken pick = null; int best = int.MaxValue;
+
+                        var scored = new List<KeyValuePair<int, JToken>>();
                         for (int k = 0; k < Math.Min(10, list.Count); k++)
                         {
-                            int score = MatchScore((string)list[k]["name"], query, k) - ((string)list[k]["food_id"] == exact ? 5 : 0);
-                            if (score < best) { best = score; pick = list[k]; }
+                            string id = (string)list[k]["food_id"];
+                            int score = MatchScore((string)list[k]["name"], query, k) - (id == exact ? 5 : 0) - (used.TryGetValue(id, out var times) ? Math.Min(14, 8 + times) : 0);
+                            scored.Add(new KeyValuePair<int, JToken>(score, list[k]));
                         }
-                        item.FoodId = (string)pick["food_id"];
-                        string brand = (string)pick["brand"];
-                        item.MatchedName = (string)pick["name"] + (string.IsNullOrEmpty(brand) ? "" : $" ({brand})");
-                        double? perServing = DashboardData.Num(pick["kcal_per_serving"]), servingG = DashboardData.Num(pick["serving_g"]);
-                        if (perServing.HasValue && servingG > 0) item.Kcal = Math.Round(perServing.Value * item.Grams / servingG.Value);
-                        Debug.Log($"[Scan] '{item.Name}' matched '{item.MatchedName}' (searched '{query}')");
+                        var ranked = scored.OrderBy(x => x.Key).ToList();
+                        var good = ranked.Where(x => x.Key < 15).Take(5).ToList();      // drop the powders, mixes and the like from the swap list
+                        if (good.Count == 0) good = ranked.Take(1).ToList();
+
+                        foreach (var pair in good)
+                        {
+                            var food = pair.Value;
+                            string brand = (string)food["brand"];
+                            item.Candidates.Add(new PlateCandidate
+                            {
+                                FoodId = (string)food["food_id"],
+                                Label = (string)food["name"] + (string.IsNullOrEmpty(brand) || ((string)food["name"]).Contains(brand) ? "" : $" ({brand})"),
+                                KcalPerServing = DashboardData.Num(food["kcal_per_serving"]),
+                                ServingG = DashboardData.Num(food["serving_g"]),
+                            });
+                        }
+                        item.Choose(0);
+                        Debug.Log($"[Scan] '{item.Name}' matched '{item.MatchedName}' (searched '{query}', {item.Candidates.Count} choice(s), {(used.ContainsKey(item.FoodId) ? "logged before" : "new to you")})");
                         break;
                     }
                     catch (Exception e) { Debug.LogWarning("[Scan] Match failed for " + item.Name + ": " + e.Message); }

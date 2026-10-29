@@ -1296,19 +1296,21 @@ namespace ABetterU.Coach
                 var item = items[i];
                 if (item.Dropped) continue;
                 var color = ScanColors[i % ScanColors.Length];
-                VRGlass.Panel(p, "Food row", new Vector3(rx, y, 0.01f), new Vector2(1.30f, 0.20f), 0.03f, GlassStyle.Card, 1);
+                var captured = item;
+                // The row is a button: tap it to swap to the next-best database entry (when there is more than one).
+                VRGlass.Button(p, "", new Vector3(rx, y, 0.01f), new Vector2(1.30f, 0.20f), GlassStyle.Card,
+                    0.008f, item.Candidates.Count > 1 ? (System.Action)(() => { captured.Next(); BuildScan(); }) : null, 0.03f, 1);
                 VRUi.Box(p, "Swatch", new Vector3(rx - 0.60f, y, -0.015f), new Vector3(0.035f, 0.14f, 0.01f), color, false);
-                VRGlass.Label(p, VRUi.Wrap(item.Name, 26, 1), new Vector3(rx - 0.55f, y + 0.045f, -0.02f), 0.0092f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+                VRGlass.Label(p, VRUi.Wrap(item.FoodId != null ? item.MatchedName : item.Name, 34, 1), new Vector3(rx - 0.55f, y + 0.045f, -0.02f), 0.0088f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
                 string detail;
                 if (item.FoodId != null)
                 {
-                    detail = $"about {item.Grams:0} g" + (item.Kcal.HasValue ? $" · {item.Kcal.Value:0} kcal" : "");
+                    detail = $"about {item.Grams:0} g" + (item.Kcal.HasValue ? $" · {item.Kcal.Value:0} kcal" : "") + (item.Candidates.Count > 1 ? " · tap to change" : "");
                     total += item.Kcal ?? 0; loggable++;
                 }
                 else detail = "Not found in your food database";
-                VRGlass.Label(p, VRUi.Wrap(detail, 42, 1), new Vector3(rx - 0.55f, y - 0.05f, -0.02f), 0.0074f, item.FoodId != null ? VRUi.Muted : new Color(1f, 0.76f, 0.30f), TextAnchor.MiddleLeft, TextAlignment.Left);
-                var captured = item;
-                VRGlass.Button(p, "x", new Vector3(rx + 0.55f, y, -0.025f), new Vector2(0.15f, 0.15f), GlassStyle.Secondary, 0.0095f, () => { captured.Dropped = true; BuildScan(); }, 0.03f);
+                VRGlass.Label(p, VRUi.Wrap(detail, 46, 1), new Vector3(rx - 0.55f, y - 0.05f, -0.02f), 0.0074f, item.FoodId != null ? VRUi.Muted : new Color(1f, 0.76f, 0.30f), TextAnchor.MiddleLeft, TextAlignment.Left);
+                VRGlass.Button(p, "x", new Vector3(rx + 0.55f, y, -0.025f), new Vector2(0.15f, 0.15f), GlassStyle.Secondary, 0.0095f, () => { captured.Dropped = true; BuildScan(); }, 0.03f, 6);
                 y -= 0.23f;
             }
             if (loggable > 0) VRGlass.Label(p, $"About {total:0} kcal in total", new Vector3(rx, -0.57f, -0.02f), 0.0092f, VRUi.Ink);
