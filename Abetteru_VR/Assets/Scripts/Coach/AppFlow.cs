@@ -1153,6 +1153,7 @@ namespace ABetterU.Coach
         void OnDestroy() => CloseQuitConfirmation();
 
         // Reloading the scene is the simplest clean reset; the signed-in session survives in the static above.
+        public void LeaveGym() => BackToHub();
         void BackToHub() => SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
 
         void LeaveToLogin()
