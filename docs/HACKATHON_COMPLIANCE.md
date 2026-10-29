@@ -17,7 +17,7 @@ Track: **Indie Developer** (solo). Theme: **Build for Your World**.
 
 | Rule | Wording (short) | Our status |
 |---|---|---|
-| Meta models | "Your project must incorporate Meta's models" (Muse Spark series, Muse Wonder, Muse Image, Muse Voice Transcribe, SAM 3.1 via the Meta Model API; open weights Muse Glimmer and Spark Open; Muse Code to "code faster") | **Met inside the product:** Muse Spark (tool-calling agent) and Muse Voice Transcribe, both live in the headset. |
+| Meta models | "Your project must incorporate Meta's models" (Muse Spark series, Muse Wonder, Muse Image, Muse Voice Transcribe, SAM 3.1 via the Meta Model API; open weights Muse Glimmer and Spark Open; Muse Code to "code faster") | **Met inside the product:** Muse Spark (tool-calling agent and plate-scan vision), Muse Voice Transcribe, Muse Image (session card, post pictures) and SAM 3.1 (plate-scan outlines), all live in the headset. |
 | Stage 1 (pass/fail) | Fits the theme and "reasonably used Meta Model API and/or Meta's open-weight models to build the project" | Met. Not a spend threshold; there is no minimum credit usage. |
 | Public repo | Repositories must be public | To do: create and push (no secrets; `ModelApiSecrets` is git-ignored). |
 | Demo | Must "only highlight the specific features, code, and functionality that you built during the Hackathon"; failing to identify original contributions = **immediate disqualification** | See "New vs existing" below. This is the rule to take most seriously. |
