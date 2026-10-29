@@ -158,7 +158,6 @@ namespace ABetterU.Coach
             if (complete)
             {
                 // Nothing left to extend or end, so offer the two things people actually want: go again, or leave the gym.
-                VRGlass.Panel(workoutControls, "Controls", new Vector3(0, 0, 0.02f), new Vector2(hasUnsaved ? 1.30f : 0.92f, 0.25f), 0.05f, GlassStyle.Panel);
                 float x0 = hasUnsaved ? -0.42f : -0.21f, step = hasUnsaved ? 0.42f : 0.42f;
                 VRGlass.Button(workoutControls, "New workout", new Vector3(x0, 0, -0.02f), size, GlassStyle.Primary, 0.0068f, next);
                 VRGlass.Button(workoutControls, "Back to hub", new Vector3(x0 + step, 0, -0.02f), size, GlassStyle.Secondary, 0.0068f, leave);
@@ -166,7 +165,6 @@ namespace ABetterU.Coach
                     VRGlass.Button(workoutControls, "Retry saves", new Vector3(x0 + 2 * step, 0, -0.02f), size, GlassStyle.Amber, 0.0068f, retry);
                 return;
             }
-            VRGlass.Panel(workoutControls, "Controls", new Vector3(0, 0, 0.02f), new Vector2(1.72f, 0.25f), 0.05f, GlassStyle.Panel);
             VRGlass.Button(workoutControls, "Next set", new Vector3(-0.63f, 0, -0.02f), size, GlassStyle.Primary, 0.0068f, next);
             VRGlass.Button(workoutControls, "+30 sec", new Vector3(-0.21f, 0, -0.02f), size, GlassStyle.Secondary, 0.0068f, moreRest);
             VRGlass.Button(workoutControls, "End workout", new Vector3(0.21f, 0, -0.02f), size, GlassStyle.Secondary, 0.0068f, finish);
