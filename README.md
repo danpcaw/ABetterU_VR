@@ -77,7 +77,7 @@ In tests on a real plate, measured weights were within about 1% (a baking potato
 
 **Pre-kickoff commit, disclosed:** the first commit in this repo is **Oct 25**, the day before kickoff. It was preparation only: planning documents, a deploy script and an interface scaffold with stubs. All working functionality was written from Oct 26. Preparation before kickoff was confirmed as allowed, provided coding had not started.
 
-**How it was built:** with AI coding assistants, directed and tested by the developer on a real Quest 3S. **Claude Code** wrote most of the code (the commits carry its co-author line). **OpenAI Codex** also contributed some changes on Oct 29. Parts of the code were written by the developer, including the rep-detection step. All commits are made under the developer's name, so only the Claude Code work is marked in the history.
+**How it was built:** with AI coding assistants, directed and tested by the developer on a real Quest 3S. **Claude Code** wrote most of the code (the commits carry its co-author line). **OpenAI Codex** also contributed some changes on Oct 29. Parts of the code were written by the developer, including the rep-detection step. All commits are made under the developer's name, so only the Claude Code work is marked in the history. [docs/AI_USAGE.md](docs/AI_USAGE.md) lists each tool, what it was used for and where to see it.
 
 **Muse Code:** from Oct 28, Muse Code (Meta) is also used on the project, both implementing changes and as a second pair of eyes reviewing the repo. Its reviews so far caught submission risks such as a duplicate scene and uncommitted build settings.
 
