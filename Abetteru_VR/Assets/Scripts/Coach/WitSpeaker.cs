@@ -98,7 +98,7 @@ namespace ABetterU.Coach
         IEnumerator Fetch(string sentence, Action<AudioClip> onClip)
         {
             string url = $"https://api.wit.ai/synthesize?v={config.witVersion}";
-            var json = JsonUtility.ToJson(new SynthRequest { q = sentence, voice = config.witVoice, style = config.witStyle });
+            var json = JsonUtility.ToJson(new SynthRequest { q = sentence, voice = config.witVoice, style = config.witStyleV2 });
 
             using var req = new UnityWebRequest(url, "POST")
             {

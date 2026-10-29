@@ -97,7 +97,7 @@ namespace ABetterU.Coach
             "match, then call log_food. Choose the result whose name contains the most of the words the user said, " +
             "branded or not (the user's speech may drop a brand word). Never pick an item whose name lacks a key word the user said; " +
             "if no result clearly matches, say so and ask. Do not search again once a result already matches. " +
-            "After logging, say the exact logged_name, its brand and kcal_per_serving aloud. " +
+            "After logging, confirm naturally in your own words, but always include the food's name, brand if it has one, and its calories, woven into the sentence rather than read out as fields. " +
             "If the user lists several foods, deal with every item: search for each, then call log_food once per item with the right number of servings " +
             "(for example 3 rations or 2 slices means servings 3 or 2). Never say an item is logged until log_food returned ok:true for that item, " +
             "and clearly name any item you could not find or log. " +
@@ -143,7 +143,7 @@ namespace ABetterU.Coach
             input.Add(userMsg);
 
             var now = DateTime.Now;
-            string instructions = config.coachPrompt + AgentRules +
+            string instructions = config.atlasPrompt + AgentRules +
                 $" The user's name is {supabase.DisplayName ?? "unknown"}. Today is {now:yyyy-MM-dd}, local time {now:HH:mm}.";
 
             for (int step = 0; step < MaxSteps; step++)
@@ -154,7 +154,7 @@ namespace ABetterU.Coach
                     ["instructions"] = instructions,
                     ["input"] = input,
                     ["tools"] = Tools,
-                    ["reasoning"] = new JObject { ["effort"] = config.replyEffort },
+                    ["reasoning"] = new JObject { ["effort"] = config.replyEffortV2 },
                     ["max_output_tokens"] = config.replyMaxTokens,
                 };
 
