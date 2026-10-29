@@ -11,7 +11,7 @@ namespace ABetterU.Coach
     /// Also owns the in-gym menu (left Menu button). VoiceLoopTest builds the gym when this enters Stage.Gym.
     public class AppFlow : MonoBehaviour
     {
-        public enum Stage { Login, Home, MyWorld, Diary, Experiences, Gym, Exercise, Profile }
+        public enum Stage { Login, Home, MyWorld, Diary, Experiences, Gym, Exercise, Profile, Scan }
         public Stage Current { get; private set; } = Stage.Login;
 
         /// True while the in-gym menu is open, so the right trigger clicks menu buttons instead of starting the mic.
@@ -442,6 +442,7 @@ namespace ABetterU.Coach
                 case Stage.Diary: BuildDiary(); break;
                 case Stage.Exercise: BuildExercise(); break;
                 case Stage.Profile: BuildProfile(); break;
+                case Stage.Scan: BuildScan(); break;
                 case Stage.Experiences: BuildExperiences(); break;
             }
         }
@@ -778,6 +779,7 @@ namespace ABetterU.Coach
         void BuildWellbeingCard(Transform c)
         {
             CardTitle(c, VRArt.IconKind.Heart, new Color(1.0f, 0.50f, 0.60f), "Recorded Injuries", 0.37f);
+            VRGlass.Button(c, "Scan a Plate", new Vector3(0, CardButtonY, -0.02f), new Vector2(0.8f, 0.12f), GlassStyle.Secondary, 0.0078f, ShowScan, 0.035f);
 
             if (!data.Loaded) { VRGlass.Label(c, "Loading...", new Vector3(0, 0.1f, -0.02f), 0.009f, VRUi.Muted); return; }
             if (data.Injuries.Count == 0)
@@ -1105,6 +1107,63 @@ namespace ABetterU.Coach
             VRGlass.Label(card, caption, new Vector3(x, y - 0.11f, -0.02f), 0.0075f, VRUi.Muted);
         }
 
+        // ── Scan a plate: step one is the headset camera. Live view, then freeze a frame. Recognition comes next. ──────
+
+        PlateCamera plateCam;
+        Texture2D scanShot;
+        bool scanWasStreaming;
+
+        void ShowScan()
+        {
+            Current = Stage.Scan;
+            EnsureAssistant();
+            if (plateCam == null) plateCam = gameObject.AddComponent<PlateCamera>();
+            if (scanShot != null) { Destroy(scanShot); scanShot = null; }
+            plateCam.Begin();
+            BuildScan();
+        }
+
+        void StopScan()
+        {
+            plateCam.Stop();
+            if (scanShot != null) { Destroy(scanShot); scanShot = null; }
+            scanWasStreaming = false;
+        }
+
+        void BuildScan()
+        {
+            scanWasStreaming = plateCam != null && plateCam.Streaming;
+            var p = NewRoot(new Vector3(0f, 1.65f, 2.55f));
+            VRGlass.Panel(p, "Scan a plate", new Vector3(0, 0, 0.04f), new Vector2(3.6f, 1.95f), 0.08f, GlassStyle.Panel);
+            VRGlass.Label(p, "Scan a Plate", new Vector3(-1.62f, 0.81f, -0.02f), 0.019f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+            VRGlass.Button(p, "My World", new Vector3(1.445f, 0.81f, -0.02f), new Vector2(0.5f, 0.16f), GlassStyle.Secondary, 0.0085f, ShowMyWorld, 0.04f);
+
+            // The camera picture, or the frozen frame once captured, in a 4:3 frame on the left.
+            VRGlass.Panel(p, "Frame", new Vector3(-0.78f, -0.07f, 0.02f), new Vector2(2.14f, 1.52f), 0.05f, GlassStyle.Card, 1);
+            Texture picture = scanShot != null ? (Texture)scanShot : (plateCam != null && plateCam.Streaming ? plateCam.Live : null);
+            if (picture != null)
+                VRGlass.Image(p, "Picture", picture, new Vector3(-0.78f, -0.07f, -0.01f), new Vector2(1.96f, 1.47f), 3);
+            else
+                VRGlass.Label(p, plateCam != null ? VRUi.Wrap(plateCam.Status, 30, 3) : "Starting...", new Vector3(-0.78f, -0.07f, -0.02f), 0.011f, VRUi.Muted);
+
+            // Controls on the right.
+            string status = scanShot != null ? "Frame captured" : plateCam != null && plateCam.Streaming ? "Point at your plate" : plateCam != null ? plateCam.Status : "";
+            VRGlass.Label(p, VRUi.Wrap(status, 22, 2), new Vector3(1.05f, 0.45f, -0.02f), 0.0105f, VRUi.Ink);
+            if (scanShot == null)
+            {
+                bool ready = plateCam != null && plateCam.Streaming;
+                VRGlass.Button(p, "Capture", new Vector3(1.05f, 0.12f, -0.02f), new Vector2(0.9f, 0.18f), ready ? GlassStyle.Primary : GlassStyle.Disabled, 0.0095f,
+                    () => { var shot = plateCam.Capture(); if (shot != null) { scanShot = shot; plateCam.Stop(); BuildScan(); } }, 0.04f);
+                if (plateCam != null && plateCam.Failed)
+                    VRGlass.Button(p, "Try again", new Vector3(1.05f, -0.12f, -0.02f), new Vector2(0.9f, 0.16f), GlassStyle.Secondary, 0.0088f, () => { plateCam.Begin(); BuildScan(); }, 0.04f);
+            }
+            else
+            {
+                VRGlass.Button(p, "Retake", new Vector3(1.05f, 0.12f, -0.02f), new Vector2(0.9f, 0.18f), GlassStyle.Secondary, 0.0095f, ShowScan, 0.04f);
+                VRGlass.Label(p, VRUi.Wrap($"{scanShot.width} x {scanShot.height} pixels\nFood recognition is the next step.", 24, 3), new Vector3(1.05f, -0.2f, -0.02f), 0.008f, VRUi.Muted);
+            }
+        }
+
         // ── Exercise log: every recorded exercise for a day, from the real strength_sets and exercise_logs ──────────────
 
         const int ExercisePageSize = 4;
@@ -1288,6 +1347,9 @@ namespace ABetterU.Coach
 
         void Update()
         {
+            // The camera only runs on the scan screen, and rebuilds that screen once when its picture starts.
+            if (Current != Stage.Scan && plateCam != null && (plateCam.Live != null || scanShot != null)) StopScan();
+            else if (Current == Stage.Scan && plateCam != null && plateCam.Streaming != scanWasStreaming) BuildScan();
             if (Current == Stage.Gym && OVRInput.GetDown(OVRInput.Button.Start, OVRInput.Controller.LTouch))
             {
                 if (MenuOpen) CloseMenu(); else OpenMenu();
