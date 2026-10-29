@@ -21,6 +21,9 @@ namespace ABetterU.Coach
         // Hands-free uses the realtime WebSocket (about 0.1 to 0.3 s after you stop, against 2 to 2.5 s for an upload). Tick off to force
         // the upload path. Even when on, a phrase falls back to the upload whenever the realtime session is not connected yet.
         public bool realtimeAsr = true;
+
+        // How loud Atlas speaks (0 to 1). The Wit style is already "soft", the gentlest it has, so a softer feel comes from volume.
+        [Range(0.2f, 1f)] public float voiceVolume = 0.75f;
         public string realtimeEndpoint = "wss://api.meta.ai/v1/asr/realtime";
 
         // Verified Oct 26 on a real UK-accent recording: keyword biasing fixed "earned my money" -> "hurt my knee"

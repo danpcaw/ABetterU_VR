@@ -33,7 +33,7 @@ namespace ABetterU.Coach
             source = gameObject.AddComponent<AudioSource>();
             source.playOnAwake = false;
             source.spatialBlend = 0f;   // plain 2D audio in the headset
-            source.volume = 1f;
+            source.volume = config.voiceVolume;
         }
 
         // Short phrases fetched once at startup so they can play instantly (no network) while a slow reply is still being made.
@@ -60,13 +60,16 @@ namespace ABetterU.Coach
             return true;
         }
 
-        public void Speak(string text, Action onDone = null)
+        public void Speak(string text, Action onDone = null) => Speak(text, onDone, null);
+
+        /// onSentence is raised with each sentence at the moment it starts playing, so captions can follow the voice like subtitles.
+        public void Speak(string text, Action onDone, Action<string> onSentence)
         {
-            if (!Ready || string.IsNullOrWhiteSpace(text)) { onDone?.Invoke(); return; }
-            StartCoroutine(SpeakRoutine(text, onDone));
+            if (!Ready || string.IsNullOrWhiteSpace(text)) { onSentence?.Invoke(text); onDone?.Invoke(); return; }
+            StartCoroutine(SpeakRoutine(text, onDone, onSentence));
         }
 
-        IEnumerator SpeakRoutine(string text, Action onDone)
+        IEnumerator SpeakRoutine(string text, Action onDone, Action<string> onSentence)
         {
             IsSpeaking = true;
             float tStart = Time.realtimeSinceStartup;
@@ -84,9 +87,10 @@ namespace ABetterU.Coach
             for (int i = 0; i < parts.Count; i++)
             {
                 while (!finished[i]) yield return null;
-                if (clips[i] == null) continue;
+                if (clips[i] == null) { onSentence?.Invoke(parts[i]); continue; }   // no audio for it: still show the words
                 source.clip = clips[i];
                 source.Play();
+                onSentence?.Invoke(parts[i]);
                 if (i == 0) FirstAudioDelay = Time.realtimeSinceStartup - tStart;
                 while (source.isPlaying) yield return null;
             }

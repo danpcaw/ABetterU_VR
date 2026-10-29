@@ -564,10 +564,10 @@ namespace ABetterU.Coach
             }
 
             board.Show($"You: {Wrap(heard)}\n\nCoach: {Wrap(reply)}\n\nASR {tAsr:0.0}s  Spark {tSpark:0.0}s");
-            Report(falseClaim ? AssistantState.Error : AssistantState.Speaking, falseClaim ? "Nothing was saved" : "A Better U", reply);
-
+            // Captions follow the voice: each sentence appears as it starts to play, not when the text arrives.
             bool spoken = false;
-            tts.Speak(reply, () => spoken = true);
+            tts.Speak(reply, () => spoken = true,
+                s => Report(falseClaim ? AssistantState.Error : AssistantState.Speaking, falseClaim ? "Nothing was saved" : "A Better U", s));
             while (!spoken) yield return null;
             Debug.Log($"[Timing] turn: asr {tAsr:0.00}s, agent {tSpark:0.00}s, speech started {tts.FirstAudioDelay:0.00}s after reply, speech to reply-heard total {Time.realtimeSinceStartup - t0:0.00}s");
 
