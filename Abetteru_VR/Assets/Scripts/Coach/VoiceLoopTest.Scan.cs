@@ -29,6 +29,10 @@ namespace ABetterU.Coach
 
         public CoachAgent Agent => agent;
 
+        // The same settings asset the rest of the voice loop loads in Start (a local there), fetched once for the scan code.
+        ModelApiConfig scanConfig;
+        ModelApiConfig Cfg => scanConfig != null ? scanConfig : (scanConfig = ModelApiConfig.Load());
+
         const string PlatePrompt =
             "You are looking at a photo of a plate or tray of food. List each distinct food or drink you can clearly see, at most 5. " +
             "For each give name: a plain, common food name that would be found in a food database (for example grilled chicken breast, chips, " +
@@ -45,7 +49,7 @@ namespace ABetterU.Coach
             // 1. Muse Spark looks at the photo.
             progress("Looking at your plate...");
             string text = null, error = null;
-            yield return ImageModelCall(config.model, PlatePrompt, dataUrl, false, true, t => text = t, e => error = e);
+            yield return ImageModelCall(Cfg.model, PlatePrompt, dataUrl, false, true, t => text = t, e => error = e);
             if (error != null || string.IsNullOrWhiteSpace(text))
             {
                 Debug.LogWarning("[Scan] Spark failed: " + error);
@@ -143,17 +147,17 @@ namespace ABetterU.Coach
                     },
                 },
             };
-            if (reasoning) { body["reasoning"] = new JObject { ["effort"] = config.replyEffortV2 }; body["max_output_tokens"] = config.replyMaxTokens; }
+            if (reasoning) { body["reasoning"] = new JObject { ["effort"] = Cfg.replyEffortV2 }; body["max_output_tokens"] = Cfg.replyMaxTokens; }
             if (sam) { body["stream"] = true; body["metadata"] = new JObject { ["include_confidence"] = "true", ["mask_encoding"] = "one_bit" }; }
 
-            using var req = new UnityWebRequest(config.endpoint, "POST")
+            using var req = new UnityWebRequest(Cfg.endpoint, "POST")
             {
                 uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body.ToString(Newtonsoft.Json.Formatting.None))),
                 downloadHandler = new DownloadHandlerBuffer(),
                 timeout = 60,
             };
             req.SetRequestHeader("Content-Type", "application/json");
-            req.SetRequestHeader("Authorization", "Bearer " + config.apiKey);
+            req.SetRequestHeader("Authorization", "Bearer " + Cfg.apiKey);
             if (sam) req.SetRequestHeader("Accept", "text/event-stream");
             yield return req.SendWebRequest();
 
