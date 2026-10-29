@@ -18,7 +18,8 @@ namespace ABetterU.Coach
         public sealed class PlateItem
         {
             public string Name;
-            public double Grams;                          // Spark's visual estimate: a starting point the user can see and drop, not a measurement
+            public double Grams;                          // starts as Spark's visual estimate; the user can correct it with - and + (weigh it for a true figure)
+            public double EstimatedGrams;                 // what Spark first guessed, kept so the log can show how far out it was
             public readonly List<Rect> Boxes = new List<Rect>();   // from SAM, as fractions of the photo, y measured from the top
             public string FoodId, MatchedName;
             public double? Kcal;                          // for Grams, from the database match
@@ -38,6 +39,12 @@ namespace ABetterU.Coach
             }
 
             public void Next() => Choose(Choice + 1);
+
+            public void AdjustGrams(double delta)
+            {
+                Grams = Math.Max(10, Math.Min(2000, Math.Round(Grams + delta)));
+                Choose(Choice);                           // recalculates the calories for the new weight
+            }
         }
 
         public struct PlateCandidate { public string FoodId, Label; public double? KcalPerServing, ServingG; }
@@ -53,7 +60,8 @@ namespace ABetterU.Coach
         const string PlatePrompt =
             "You are looking at a photo of a plate or tray of food. List each distinct food or drink you can clearly see, at most 5. " +
             "For each give name: a plain, common food name that would be found in a food database, including how it is cooked when you can tell " +
-            "(for example grilled chicken breast, boiled potatoes, white rice, raw red pepper, fried egg). A whole uncooked potato is called baking potato (or new potato if it is small), and a whole sweet or bell pepper is named by its colour, for example orange pepper or red pepper. Then grams: your best estimate of the weight shown, a whole number. " +
+            "(for example grilled chicken breast, boiled potatoes, white rice, raw red pepper, fried egg). A whole uncooked potato is called baking potato (or new potato if it is small), and a whole sweet or bell pepper is named by its colour, for example orange pepper or red pepper. Then grams: your best estimate of the total weight of that food on the plate, a whole number. " +
+            "Think about real sizes: a medium baking potato is about 250 g, a medium bell pepper about 150 g, a chicken breast about 150 g, a cooked portion of rice about 180 g, a slice of bread about 35 g. " +
             "Reply with JSON only and nothing else, exactly like {\"items\":[{\"name\":\"white rice\",\"grams\":150}]}. " +
             "If there is no food, reply {\"items\":[]}.";
 
@@ -81,7 +89,7 @@ namespace ABetterU.Coach
                 {
                     string name = ((string)i["name"] ?? "").Trim();
                     double grams = DashboardData.Num(i["grams"]) ?? 100;
-                    if (name.Length > 0) result.Items.Add(new PlateItem { Name = name, Grams = Math.Max(10, Math.Min(1500, Math.Round(grams))) });
+                    if (name.Length > 0) { double g = Math.Max(10, Math.Min(1500, Math.Round(grams))); result.Items.Add(new PlateItem { Name = name, Grams = g, EstimatedGrams = g }); }
                 }
             }
             catch (Exception e) { Debug.LogWarning("[Scan] Could not read Spark's answer: " + e.Message + " :: " + text); }
@@ -297,6 +305,7 @@ namespace ABetterU.Coach
                     var j = JObject.Parse(reply);
                     if ((bool?)j["ok"] != true) { Debug.LogWarning("[Scan] Log failed: " + reply); continue; }
                     logged.Add((string)j["logged_name"]);
+                    Debug.Log($"[Scan] logged '{item.Name}' as '{(string)j["logged_name"]}': Spark guessed {item.EstimatedGrams:0} g, logged {item.Grams:0} g");
                     kcal += item.Kcal ?? 0;
                 }
                 catch (Exception) { }
