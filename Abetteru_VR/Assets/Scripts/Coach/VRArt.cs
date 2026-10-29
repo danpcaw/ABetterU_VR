@@ -7,7 +7,7 @@ namespace ABetterU.Coach
     /// keeps the project free of binary art files and lets every panel size get a correctly proportioned corner.
     public static class VRArt
     {
-        const float PixelsPerMetre = 300f;
+        const float PixelsPerMetre = 600f;
         static readonly Dictionary<string, Texture2D> cache = new Dictionary<string, Texture2D>();
 
         // ── Rounded rectangle with a vertical gradient fill and an inner border, anti-aliased by signed distance ──
@@ -40,26 +40,41 @@ namespace ABetterU.Coach
 
                     float borderMix = bw > 0f ? Mathf.Clamp01(d + bw + 0.5f) : 0f;   // 1 within the border band
                     Color c = Color.Lerp(fill, border, borderMix);
+
+                    // Glass light: a soft sheen toward the top, a faint diagonal specular streak, and a
+                    // brighter rim where light would catch the top edge. Kept subtle so text stays readable.
+                    float vTop = (y + 0.5f) / h;
+                    float uAcross = (x + 0.5f) / w;
+                    float sheen = Mathf.Pow(vTop, 3f) * 0.07f;
+                    float streakBand = (uAcross * 0.72f + vTop * 0.28f - 0.62f) * 3.2f;
+                    float streak = Mathf.Exp(-streakBand * streakBand) * 0.055f;
+                    float topRim = bw > 0f ? borderMix * Mathf.Pow(vTop, 6f) * 0.35f : 0f;
+                    float lift = sheen + streak + topRim;
+                    c.r += lift; c.g += lift; c.b += lift * 1.05f;
+
                     c.a *= edge;
                     pixels[y * w + x] = c;
                 }
             }
 
-            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false)
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, true)
             {
                 wrapMode = TextureWrapMode.Clamp,
-                filterMode = FilterMode.Bilinear,
+                filterMode = FilterMode.Trilinear,
+                anisoLevel = 4,
                 name = "glass",
             };
             tex.SetPixels32(pixels);
-            tex.Apply(false, true);
+            // Trilinear filtering samples mip levels at dashboard viewing distances.
+            // Populate those levels before discarding the CPU copy of the pixels.
+            tex.Apply(true, true);
             cache[key] = tex;
             return tex;
         }
 
         // ── Sunset over mountains and a lake, as an equirectangular texture for the sky sphere ──────────────────
 
-        public static Texture2D Sky(int w = 1536, int h = 768)
+        public static Texture2D Sky(int w = 2560, int h = 1280)
         {
             const float TwoPi = Mathf.PI * 2f;
             const float sunU = 0.5f, sunElev = 0.045f;                 // low sun, just above the horizon
@@ -219,16 +234,127 @@ namespace ABetterU.Coach
             return Store(key, pixels, n, n, "orb");
         }
 
+        // ── Premium data-ink: donut ring, sparkline and week bars, drawn as textures like the panels ─────
+
+        /// A donut ring: dark track with a coloured arc for fraction (0 to 1), starting at the top.
+        public static Texture2D Ring(float fraction, Color fill, int px = 256)
+        {
+            float f = Mathf.Clamp01(fraction);
+            string key = $"ring:{f:0.00}:{fill}:{px}";
+            if (cache.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            var pixels = new Color32[px * px];
+            float cx = px * 0.5f, cy = px * 0.5f, radius = px * 0.40f, halfThick = px * 0.055f;
+            Color track = new Color(0.14f, 0.18f, 0.26f, 0.95f);
+            for (int y = 0; y < px; y++)
+                for (int x = 0; x < px; x++)
+                {
+                    float dx = x + 0.5f - cx, dy = y + 0.5f - cy;
+                    float dist = Mathf.Sqrt(dx * dx + dy * dy);
+                    float band = Mathf.Clamp01(halfThick - Mathf.Abs(dist - radius) + 0.75f);
+                    if (band <= 0f) { pixels[y * px + x] = new Color32(0, 0, 0, 0); continue; }
+
+                    // Angle from the top, clockwise in texture space (y is up after upload).
+                    float ang = Mathf.Atan2(dx, dy) / (Mathf.PI * 2f);
+                    if (ang < 0f) ang += 1f;
+                    bool filled = ang <= f;
+                    Color c = filled ? fill : track;
+                    if (filled)
+                    {
+                        float head = Mathf.Clamp01((f - ang) * 40f);          // soft leading edge
+                        c = Color.Lerp(fill, Color.white, 0.25f * (1f - head));
+                    }
+                    c.a = band * 0.98f;
+                    pixels[y * px + x] = c;
+                }
+            return Store(key, pixels, px, px, "ring");
+        }
+
+        /// A thin glowing line chart through values (any scale; normalised internally). Transparent elsewhere.
+        public static Texture2D Sparkline(float[] values, Color line)
+        {
+            if (values == null || values.Length < 2) values = new float[] { 0f, 0f };
+            string key = $"spark:{string.Join(",", values)}:{line}";
+            if (cache.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            const int w = 512, h = 160;
+            float min = float.MaxValue, max = float.MinValue;
+            foreach (var v in values) { min = Mathf.Min(min, v); max = Mathf.Max(max, v); }
+            if (max - min < 0.001f) { max = min + 1f; }
+
+            var pts = new Vector2[values.Length];
+            for (int i = 0; i < values.Length; i++)
+                pts[i] = new Vector2((i + 0.5f) / values.Length * w, Mathf.Lerp(h * 0.18f, h * 0.82f, (values[i] - min) / (max - min)));
+
+            var pixels = new Color32[w * h];
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    float best = float.MaxValue;
+                    for (int i = 0; i < pts.Length - 1; i++)
+                    {
+                        var a = pts[i]; var b = pts[i + 1];
+                        var ab = b - a;
+                        float t = ab.sqrMagnitude > 0f ? Mathf.Clamp01(Vector2.Dot(new Vector2(x - a.x, y - a.y), ab) / ab.sqrMagnitude) : 0f;
+                        var p = a + ab * t;
+                        best = Mathf.Min(best, Vector2.Distance(new Vector2(x, y), p));
+                    }
+                    float core = Mathf.Clamp01(2.6f - best);
+                    float glow = Mathf.Clamp01(7f - best) * 0.35f;
+                    float a2 = Mathf.Max(core, glow);
+                    if (a2 <= 0f) { pixels[y * w + x] = new Color32(0, 0, 0, 0); continue; }
+                    Color c = Color.Lerp(line, Color.white, core * 0.35f);
+                    c.a = a2;
+                    pixels[y * w + x] = c;
+                }
+            return Store(key, pixels, w, h, "sparkline");
+        }
+
+        /// Seven slim vertical bars (oldest to newest), heights from values normalised to max.
+        public static Texture2D WeekBars(float[] values, Color fill)
+        {
+            if (values == null || values.Length == 0) values = new float[] { 0f };
+            string key = $"bars:{string.Join(",", values)}:{fill}";
+            if (cache.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            const int w = 512, h = 160;
+            float max = 0.001f;
+            foreach (var v in values) max = Mathf.Max(max, v);
+
+            var pixels = new Color32[w * h];
+            int n = values.Length;
+            float slot = w / (float)n;
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    int i = Mathf.Min(n - 1, (int)(x / slot));
+                    float local = (x - i * slot) / slot;                       // 0 to 1 across the slot
+                    float barHalf = 0.26f;
+                    float bh = Mathf.Lerp(0.08f, 0.92f, Mathf.Clamp01(values[i] / max)) * h;
+                    bool inX = Mathf.Abs(local - 0.5f) <= barHalf;
+                    bool inY = y <= bh;
+                    bool newest = i == n - 1;
+                    if (!inX || !inY) { pixels[y * w + x] = new Color32(0, 0, 0, 0); continue; }
+                    Color c = newest ? Color.Lerp(fill, Color.white, 0.25f) : fill;
+                    c.a = newest ? 1f : 0.75f;
+                    pixels[y * w + x] = c;
+                }
+            return Store(key, pixels, w, h, "week-bars");
+        }
+
         static Texture2D Store(string key, Color32[] pixels, int w, int h, string name)
         {
-            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false)
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, true)
             {
                 wrapMode = TextureWrapMode.Clamp,
-                filterMode = FilterMode.Bilinear,
+                filterMode = FilterMode.Trilinear,
+                anisoLevel = 4,
                 name = name,
             };
             tex.SetPixels32(pixels);
-            tex.Apply(false, true);
+            // Trilinear filtering samples mip levels at dashboard viewing distances.
+            // Populate those levels before discarding the CPU copy of the pixels.
+            tex.Apply(true, true);
             cache[key] = tex;
             return tex;
         }

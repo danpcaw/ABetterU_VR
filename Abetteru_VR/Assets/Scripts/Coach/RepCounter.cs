@@ -100,6 +100,27 @@ namespace ABetterU.Coach
             lastRepTime = setStartedAt = Time.time;
         }
 
+        /// Starts a new set using the existing standing-height calibration.
+        public void ResetSet()
+        {
+            Active = false;
+            RepCount = 0; DeepestDrop = 0; SecondsPerRep = 0; CurrentDrop = 0;
+            FlaggedReps = 0; inBottom = false; repFlagged = false;
+            repMaxLean = repMaxLookDown = 0;
+            standingPos = NeckPoint();
+            Vector3 forward = head.parent != null ? head.parent.InverseTransformDirection(head.forward) : head.forward;
+            forward.y = 0;
+            standingForward = forward.sqrMagnitude > 0.01f ? forward.normalized : Vector3.forward;
+            lastRepTime = setStartedAt = Time.time;
+        }
+
+        /// Pausing must not turn an interrupted downward movement into a completed rep.
+        public void CancelPartialRep()
+        {
+            inBottom = false; repFlagged = false;
+            repMaxLean = repMaxLookDown = 0;
+        }
+
         void Update()
         {
             if (!Active) return;

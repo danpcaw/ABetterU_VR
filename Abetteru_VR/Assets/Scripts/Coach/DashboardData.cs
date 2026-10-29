@@ -28,6 +28,14 @@ namespace ABetterU.Coach
         public string LatestWorkoutWhen;          // "Today", "Yesterday" or a date
 
         public double? WeightKg;
+        public readonly List<float> WeightHistory = new List<float>();   // oldest to newest, for the sparkline
+        public double? WeightDelta;                                      // newest minus oldest in WeightHistory
+        public double? SleepMinutes;                                     // last recorded night (sleep_logs)
+        public int? SleepScore;                                          // 0 to 100, duration vs 8 h (mirrors the web app)
+        public double? MoodRating;                                       // latest mood_logs rating, 1 to 5
+        public string MoodEmotion;
+        public readonly float[] MoodWeek = new float[7];                 // daily average rating, oldest to today, 0 = none
+        public int StreakDays;                                           // consecutive days with a food or workout log
         public readonly List<InjuryNote> Injuries = new List<InjuryNote>();
 
         static readonly Dictionary<string, string> AreaNames = new Dictionary<string, string>
@@ -76,10 +84,51 @@ namespace ABetterU.Coach
                 }
             }
 
-            // Latest weight (the newest log, if there is one).
+            // Weight: latest value plus recent history for the sparkline and change since the oldest shown.
             rows = null;
-            yield return Fetch(db, "weight_logs?select=weight_kg,date&order=date.desc&limit=1", r => rows = r);
-            WeightKg = rows != null && rows.Count > 0 ? Num(rows[0]["weight_kg"]) : null;
+            yield return Fetch(db, "weight_logs?select=weight_kg,date&order=date.desc&limit=12", r => rows = r);
+            WeightHistory.Clear();
+            WeightDelta = null;
+            if (rows != null && rows.Count > 0)
+            {
+                WeightKg = Num(rows[0]["weight_kg"]);
+                for (int i = rows.Count - 1; i >= 0; i--)
+                {
+                    var w = Num(rows[i]["weight_kg"]);
+                    if (w.HasValue) WeightHistory.Add((float)w.Value);
+                }
+                if (WeightHistory.Count >= 2)
+                    WeightDelta = WeightHistory[WeightHistory.Count - 1] - WeightHistory[0];
+            }
+            else WeightKg = null;
+
+            // Last recorded night's sleep. Score mirrors the web app: duration against an 8-hour goal.
+            rows = null;
+            yield return Fetch(db, "sleep_logs?select=log_date,duration_min&order=log_date.desc&limit=1", r => rows = r);
+            SleepMinutes = rows != null && rows.Count > 0 ? Num(rows[0]["duration_min"]) : null;
+            SleepScore = SleepMinutes.HasValue ? (int?)Math.Min(100, (int)Math.Round(SleepMinutes.Value / 480.0 * 100.0)) : null;
+
+            // Mood: latest entry plus daily averages for the last seven days (mood_logs rates 1 to 5).
+            rows = null;
+            yield return Fetch(db, "mood_logs?select=logged_at,mood_rating,emotion&order=logged_at.desc&limit=60", r => rows = r);
+            MoodRating = null; MoodEmotion = null;
+            for (int i = 0; i < MoodWeek.Length; i++) MoodWeek[i] = 0f;
+            if (rows != null && rows.Count > 0)
+            {
+                MoodRating = Num(rows[0]["mood_rating"]);
+                MoodEmotion = (string)rows[0]["emotion"];
+                var sums = new double[7]; var counts = new int[7];
+                foreach (var m in rows)
+                {
+                    string at = (string)m["logged_at"];
+                    var rating = Num(m["mood_rating"]);
+                    if (string.IsNullOrEmpty(at) || !rating.HasValue || !DateTime.TryParse(at, out var when)) continue;
+                    int ago = (DateTime.Now.Date - when.Date).Days;
+                    if (ago < 0 || ago > 6) continue;
+                    sums[6 - ago] += rating.Value; counts[6 - ago]++;
+                }
+                for (int i = 0; i < 7; i++) if (counts[i] > 0) MoodWeek[i] = (float)(sums[i] / counts[i]);
+            }
 
             // Workouts in the last seven days, and the newest one.
             rows = null;
@@ -115,6 +164,23 @@ namespace ABetterU.Coach
                         Reported = DayLabel(((string)i["reported_at"] ?? "").Length >= 10 ? ((string)i["reported_at"]).Substring(0, 10) : null),
                     });
                 }
+            }
+
+            // Streak: consecutive days (ending today, or yesterday if today has nothing yet) with any log.
+            {
+                string since90 = DateTime.Now.AddDays(-90).ToString("yyyy-MM-dd");
+                var days = new HashSet<string>();
+                rows = null;
+                yield return Fetch(db, $"food_log_entries?select=log_date&log_date=gte.{since90}", r => rows = r);
+                if (rows != null) foreach (var e in rows) { string d = (string)e["log_date"]; if (!string.IsNullOrEmpty(d) && d.Length >= 10) days.Add(d.Substring(0, 10)); }
+                rows = null;
+                yield return Fetch(db, $"exercise_logs?select=date&date=gte.{since90}", r => rows = r);
+                if (rows != null) foreach (var e in rows) { string d = (string)e["date"]; if (!string.IsNullOrEmpty(d) && d.Length >= 10) days.Add(d.Substring(0, 10)); }
+
+                StreakDays = 0;
+                var cursor = DateTime.Now.Date;
+                if (!days.Contains(cursor.ToString("yyyy-MM-dd"))) cursor = cursor.AddDays(-1);
+                while (days.Contains(cursor.ToString("yyyy-MM-dd"))) { StreakDays++; cursor = cursor.AddDays(-1); }
             }
 
             Loading = false;

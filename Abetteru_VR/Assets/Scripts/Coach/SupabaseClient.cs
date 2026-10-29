@@ -89,6 +89,64 @@ namespace ABetterU.Coach
         public IEnumerator Insert(string table, string json, Action<string> ok, Action<string> fail) =>
             Send($"{config.supabaseUrl}/rest/v1/{table}", "POST", json, true, ok, fail);
 
+        /// Deletes exactly one diary entry belonging to this signed-in user; RLS still applies.
+        public IEnumerator DeleteFoodEntry(string entryId, Action ok, Action<string> fail)
+        {
+            if (!SignedIn || !Guid.TryParse(UserId, out var owner) || !Guid.TryParse(entryId, out var id))
+            {
+                fail("Sign in and select a valid food diary entry.");
+                yield break;
+            }
+            string raw = null, error = null;
+            yield return Send($"{config.supabaseUrl}/rest/v1/food_log_entries?id=eq.{id:D}&user_id=eq.{owner:D}&select=id",
+                "DELETE", null, true, r => raw = r, e => error = e);
+            if (error != null) { fail(error); yield break; }
+            if (!ConfirmsDeletedEntry(raw, entryId))
+            {
+                fail("The entry was not deleted. Refresh and try again.");
+                yield break;
+            }
+            ok();
+        }
+
+        internal static bool ConfirmsDeletedEntry(string json, string entryId)
+        {
+            if (!Guid.TryParse(entryId, out var expected)) return false;
+            try
+            {
+                var rows = Newtonsoft.Json.Linq.JArray.Parse(json);
+                return rows.Count == 1 && Guid.TryParse((string)rows[0]["id"], out var actual) && actual == expected;
+            }
+            catch (Exception) { return false; }
+        }
+
+        /// Inserts a measured-workout row once; a timed-out request may be retried with the same UUID.
+        public IEnumerator InsertWorkoutRowOnce(string table, Newtonsoft.Json.Linq.JObject row, Action<string> done)
+        {
+            if ((table != "strength_sets" && table != "exercise_logs") || !SignedIn || (string)row["user_id"] != UserId ||
+                !Guid.TryParse((string)row["id"], out var id))
+            { done("Sign in to the workout's account before saving."); yield break; }
+            using var request = Build($"{config.supabaseUrl}/rest/v1/{table}?on_conflict=id", "POST",
+                row.ToString(Newtonsoft.Json.Formatting.None), true);
+            request.SetRequestHeader("Prefer", "resolution=ignore-duplicates,return=representation");
+            yield return request.SendWebRequest();
+            if (request.result != UnityWebRequest.Result.Success) { done("The workout save was not confirmed. Please retry."); yield break; }
+            string raw = null, error = null;
+            // Check the stored values as well as HTTP success, including an earlier successful retry.
+            yield return Get($"{table}?id=eq.{id:D}&user_id=eq.{UserId}&select=*", r => raw = r, e => error = e);
+            if (error != null) { done("Could not verify the saved set. Please retry."); yield break; }
+            bool matches = false;
+            try
+            {
+                var rows = Newtonsoft.Json.Linq.JArray.Parse(raw);
+                string repsField = table == "strength_sets" ? "reps" : "reps_completed";
+                matches = rows.Count == 1 && (string)rows[0]["id"] == (string)row["id"] &&
+                    (string)rows[0]["user_id"] == UserId && rows[0][repsField].ToString() == row[repsField].ToString();
+            }
+            catch (Exception) { /* no verified row means no saved claim */ }
+            done(matches ? null : "The stored set did not match. Please retry.");
+        }
+
         IEnumerator Send(string url, string method, string json, bool returnRow, Action<string> ok, Action<string> fail)
         {
             using var req = Build(url, method, json, true);

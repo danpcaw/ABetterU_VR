@@ -28,6 +28,9 @@ namespace ABetterU.Coach
 
         /// Raised after a tool call the backend confirmed (ok:true), with the tool's name and its result.
         public event Action<string, JObject> ToolSucceeded;
+        public Func<bool> HasTrackedSquatWorkout;
+        public Func<int, int, int, string> StartSquatSession;
+        public Func<string, int, int, string> ControlSquatSession;
 
         public CoachAgent(ModelApiConfig config, SupabaseClient supabase)
         {
@@ -86,6 +89,18 @@ namespace ABetterU.Coach
              ""sets"":{""type"":""integer"",""description"":""Default 1""},
              ""weight_kg"":{""type"":""number"",""description"":""Omit for bodyweight""}},
             ""required"":[""exercise_name"",""reps""]}},
+          {""type"":""function"",""name"":""start_squat_session"",
+           ""description"":""Configure a headset-tracked squat workout when the user asks to DO squats, such as 3 sets of 10 reps. Opens the gym, then calibrates and starts after your reply. Does not log any reps."",
+           ""parameters"":{""type"":""object"",""properties"":{
+             ""sets"":{""type"":""integer"",""minimum"":1,""maximum"":10},
+             ""reps"":{""type"":""integer"",""minimum"":1,""maximum"":50},
+             ""rest_seconds"":{""type"":""integer"",""minimum"":0,""maximum"":300,""description"":""Default 60 seconds between sets""}},""required"":[""sets"",""reps""]}},
+          {""type"":""function"",""name"":""control_squat_session"",
+           ""description"":""Control the current headset workout. finish stops and retains actual completed reps; start_next or skip_rest starts the next set after the reply; add_rest extends a rest; change_sets changes the total number of sets. Never use log_set for headset-tracked reps because they are saved automatically."",
+           ""parameters"":{""type"":""object"",""properties"":{
+             ""action"":{""type"":""string"",""enum"":[""finish"",""start_next"",""skip_rest"",""add_rest"",""change_sets""]},
+             ""seconds"":{""type"":""integer"",""minimum"":1,""maximum"":300,""description"":""Extra rest, default 30""},
+             ""sets"":{""type"":""integer"",""minimum"":1,""maximum"":10}},""required"":[""action""]}},
           {""type"":""function"",""name"":""build_workout"",
            ""description"":""Fetch exercise candidates from the A Better U library, already filtered to avoid the user's active injuries. Then choose 3 and give sets and reps."",
            ""parameters"":{""type"":""object"",""properties"":{
@@ -126,7 +141,10 @@ namespace ABetterU.Coach
             "If the user says something hurts or is sore, call report_injury first (record their words, never diagnose), " +
             "then if they want a workout call build_workout with focus legs unless they ask for upper body, core or full body, " +
             "and pick exactly 3 exercises from its candidates, giving sets and reps. For legs, prefer gentle glute, hip and bodyweight squat options. " +
-            "When the user says they finished a set, call log_set with the exercise and the reps they stated, then say what was recorded. " +
+            "When the user asks to do or start squats, call start_squat_session with their requested sets and reps, default one set of ten and 60 seconds rest. " +
+            "For an ongoing headset workout use control_squat_session to stop, skip rest, extend rest or change the number of sets. " +
+            "Headset-measured sets are saved automatically; never log_set those reps again. Do not claim a session was started or changed without a successful tool result. " +
+            "When the user says they finished an exercise outside the tracked headset workout, call log_set with the exercise and the reps they stated, then say what was recorded. " +
             "Say the exercise names aloud in one short sentence, and add that you are not a medical professional only if they ask about treatment.";
 
         /// Runs one user turn. onProgress gets short status text (tool names) for the board.
@@ -241,7 +259,17 @@ namespace ABetterU.Coach
                 case "go_to": done(GoTo(args)); break;
                 case "report_injury": yield return ReportInjury(args, done); break;
                 case "build_workout": yield return BuildWorkout(args, done); break;
-                case "log_set": yield return LogSet(args, done); break;
+                case "log_set":
+                    if (HasTrackedSquatWorkout?.Invoke() == true && ((string)args["exercise_name"] ?? "").IndexOf("squat", StringComparison.OrdinalIgnoreCase) >= 0)
+                        done(Fail("The headset owns this workout's measured reps and saves each set automatically. Use control_squat_session instead."));
+                    else yield return LogSet(args, done);
+                    break;
+                case "start_squat_session":
+                    done(StartSquatSession != null ? StartSquatSession((int?)args["sets"] ?? 1, (int?)args["reps"] ?? 10,
+                        (int?)args["rest_seconds"] ?? 60) : Fail("tracked workouts are unavailable")); break;
+                case "control_squat_session":
+                    done(ControlSquatSession != null ? ControlSquatSession((string)args["action"], (int?)args["seconds"] ?? 30,
+                        (int?)args["sets"] ?? 0) : Fail("tracked workouts are unavailable")); break;
                 default: done(Fail("unknown tool " + name)); break;
             }
         }

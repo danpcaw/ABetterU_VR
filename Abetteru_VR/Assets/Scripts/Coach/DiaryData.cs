@@ -10,7 +10,7 @@ namespace ABetterU.Coach
     /// arithmetic as the dashboards (DashboardData.Portion), so the numbers match the web app.
     public class DiaryData
     {
-        public struct Item { public string Slot, Name, Amount; public double Kcal; }
+        public struct Item { public string Id, Slot, Name, Amount, ImageUrl; public double Kcal, Protein, Carbs, Fat; }
 
         public DateTime Date = DateTime.Now.Date;
         public bool Loading, Loaded, HadError;
@@ -24,11 +24,11 @@ namespace ABetterU.Coach
             Items.Clear();
             Kcal = Protein = Carbs = Fat = 0;
 
-            const string foodCols = "name,brand,serving_size_g,energy_kcal_100g,energy_kcal_serving,protein_g_100g,protein_g_serving," +
+            const string foodCols = "name,brand,image_url,serving_size_g,energy_kcal_100g,energy_kcal_serving,protein_g_100g,protein_g_serving," +
                                     "carbohydrate_g_100g,carbohydrate_g_serving,fat_g_100g,fat_g_serving";
             string day = Date.ToString("yyyy-MM-dd");
             string raw = null, err = null;
-            yield return db.Get($"food_log_entries?select=meal_slot,servings,quantity_g,created_at,food:food_id({foodCols}),{DashboardData.MealEmbed}&log_date=eq.{day}&order=created_at.asc",
+            yield return db.Get($"food_log_entries?select=id,meal_slot,servings,quantity_g,created_at,food:food_id({foodCols}),{DashboardData.MealEmbed.Replace("meal:meal_id(name,", "meal:meal_id(name,image_url,")}&log_date=eq.{day}&order=created_at.asc",
                 r => raw = r, e => err = e);
 
             JArray rows = null;
@@ -53,7 +53,13 @@ namespace ABetterU.Coach
                 double qty = DashboardData.Num(entry["quantity_g"]) ?? 0;
                 string amount = servings > 0 ? $"x{servings:0.##}" : $"{qty:0} g";
 
-                Items.Add(new Item { Slot = (string)entry["meal_slot"], Name = name, Amount = amount, Kcal = kcal });
+                var meal = entry["meal"];
+                bool savedMeal = (string)entry["item_type"] == "meal";
+                string image = savedMeal && meal != null && meal.Type != JTokenType.Null
+                    ? (string)meal["image_url"]
+                    : food != null && food.Type != JTokenType.Null ? (string)food["image_url"] : null;
+                Items.Add(new Item { Id = (string)entry["id"], Slot = (string)entry["meal_slot"], Name = name, Amount = amount,
+                    Kcal = kcal, Protein = protein, Carbs = carbs, Fat = fat, ImageUrl = image });
             }
 
             Loading = false;

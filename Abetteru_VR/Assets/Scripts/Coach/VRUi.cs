@@ -198,6 +198,23 @@ namespace ABetterU.Coach
             Transform hand = useLeft ? leftHand : rightHand;
             Transform from = hand != null && hand.gameObject.activeInHierarchy ? hand : head;
             var ray = new Ray(from.position, from.forward);
+            bool pressed = leftPulled || rightPulled;
+
+#if UNITY_EDITOR && ENABLE_INPUT_SYSTEM
+            // The desktop Game view has no tracked controller. Let the mouse select the same
+            // collider-backed buttons, while preserving controller input when an HMD is active.
+            if (!UnityEngine.XR.XRSettings.isDeviceActive)
+            {
+                var mouse = UnityEngine.InputSystem.Mouse.current;
+                var camera = Camera.main;
+                if (mouse != null && camera != null)
+                {
+                    Vector2 position = mouse.position.ReadValue();
+                    ray = camera.ScreenPointToRay(position);
+                    pressed = camera.pixelRect.Contains(position) && mouse.leftButton.wasPressedThisFrame;
+                }
+            }
+#endif
 
             Vector3 end = ray.origin + ray.direction * 4f;
             VRButton hit = null;
@@ -218,7 +235,7 @@ namespace ABetterU.Coach
             line.SetPosition(1, end);
             dot.position = end;
 
-            if ((leftPulled || rightPulled) && hovered != null && hovered.Interactable) hovered.OnClick?.Invoke();
+            if (pressed && hovered != null && hovered.Interactable) hovered.OnClick?.Invoke();
         }
 
         void OnDestroy()

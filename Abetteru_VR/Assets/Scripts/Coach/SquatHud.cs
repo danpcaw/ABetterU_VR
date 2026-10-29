@@ -7,8 +7,8 @@ namespace ABetterU.Coach
     /// It only displays what RepCounter measured; "Saved" appears only when the caller says the backend confirmed it.
     public class SquatHud : MonoBehaviour
     {
-        const float BarW = 1.2f, BarH = 0.07f;
-        const int PromptWidth = 22;             // characters per line that fit the panel at the prompt's size
+        const float DepthX = 0.61f, DepthTop = 0.30f, DepthHeight = 0.58f, DepthWidth = 0.045f;
+        const int PromptWidth = 20;             // characters per line that fit the panel at the prompt's size
         const float RangeBeyondLine = 1.5f;     // the bar's full width is 1.5x the depth that counts, so the line sits at two thirds
 
         static readonly Color Cyan = new Color(0.25f, 0.85f, 0.98f);
@@ -17,8 +17,11 @@ namespace ABetterU.Coach
         static readonly Color Red = new Color(0.95f, 0.38f, 0.40f);
 
         TextMesh header, repNumber, repTarget, prompt, footer, lineTag;
-        Transform fill, marker, track;
-        Renderer fillRenderer;
+        Transform fill, marker, track, depthCursor;
+        TextMesh standingTag;
+        Renderer fillRenderer, cursorRenderer;
+        int workoutSet = 1, workoutSets = 1;
+        Transform workoutControls;
         int shownReps = -1;
         float punchUntil;
 
@@ -37,22 +40,24 @@ namespace ABetterU.Coach
 
             header = VRGlass.Label(root, "SQUAT SET", new Vector3(0, 0.47f, -0.02f), 0.0095f, VRUi.Muted);
 
-            repNumber = VRGlass.Label(root, "0", new Vector3(0.06f, 0.20f, -0.02f), 0.075f, VRUi.Ink, TextAnchor.MiddleRight, TextAlignment.Right);
-            repTarget = VRGlass.Label(root, "", new Vector3(0.11f, 0.17f, -0.02f), 0.026f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+            repNumber = VRGlass.Label(root, "0", new Vector3(-0.06f, 0.20f, -0.02f), 0.075f, VRUi.Ink, TextAnchor.MiddleRight, TextAlignment.Right);
+            repTarget = VRGlass.Label(root, "", new Vector3(-0.01f, 0.17f, -0.02f), 0.026f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
 
-            prompt = VRGlass.Label(root, "", new Vector3(0, -0.10f, -0.02f), 0.0135f, VRUi.Ink);
+            prompt = VRGlass.Label(root, "", new Vector3(-0.13f, -0.10f, -0.02f), 0.0135f, VRUi.Ink);
 
-            track = VRGlass.Solid(root, "Depth track", new Vector3(0, -0.27f, -0.01f), new Vector2(BarW, BarH), BarH / 2f,
-                new Color(0.13f, 0.17f, 0.24f, 1f), new Color(0.10f, 0.14f, 0.20f, 1f), 2);
-
-            // The fill is a white block tinted at runtime; its width is set from the live depth.
-            fill = VRGlass.Solid(root, "Depth fill", new Vector3(-BarW / 2f, -0.27f, -0.02f), new Vector2(1f, BarH), BarH / 2f, Color.white, Color.white, 3);
+            track = VRGlass.Solid(root, "Vertical depth track", new Vector3(DepthX, DepthTop - DepthHeight / 2f, -0.01f),
+                new Vector2(DepthWidth, DepthHeight), DepthWidth / 2f, new Color(0.13f, 0.17f, 0.24f), new Color(0.10f, 0.14f, 0.20f), 2);
+            fill = VRGlass.Solid(root, "Depth fill", new Vector3(DepthX, DepthTop, -0.02f), new Vector2(DepthWidth, 1f),
+                DepthWidth / 2f, Color.white, Color.white, 3);
             fillRenderer = fill.GetComponent<Renderer>();
-            fill.localScale = new Vector3(0.001f, BarH, 1f);
-
-            marker = VRGlass.Solid(root, "Depth line", new Vector3(0, -0.27f, -0.03f), new Vector2(0.012f, BarH * 2.1f), 0.004f,
-                new Color(1f, 0.92f, 0.55f, 1f), new Color(1f, 0.92f, 0.55f, 1f), 5);
-            lineTag = VRGlass.Label(root, "COUNTS", new Vector3(0, -0.35f, -0.02f), 0.0072f, VRUi.Muted);
+            fill.localScale = new Vector3(DepthWidth, 0.001f, 1f);
+            marker = VRGlass.Solid(root, "Count threshold", new Vector3(DepthX, DepthTop - DepthHeight / RangeBeyondLine, -0.03f),
+                new Vector2(0.20f, 0.012f), 0.004f, Amber, Amber, 5);
+            depthCursor = VRGlass.Solid(root, "Moving depth square", new Vector3(DepthX, DepthTop, -0.045f),
+                new Vector2(0.10f, 0.10f), 0.015f, Color.white, Color.white, 7);
+            cursorRenderer = depthCursor.GetComponent<Renderer>();
+            standingTag = VRGlass.Label(root, "STAND", new Vector3(DepthX, 0.40f, -0.02f), 0.0065f, VRUi.Muted);
+            lineTag = VRGlass.Label(root, "TARGET", new Vector3(DepthX, -0.37f, -0.02f), 0.0065f, Amber);
 
             footer = VRGlass.Label(root, "Left trigger when you are done", new Vector3(0, -0.46f, -0.02f), 0.0085f, VRUi.Muted);
         }
@@ -60,7 +65,7 @@ namespace ABetterU.Coach
         /// Called several times a second during a set.
         public void SetLive(int reps, int target, float drop, float downFraction, bool inBottom, string formCue = null)
         {
-            header.text = "SQUAT SET";
+            header.text = $"SET {workoutSet} OF {workoutSets} · SQUATS";
             repNumber.text = reps.ToString();
             repTarget.text = target > 0 ? "/ " + target : "reps";
             if (reps != shownReps)
@@ -74,14 +79,17 @@ namespace ABetterU.Coach
             prompt.color = formCue != null ? Amber : inBottom ? Green : VRUi.Ink;
 
             SetBarVisible(true);
-            float range = downFraction * RangeBeyondLine;
+            float range = Mathf.Max(0.001f, downFraction * RangeBeyondLine);
             float f = Mathf.Clamp01(Mathf.Max(0f, drop) / range);
-            float w = Mathf.Max(0.001f, BarW * f);
-            fill.localScale = new Vector3(w, BarH, 1f);
-            fill.localPosition = new Vector3(-BarW / 2f + w / 2f, -0.27f, -0.02f);
-            fillRenderer.sharedMaterial.color = drop >= downFraction ? Green : Cyan;
-            marker.localPosition = new Vector3(-BarW / 2f + BarW / RangeBeyondLine, -0.27f, -0.03f);
-            lineTag.transform.localPosition = new Vector3(marker.localPosition.x, -0.35f, -0.02f);
+            float height = Mathf.Max(0.001f, DepthHeight * f);
+            fill.localScale = new Vector3(DepthWidth, height, 1f);
+            fill.localPosition = new Vector3(DepthX, DepthTop - height / 2f, -0.02f);
+            Color depthColour = formCue != null ? Amber : drop >= downFraction ? Green : Cyan;
+            fillRenderer.sharedMaterial.color = depthColour;
+            cursorRenderer.sharedMaterial.color = depthColour;
+            depthCursor.localPosition = new Vector3(DepthX, DepthTop - DepthHeight * f, -0.045f);
+            marker.localPosition = new Vector3(DepthX, DepthTop - DepthHeight * Mathf.Clamp01(downFraction / range), -0.03f);
+            lineTag.text = $"TARGET\n{downFraction * 100f:0}%";
 
             footer.transform.localPosition = new Vector3(0, -0.46f, -0.02f);
             footer.text = "Left trigger when you are done";
@@ -106,6 +114,55 @@ namespace ABetterU.Coach
             }
             footer.transform.localPosition = new Vector3(0, -0.40f, -0.02f);
             footer.text = detail + "Left trigger for another set";
+        }
+
+        public void SetWorkoutProgress(int set, int total)
+        {
+            workoutSet = set; workoutSets = total;
+        }
+
+        public void SetRest(SquatWorkoutSession session)
+        {
+            header.text = $"SET {session.Results.Count} OF {session.PlannedSets} · REST";
+            repNumber.text = Mathf.CeilToInt(session.RestRemaining).ToString();
+            repTarget.text = "sec";
+            prompt.text = session.RestRemaining > 0 ? $"Next: set {session.NextSet} of {session.PlannedSets}" : "Stand tall for the next set";
+            prompt.color = Cyan;
+            footer.text = (session.UnsavedSets == 0 ? "Completed sets saved" : $"{session.UnsavedSets} set(s) pending save") +
+                "\nLeft trigger to start next set";
+            footer.transform.localPosition = new Vector3(0, -0.40f, -0.02f);
+            SetBarVisible(false);
+        }
+
+        public void SetWorkoutSummary(SquatWorkoutSession session)
+        {
+            header.text = "WORKOUT FINISHED";
+            repNumber.text = session.TotalReps.ToString();
+            repTarget.text = "reps";
+            prompt.text = session.Results.Count == 0 ? "No reps recorded" : session.UnsavedSets == 0 ? "Saved to your activity" : "Some sets need saving";
+            prompt.color = session.UnsavedSets == 0 ? Green : Amber;
+            footer.text = $"{session.Results.Count} of {session.PlannedSets} sets · {session.SavedSets} saved\n" +
+                (session.Results.Count > 0 ? session.RepBreakdown + " reps" : "No reps recorded") + "\nLeft trigger for a new workout";
+            footer.transform.localPosition = new Vector3(0, -0.40f, -0.02f);
+            SetBarVisible(false);
+        }
+
+        public void SetWorkoutControls(System.Action next, System.Action moreRest, System.Action finish, System.Action retry,
+            bool complete, bool hasUnsaved)
+        {
+            if (workoutControls != null) Destroy(workoutControls.gameObject);
+            workoutControls = new GameObject("Workout controls").transform;
+            workoutControls.SetParent(transform, false);
+            workoutControls.localPosition = new Vector3(0, -0.70f, 0);
+            VRGlass.Panel(workoutControls, "Controls", new Vector3(0, 0, 0.02f), new Vector2(1.6f, 0.25f), 0.05f, GlassStyle.Panel);
+            VRGlass.Button(workoutControls, complete ? "New workout" : "Next set", new Vector3(-0.585f, 0, -0.02f),
+                new Vector2(0.37f, 0.15f), GlassStyle.Primary, 0.0075f, next);
+            VRGlass.Button(workoutControls, "+30 sec", new Vector3(-0.195f, 0, -0.02f), new Vector2(0.37f, 0.15f),
+                complete ? GlassStyle.Disabled : GlassStyle.Secondary, 0.0075f, moreRest);
+            VRGlass.Button(workoutControls, "Finish", new Vector3(0.195f, 0, -0.02f), new Vector2(0.37f, 0.15f),
+                complete ? GlassStyle.Disabled : GlassStyle.Secondary, 0.0075f, finish);
+            VRGlass.Button(workoutControls, "Retry saves", new Vector3(0.585f, 0, -0.02f), new Vector2(0.37f, 0.15f),
+                hasUnsaved ? GlassStyle.Secondary : GlassStyle.Disabled, 0.0075f, retry);
         }
 
         // ── Session card: art made by Muse Image beside the summary. The numbers on it are drawn by us from the headset's
@@ -148,6 +205,8 @@ namespace ABetterU.Coach
             fill.gameObject.SetActive(on);
             marker.gameObject.SetActive(on);
             lineTag.gameObject.SetActive(on);
+            standingTag.gameObject.SetActive(on);
+            depthCursor.gameObject.SetActive(on);
         }
 
         void Update()

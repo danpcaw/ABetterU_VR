@@ -11,7 +11,7 @@ namespace ABetterU.Coach
     /// mic -> Muse Voice Transcribe -> Muse Spark agent (tools on the real A Better U account) -> Wit.ai voice.
     /// It works on the dashboard screens and in the gym. In the gym the LEFT trigger also starts and ends a squat set.
     /// Add to any GameObject in the scene (the "VoiceLoop" object). It adds the other components it needs.
-    public class VoiceLoopTest : MonoBehaviour
+    public partial class VoiceLoopTest : MonoBehaviour
     {
         MicRecorder mic;
         WitSpeaker tts;
@@ -71,11 +71,9 @@ namespace ABetterU.Coach
                 Debug.Log("[Timing] narration played");
             }
         }
-        const int TargetReps = 10;
         SquatHud hud;
         MuseImageClient museImage;
         bool busy, inSet;
-        int lastShownReps = -1;
         float nextMeter;
 
         /// The dashboard's assistant bar subscribes to this. (state, headline, detail)
@@ -152,6 +150,9 @@ namespace ABetterU.Coach
             agent = new CoachAgent(config, supabase);
             agent.ToolSucceeded += OnToolSucceeded;
             agent.Navigate = dest => flow != null && flow.NavigateTo(dest);
+            agent.StartSquatSession = ConfigureSquatWorkout;
+            agent.ControlSquatSession = ControlSquatWorkout;
+            agent.HasTrackedSquatWorkout = () => workout != null;
             agent.ChoicesOffered += (list, servings, grams) => OnChoices?.Invoke(list, servings, grams);
 
             flow = gameObject.AddComponent<AppFlow>();
@@ -168,7 +169,7 @@ namespace ABetterU.Coach
             reps = gameObject.AddComponent<RepCounter>();
             reps.head = Camera.main != null ? Camera.main.transform : transform;
 
-            board.Show($"Hold RIGHT TRIGGER to talk.\nPress LEFT TRIGGER\nto start a squat set.\nLeft MENU button: menu.\n\nSigned in as {supabase.DisplayName ?? "user"}.");
+            board.Show($"Welcome, {supabase.DisplayName ?? "there"}.\nStand on the mat. Press the left trigger when ready.");
         }
 
         void Update()
@@ -177,30 +178,10 @@ namespace ABetterU.Coach
             HandsFreeTick();
             var stage = flow.Current;
             if (stage == AppFlow.Stage.Login) return;           // nothing to talk to until someone is signed in
-            if (flow.MenuOpen) return;                          // the trigger is clicking menu buttons, not recording
+            if (flow.MenuOpen) { PauseWorkoutTracking(); return; }                          // the trigger is clicking menu buttons, not recording
             bool inGym = stage == AppFlow.Stage.Gym;
 
-            if (inGym)
-            {
-                // The left trigger starts a squat set, and ends it.
-                if (SetTogglePressed() && !busy)
-                {
-                    StartCoroutine(inSet ? EndSet() : BeginSet());
-                    return;
-                }
-                if (inSet)
-                {
-                    if (Time.unscaledTime >= nextMeter)
-                    {
-                        nextMeter = Time.unscaledTime + 0.1f;
-                        lastShownReps = reps.RepCount;
-                        // Depth meter: the bar fills toward the "down" line; % is how far below standing you are.
-                        float pct = Mathf.Max(0f, reps.CurrentDrop);
-                        if (hud != null) hud.SetLive(reps.RepCount, TargetReps, pct, reps.downFraction, reps.InBottom, FormCue(pct));
-                    }
-                    return;
-                }
-            }
+            if (inGym && HandleWorkoutUpdate()) return;
             if (busy) return;
 
             // After a confirmation or an error, the assistant goes back to "Ready" by itself.
@@ -213,7 +194,7 @@ namespace ABetterU.Coach
             if (PressedDown())
             {
                 // On the dashboard a trigger pull while the laser is on a button is a click, never a recording.
-                if (!inGym && flow.PointerOverButton) { /* the pointer handles the click */ }
+                if (flow.PointerOverButton) { /* the pointer handles the click */ }
                 else if (PauseHandsFree() && mic.StartRecording())
                 {
                     readyAt = 0f;
@@ -293,9 +274,9 @@ namespace ABetterU.Coach
                 rt.Pump();
                 // The session stays open (streaming silence) through replies, so there is no reconnect gap before a follow-up.
                 // It closes on the login screen, in a set and in the gym menu, where the microphone is not in use.
-                rt.SetWanted(handsFree && !inSet && !flow.MenuOpen && flow.Current != AppFlow.Stage.Login);
+                rt.SetWanted(handsFree && !flow.MenuOpen && flow.Current != AppFlow.Stage.Login);
             }
-            bool allowed = handsFree && !busy && !inSet && !mic.IsRecording && !flow.MenuOpen
+            bool allowed = handsFree && !busy && !mic.IsRecording && !flow.MenuOpen
                            && flow.Current != AppFlow.Stage.Login
                            && Time.unscaledTime >= listenAfter && (tts == null || !tts.IsSpeaking);
             if (allowed && !hf.Listening) hf.Resume();
@@ -305,7 +286,11 @@ namespace ABetterU.Coach
         bool PauseHandsFree() { hf?.Pause(); return true; }
 
         // Headset off or app closed: drop the realtime socket now (the next frame after resuming reopens it).
-        void OnApplicationPause(bool paused) { if (paused) rt?.SetWanted(false); }
+        void OnApplicationPause(bool paused)
+        {
+            applicationPaused = paused;
+            if (paused) { rt?.SetWanted(false); PauseWorkoutTracking(); }
+        }
         void OnDestroy() => rt?.SetWanted(false);
 
         // True if the phrase starts with the wake name; rest is what followed it.
@@ -396,66 +381,6 @@ namespace ABetterU.Coach
             forHud.ShowCard(art, n, n == 1 ? "SQUAT" : "SQUATS");
         }
 
-        IEnumerator BeginSet()
-        {
-            busy = true;
-            board.Show("Stand tall, look\nstraight ahead and\nstay still...");
-            yield return reps.Calibrate(2f);
-
-            // Fix the HUD in the room, 1.5 m ahead of where the user stands, just below standing eye height.
-            var head = Camera.main != null ? Camera.main.transform : transform;
-            Vector3 fwd = head.forward; fwd.y = 0f;
-            fwd = fwd.sqrMagnitude < 0.01f ? Vector3.forward : fwd.normalized;
-            if (hud != null) Destroy(hud.gameObject);
-            hud = SquatHud.Create(new Vector3(head.position.x, Mathf.Max(head.position.y - 0.15f, 1.2f), head.position.z) + fwd * 1.5f,
-                                  Quaternion.LookRotation(fwd, Vector3.up));
-            hud.SetLive(0, TargetReps, 0f, reps.downFraction, false);
-            board.Show("SQUAT SET");
-
-            reps.Active = true;
-            inSet = true;
-            busy = false;
-            lastShownReps = -1;   // forces the first "Reps: 0" draw
-        }
-
-        IEnumerator EndSet()
-        {
-            reps.Active = false;
-            inSet = false;
-            busy = true;
-            int n = reps.RepCount;
-            float perRep = n > 0 ? reps.SetSeconds / n : 0f, deepest = reps.DeepestDrop;
-            int flagged = reps.FlaggedReps;
-            if (n == 0)
-            {
-                if (hud != null) hud.SetSummary(0, 0f, deepest, 0, "No reps counted. Squat past the line to count.", false);
-                board.Show("No reps counted.");
-                busy = false; yield break;
-            }
-
-            // The rep count comes from the headset, not from the user or the model.
-            if (hud != null) hud.SetSummary(n, perRep, deepest, flagged, "Saving to your activity...", null);
-            if (hud != null) StartCoroutine(MakeSessionCard(hud, n));
-            board.Show($"Set done: {n} reps.\nLogging...");
-            lastSaved = null; savedNames.Clear();
-            string turn = $"Context: the headset just counted a finished set: {n} bodyweight squat reps (exercise name: Bodyweight Squat). " +
-                          "Log it with log_set and reply briefly with what was recorded.";
-            string reply = null, error = null;
-            yield return agent.Run(turn, p => board.Show($"Set done: {n} reps.\n{Wrap(p)}"), r => reply = r, e => error = e);
-
-            // "Saved" is shown only if the backend confirmed log_set, never because the reply says so.
-            bool saved = savedNames.Count > 0;
-            if (hud != null) hud.SetSummary(n, perRep, deepest, flagged, saved ? "Saved to your activity" : "Not saved. Please try again.", saved);
-
-            if (reply == null) { board.Show("Coach failed:\n" + Wrap(Short(error ?? "no reply", 160))); busy = false; yield break; }
-            board.Show($"Set done: {n} reps.\n\nCoach: {Wrap(reply)}");
-
-            bool spoken = false;
-            tts.Speak(reply, () => spoken = true);
-            while (!spoken) yield return null;
-            busy = false;
-        }
-
         static bool PressedDown() =>
             OVRInput.GetDown(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.RTouch) ||
             OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.RTouch);
@@ -525,7 +450,10 @@ namespace ABetterU.Coach
 
             string reply = null;
             float t1 = Time.realtimeSinceStartup;
-            string userTurn = $"Context: no set in progress, no rep data.\nThe user said: \"{heard}\"";
+            string workoutContext = workout == null ? "No tracked workout is configured."
+                : $"Tracked squat workout: {workout.PlannedSets} sets of {workout.TargetReps}; phase {workout.Phase}; {workout.TotalReps} completed reps; {workout.SavedSets} confirmed saved sets; {workout.UnsavedSets} pending saves. " +
+                  "The headset saves these sets automatically. Never log_set these reps. Use control_squat_session for changes.";
+            string userTurn = $"Context: {workoutContext}\nThe user said: \"{heard}\"";
             if (supabase != null && supabase.SignedIn)
                 yield return agent.Run(userTurn, p =>
                 {
@@ -638,6 +566,9 @@ namespace ABetterU.Coach
             string text = null, shortName = null;
             switch (tool)
             {
+                case "start_squat_session":
+                    if ((bool?)result["opened_gym"] == true) navigatedThisTurn = true;
+                    break;
                 case "go_to":
                     navigatedThisTurn = true;
                     break;

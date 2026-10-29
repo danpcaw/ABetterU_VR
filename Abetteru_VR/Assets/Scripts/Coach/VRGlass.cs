@@ -19,9 +19,9 @@ namespace ABetterU.Coach
             switch (s)
             {
                 case GlassStyle.Panel:
-                    return new Look { top = new Color(0.05f, 0.08f, 0.14f, 0.86f), bottom = new Color(0.03f, 0.05f, 0.10f, 0.90f), border = new Color(0.25f, 0.75f, 0.85f, 0.55f), borderM = 0.008f };
+                    return new Look { top = new Color(0.06f, 0.10f, 0.19f, 0.84f), bottom = new Color(0.03f, 0.05f, 0.11f, 0.90f), border = new Color(0.35f, 0.85f, 0.95f, 0.70f), borderM = 0.009f };
                 case GlassStyle.Card:
-                    return new Look { top = new Color(0.07f, 0.11f, 0.18f, 0.90f), bottom = new Color(0.05f, 0.08f, 0.14f, 0.93f), border = new Color(0.30f, 0.70f, 0.85f, 0.45f), borderM = 0.006f };
+                    return new Look { top = new Color(0.08f, 0.13f, 0.22f, 0.88f), bottom = new Color(0.05f, 0.08f, 0.15f, 0.93f), border = new Color(0.38f, 0.80f, 0.92f, 0.60f), borderM = 0.007f };
                 case GlassStyle.Primary:
                     return hover
                         ? new Look { top = new Color(0.22f, 0.92f, 0.82f, 1f), bottom = new Color(0.20f, 0.62f, 1.00f, 1f), border = Color.white, borderM = 0.007f }
@@ -113,6 +113,37 @@ namespace ABetterU.Coach
             float w = Mathf.Max(height, width * f);
             Solid(parent, "Bar fill", localPos + new Vector3(-width / 2f + w / 2f, 0f, -0.003f), new Vector2(w, height), height / 2f,
                 new Color(0.20f, 0.90f, 0.80f, 1f), new Color(0.15f, 0.60f, 0.98f, 1f), order + 1);
+        }
+
+        /// A progress bar with caller-chosen fill colours (macros, scores). Track matches Bar.
+        public static void BarColoured(Transform parent, Vector3 localPos, float width, float height, float fraction, Color top, Color bottom, int order = 4)
+        {
+            Solid(parent, "Bar track", localPos, new Vector2(width, height), height / 2f, new Color(0.13f, 0.17f, 0.24f, 1f), new Color(0.10f, 0.14f, 0.20f, 1f), order);
+            float f = Mathf.Clamp01(fraction);
+            if (f <= 0.001f) return;
+            float w = Mathf.Max(height, width * f);
+            Solid(parent, "Bar fill", localPos + new Vector3(-width / 2f + w / 2f, 0f, -0.003f), new Vector2(w, height), height / 2f, top, bottom, order + 1);
+        }
+
+        /// A donut ring with its value labels left to the caller (drawn centred by default).
+        public static Transform Ring(Transform parent, Vector3 localPos, float size, float fraction, Color fill, int order = 4) =>
+            Image(parent, "Ring", VRArt.Ring(fraction, fill), localPos, new Vector2(size, size), order);
+
+        public static Transform Sparkline(Transform parent, Vector3 localPos, Vector2 size, float[] values, Color line, int order = 4) =>
+            Image(parent, "Sparkline", VRArt.Sparkline(values, line), localPos, size, order);
+
+        public static Transform WeekBars(Transform parent, Vector3 localPos, Vector2 size, float[] values, Color fill, int order = 4) =>
+            Image(parent, "Week bars", VRArt.WeekBars(values, fill), localPos, size, order);
+
+        /// A row of small dots, the first `lit` of them filled (streak days, page indicators).
+        public static void Dots(Transform parent, Vector3 centre, int total, int lit, float spacing = 0.045f, float size = 0.026f)
+        {
+            Color on = new Color(0.25f, 0.95f, 0.80f, 1f), off = new Color(0.22f, 0.28f, 0.36f, 1f);
+            for (int i = 0; i < total; i++)
+            {
+                var c = i < lit ? on : off;
+                Solid(parent, "Dot", centre + new Vector3((i - (total - 1) / 2f) * spacing, 0f, 0f), new Vector2(size, size), size / 2f, c, c, 4);
+            }
         }
 
         public static Transform Icon(Transform parent, VRArt.IconKind kind, Color color, Vector3 localPos, float size, int order = 6) =>
