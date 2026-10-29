@@ -204,6 +204,13 @@ namespace ABetterU.Coach
             VRGlass.Label(cardRoot, "Made with Muse Image", new Vector3(0, -0.49f, -0.02f), 0.0075f, VRUi.Muted);
         }
 
+        /// A "Share to feed" button under the finished card. Pure display: the caller decides what sharing does.
+        public void ShowShareButton(System.Action onShare)
+        {
+            if (cardRoot == null) return;
+            VRGlass.Button(cardRoot, "Share to feed", new Vector3(0f, -0.665f, -0.02f), new Vector2(0.64f, 0.14f), GlassStyle.Primary, 0.0088f, onShare, 0.04f);
+        }
+
         public void HideCard()
         {
             if (cardRoot != null) Destroy(cardRoot.gameObject);

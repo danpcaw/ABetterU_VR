@@ -84,6 +84,31 @@ namespace ABetterU.Coach
             }.ToString(Newtonsoft.Json.Formatting.None));
         }
 
+        // The caption for the Share button is built here from the real numbers, so tapping it needs no model call and is instant.
+        IEnumerator DraftFromCard()
+        {
+            if (workout == null || workout.TotalReps <= 0) yield break;
+            int sets = workout.Results.Count;
+            string caption = $"Just finished {workout.TotalReps} bodyweight squat{(workout.TotalReps == 1 ? "" : "s")} across {sets} set{(sets == 1 ? "" : "s")} in the A Better U VR gym. Tracked live on my Quest.";
+            var args = new JObject { ["caption"] = caption, ["hashtags"] = new JArray("squats", "vr") };
+            yield return DraftPostRoutine(args, _ => { });
+        }
+
+        // After the picture appears Atlas offers to share it, then listens for "share my session" without needing the wake name.
+        IEnumerator OfferShare(SquatHud forHud)
+        {
+            float waited = 0f;
+            while ((busy || (tts != null && tts.IsSpeaking)) && waited < 20f) { waited += Time.unscaledDeltaTime; yield return null; }
+            if (forHud == null || draft != null || posting || tts == null || !tts.Ready) yield break;
+            bool spoken = false;
+            tts.Speak($"Your session card is ready. Want me to share it to your feed? Just say, share my session, or tap Share.",
+                () => spoken = true, (s, secs) => ShowCaption(AssistantState.Speaking, WakeName, s, secs));
+            while (!spoken) yield return null;
+            Report(AssistantState.Ready, ReadyHeadline, ReadyDetail);
+            listenAfter = Time.unscaledTime + 0.7f;
+            followUntil = Time.unscaledTime + FollowUpSeconds;
+        }
+
         // ── Publishing ───────────────────────────────────────────────────────────
 
         IEnumerator PublishRoutine(string visibility, Action<string> done)

@@ -381,6 +381,8 @@ namespace ABetterU.Coach
             if (art == null) { Debug.LogWarning("[MuseImage] card failed: " + err); forHud.HideCard(); yield break; }
             lastCardJpg = art.EncodeToJPG(88);                      // kept so a post can reuse this exact artwork
             forHud.ShowCard(art, n, n == 1 ? "SQUAT" : "SQUATS");
+            forHud.ShowShareButton(() => { if (!busy && !posting) StartCoroutine(DraftFromCard()); });
+            StartCoroutine(OfferShare(forHud));
         }
 
         static bool PressedDown() =>
@@ -454,7 +456,8 @@ namespace ABetterU.Coach
             float t1 = Time.realtimeSinceStartup;
             string workoutContext = workout == null ? "No tracked workout is configured."
                 : $"Tracked squat workout: {workout.PlannedSets} sets of {workout.TargetReps}; phase {workout.Phase}; {workout.TotalReps} completed reps; {workout.SavedSets} confirmed saved sets; {workout.UnsavedSets} pending saves. " +
-                  "The headset saves these sets automatically. Never log_set these reps. Use control_squat_session for changes.";
+                  "The headset saves these sets automatically. Never log_set these reps. Use control_squat_session for changes." +
+                  (lastCardJpg != null && workout.Phase == WorkoutPhase.Complete ? " A session card picture is ready: if the user wants to share or post it, call draft_post." : "");
             string userTurn = $"Context: {workoutContext}\nThe user said: \"{heard}\"";
             if (supabase != null && supabase.SignedIn)
                 yield return agent.Run(userTurn, p =>
