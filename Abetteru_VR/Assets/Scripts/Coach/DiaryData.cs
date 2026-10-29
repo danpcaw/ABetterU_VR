@@ -51,7 +51,11 @@ namespace ABetterU.Coach
                 string name = itemName + (string.IsNullOrEmpty(brand) ? "" : $" ({brand})");
                 double servings = DashboardData.Num(entry["servings"]) ?? 0;
                 double qty = DashboardData.Num(entry["quantity_g"]) ?? 0;
-                string amount = servings > 0 ? $"x{servings:0.##}" : $"{qty:0} g";
+                // Show the weight that was logged (a scanned 110 g potato reads "110 g", not "x1.1"). A whole number of servings is shown
+                // too ("x2 · 430 g"), because that is how the person logged it; a saved meal has no weight, so it stays "x1".
+                string amount = qty > 0
+                    ? (servings >= 1 && Math.Abs(servings - Math.Round(servings)) < 0.001 ? $"x{servings:0} · {qty:0.#} g" : $"{qty:0.#} g")
+                    : servings > 0 ? $"x{servings:0.##}" : "";
 
                 var meal = entry["meal"];
                 bool savedMeal = (string)entry["item_type"] == "meal";
