@@ -9,9 +9,11 @@ namespace ABetterU.Coach
     {
         public const int MirrorOnlyLayer = 30;     // head and visor: seen in the mirror, hidden from your own eyes
 
-        static readonly Color Suit = new Color(0.078f, 0.722f, 0.651f);     // A Better U teal
-        static readonly Color Joint = new Color(0.90f, 0.93f, 0.96f);
-        static readonly Color Dark = new Color(0.07f, 0.08f, 0.10f);
+        // Dark glossy suit, pearl head and hands, and A Better U teal that glows at the joints and visor.
+        static readonly Color Suit = new Color(0.085f, 0.115f, 0.15f);
+        static readonly Color Joint = new Color(0.30f, 0.95f, 0.85f);       // the glowing accent
+        static readonly Color Pearl = new Color(0.86f, 0.90f, 0.95f);
+        static readonly Color Dark = new Color(0.03f, 0.04f, 0.055f);
 
         Transform head, leftAnchor, rightAnchor;
         Material template;
@@ -35,23 +37,23 @@ namespace ABetterU.Coach
 
             root = new GameObject("Mannequin").transform;
 
-            headBall = Part(PrimitiveType.Sphere, "Head", Joint, MirrorOnlyLayer);
-            visor = Part(PrimitiveType.Cube, "Visor", Dark, MirrorOnlyLayer);
-            neck = Part(PrimitiveType.Cylinder, "Neck", Joint);
-            torso = Part(PrimitiveType.Cylinder, "Torso", Suit);
-            hipBall = Part(PrimitiveType.Sphere, "Hips", Dark);
-            shoulders = Part(PrimitiveType.Cylinder, "Shoulders", Suit);
+            headBall = Part(PrimitiveType.Sphere, "Head", Pearl, MirrorOnlyLayer, 0.9f, 0.1f);
+            visor = Part(PrimitiveType.Sphere, "Visor", Dark, MirrorOnlyLayer, 0.95f, 0.5f, Joint * 0.9f);
+            neck = Part(PrimitiveType.Capsule, "Neck", Pearl, 0, 0.85f, 0.1f);
+            torso = Part(PrimitiveType.Capsule, "Torso", Suit);
+            hipBall = Part(PrimitiveType.Sphere, "Hips", Joint, 0, 0.9f, 0.3f, Joint * 0.6f);
+            shoulders = Part(PrimitiveType.Capsule, "Shoulders", Suit);
 
             for (int i = 0; i < 2; i++)
             {
-                thigh[i] = Part(PrimitiveType.Cylinder, "Thigh", Suit);
-                shin[i] = Part(PrimitiveType.Cylinder, "Shin", Suit);
-                knee[i] = Part(PrimitiveType.Sphere, "Knee", Joint);
-                foot[i] = Part(PrimitiveType.Cube, "Foot", Dark);
-                upperArm[i] = Part(PrimitiveType.Cylinder, "Upper arm", Suit);
-                foreArm[i] = Part(PrimitiveType.Cylinder, "Forearm", Suit);
-                elbow[i] = Part(PrimitiveType.Sphere, "Elbow", Joint);
-                hand[i] = Part(PrimitiveType.Sphere, "Hand", Joint);
+                thigh[i] = Part(PrimitiveType.Capsule, "Thigh", Suit);
+                shin[i] = Part(PrimitiveType.Capsule, "Shin", Suit);
+                knee[i] = Part(PrimitiveType.Sphere, "Knee", Joint, 0, 0.9f, 0.3f, Joint * 0.6f);
+                foot[i] = Part(PrimitiveType.Sphere, "Foot", Dark, 0, 0.8f, 0.4f);
+                upperArm[i] = Part(PrimitiveType.Capsule, "Upper arm", Suit);
+                foreArm[i] = Part(PrimitiveType.Capsule, "Forearm", Suit);
+                elbow[i] = Part(PrimitiveType.Sphere, "Elbow", Joint, 0, 0.9f, 0.3f, Joint * 0.6f);
+                hand[i] = Part(PrimitiveType.Sphere, "Hand", Pearl, 0, 0.9f, 0.1f);
             }
         }
 
@@ -164,15 +166,20 @@ namespace ABetterU.Coach
             t.localScale = scale;
         }
 
-        Transform Part(PrimitiveType type, string name, Color color, int layer = 0)
+        Transform Part(PrimitiveType type, string name, Color color, int layer = 0, float smooth = 0.8f, float metal = 0.35f, Color? glow = null)
         {
             var go = GameObject.CreatePrimitive(type);
             go.name = name;
             go.layer = layer;
             go.transform.SetParent(root, false);
             Destroy(go.GetComponent<Collider>());
-            var m = GymRoom.MakeMaterial(template, color, 0.35f, 0f);
-            if (m != null) go.GetComponent<Renderer>().sharedMaterial = m;
+            var m = GymRoom.MakeMaterial(template, color, smooth, metal);
+            if (m != null)
+            {
+                // Emission may be stripped from a device build's shader variants; the base colours still read well without it.
+                if (glow.HasValue && m.HasProperty("_EmissionColor")) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", glow.Value); }
+                go.GetComponent<Renderer>().sharedMaterial = m;
+            }
             return go.transform;
         }
 
