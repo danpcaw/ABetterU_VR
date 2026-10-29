@@ -1132,7 +1132,43 @@ namespace ABetterU.Coach
             if (plateCam == null) plateCam = gameObject.AddComponent<PlateCamera>();
             ResetScan();
             plateCam.Begin();
+            StartCoroutine(SeeThroughSoon());
             BuildScan();
+        }
+
+        // While aiming the camera you see the real room: the backdrop is hidden and passthrough shows behind the screens, so looking down at
+        // the plate works. The screens stay where they are. Passthrough needs a moment to start after it is switched on, so this waits.
+        OVRPassthroughLayer passLayer;
+        bool seeThrough;
+
+        IEnumerator SeeThroughSoon()
+        {
+            yield return new WaitForSecondsRealtime(0.7f);
+            if (Current == Stage.Scan && scanShot == null) SetSeeThrough(true);
+        }
+
+        void SetSeeThrough(bool on)
+        {
+            if (seeThrough == on) return;
+            seeThrough = on;
+            var cam = Camera.main;
+            if (on)
+            {
+                if (passLayer == null)
+                {
+                    var rig = FindAnyObjectByType<OVRCameraRig>();
+                    if (rig != null) passLayer = rig.gameObject.AddComponent<OVRPassthroughLayer>();
+                }
+                if (passLayer != null) passLayer.hidden = false;
+                if (cam != null) cam.backgroundColor = new Color(0f, 0f, 0f, 0f);       // transparent: passthrough shows through
+                if (retreat != null) retreat.SetVisible(false);
+            }
+            else
+            {
+                if (passLayer != null) passLayer.hidden = true;
+                if (cam != null) cam.backgroundColor = Navy;
+                if (retreat != null) retreat.SetVisible(true);
+            }
         }
 
         void ResetScan()
@@ -1143,6 +1179,7 @@ namespace ABetterU.Coach
 
         void StopScan()
         {
+            SetSeeThrough(false);
             plateCam.Stop();
             ResetScan();
             scanWasStreaming = false;
@@ -1196,7 +1233,7 @@ namespace ABetterU.Coach
                 bool ready = plateCam != null && plateCam.Streaming;
                 VRGlass.Label(p, VRUi.Wrap(ready ? "Point at your plate" : plateCam != null ? plateCam.Status : "", 22, 2), new Vector3(rx, 0.45f, -0.02f), 0.0105f, VRUi.Ink);
                 VRGlass.Button(p, "Capture", new Vector3(rx, 0.12f, -0.02f), new Vector2(0.9f, 0.18f), ready ? GlassStyle.Primary : GlassStyle.Disabled, 0.0095f,
-                    () => { var shot = plateCam.Capture(); if (shot != null) { scanShot = shot; plateCam.Stop(); StartCoroutine(AnalyseScan()); } }, 0.04f);
+                    () => { var shot = plateCam.Capture(); if (shot != null) { scanShot = shot; SetSeeThrough(false); plateCam.Stop(); StartCoroutine(AnalyseScan()); } }, 0.04f);
                 if (plateCam != null && plateCam.Failed)
                     VRGlass.Button(p, "Try again", new Vector3(rx, -0.12f, -0.02f), new Vector2(0.9f, 0.16f), GlassStyle.Secondary, 0.0088f, () => { plateCam.Begin(); BuildScan(); }, 0.04f);
                 return;

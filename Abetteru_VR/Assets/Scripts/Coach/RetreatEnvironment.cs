@@ -21,6 +21,9 @@ namespace ABetterU.Coach
 
         Transform root;
 
+        /// Hides or shows the whole backdrop (sky, hills, ground, sofa), so passthrough can show the real room behind the screens.
+        public void SetVisible(bool on) { if (root != null) root.gameObject.SetActive(on); }
+
         public void Build()
         {
             root = new GameObject("Retreat").transform;
