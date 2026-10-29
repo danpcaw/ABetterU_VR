@@ -183,11 +183,19 @@ namespace ABetterU.Coach
 
         IEnumerator SegmentItem(PlateItem item, string dataUrl, Action finished)
         {
-            string text = null, error = null;
-            yield return ImageModelCall("sam-3.1", item.Name, dataUrl, true, false, t => text = t, e => error = e);
-            if (error != null) Debug.LogWarning($"[Scan] SAM failed for {item.Name}: {error}");
-            else if (text != null)
+            // SAM is asked for one concept at a time. The full name Spark gave ("baking potato") sometimes finds nothing where the plain
+            // noun ("potato") does, so if the first try outlines nothing, try the last word before giving up.
+            var words = item.Name.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            var prompts = new List<string> { item.Name };
+            if (words.Length > 1) prompts.Add(words[words.Length - 1]);
+
+            foreach (var prompt in prompts)
             {
+                string text = null, error = null;
+                yield return ImageModelCall("sam-3.1", prompt, dataUrl, true, false, t => text = t, e => error = e);
+                if (error != null) { Debug.LogWarning($"[Scan] SAM failed for '{prompt}': {error}"); continue; }
+                if (text == null) continue;
+
                 // Each object comes back as <|box;x1=..;y1=..;x2=..;y2=..;w=..;h=..;c=..|> followed by its mask; the boxes are enough here.
                 foreach (Match m in Regex.Matches(text, @"<\|box;x1=(\d+);y1=(\d+);x2=(\d+);y2=(\d+);w=(\d+);h=(\d+)(?:;c=([\d.]+))?\|>"))
                 {
@@ -198,8 +206,9 @@ namespace ABetterU.Coach
                     if (conf < 0.4f || (x2 - x1) * (y2 - y1) < 0.004f || item.Boxes.Count >= 6) continue;
                     item.Boxes.Add(new Rect(x1, y1, x2 - x1, y2 - y1));
                 }
+                Debug.Log($"[Scan] SAM '{prompt}': {item.Boxes.Count} box(es)");
+                if (item.Boxes.Count > 0) break;
             }
-            Debug.Log($"[Scan] SAM '{item.Name}': {item.Boxes.Count} box(es)");
             finished();
         }
 
