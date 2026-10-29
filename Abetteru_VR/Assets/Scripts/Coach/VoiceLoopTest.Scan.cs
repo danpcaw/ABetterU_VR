@@ -35,8 +35,8 @@ namespace ABetterU.Coach
 
         const string PlatePrompt =
             "You are looking at a photo of a plate or tray of food. List each distinct food or drink you can clearly see, at most 5. " +
-            "For each give name: a plain, common food name that would be found in a food database (for example grilled chicken breast, chips, " +
-            "white rice, broccoli, fried egg), and grams: your best estimate of the weight shown, a whole number. " +
+            "For each give name: a plain, common food name that would be found in a food database, including how it is cooked when you can tell " +
+            "(for example grilled chicken breast, boiled potatoes, white rice, raw red pepper, fried egg), and grams: your best estimate of the weight shown, a whole number. " +
             "Reply with JSON only and nothing else, exactly like {\"items\":[{\"name\":\"white rice\",\"grams\":150}]}. " +
             "If there is no food, reply {\"items\":[]}.";
 
@@ -81,29 +81,58 @@ namespace ABetterU.Coach
             foreach (var item in result.Items) StartCoroutine(SegmentItem(item, dataUrl, () => pending--));
             for (float t = 0f; pending > 0 && t < 60f; t += Time.unscaledDeltaTime) yield return null;
 
-            // 3. Match each food to the user's own food database.
+            // 3. Match each food to the user's own food database. The search ranks by name only, so a plain "potato" can come back as
+            // dehydrated potato powder first. Look at the top results and prefer the ordinary food: if the full name finds nothing, try
+            // its last word ("grilled chicken" then "chicken"), and mark down powders, mixes, sauces and the like unless they were asked for.
             progress("Matching your food database...");
             foreach (var item in result.Items)
             {
-                string found = null;
-                yield return agent.SearchForScan(item.Name, r => found = r);
-                try
+                var words = item.Name.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                var queries = new List<string> { item.Name };
+                if (words.Length > 1) queries.Add(words[words.Length - 1]);
+
+                foreach (var query in queries)
                 {
-                    var j = JObject.Parse(found);
-                    var list = j["results"] as JArray;
-                    if (list == null || list.Count == 0) continue;
-                    string exact = (string)j["exact_match_food_id"];
-                    var pick = exact != null ? list.FirstOrDefault(x => (string)x["food_id"] == exact) ?? list[0] : list[0];
-                    item.FoodId = (string)pick["food_id"];
-                    string brand = (string)pick["brand"];
-                    item.MatchedName = (string)pick["name"] + (string.IsNullOrEmpty(brand) ? "" : $" ({brand})");
-                    double? perServing = DashboardData.Num(pick["kcal_per_serving"]), servingG = DashboardData.Num(pick["serving_g"]);
-                    if (perServing.HasValue && servingG > 0) item.Kcal = Math.Round(perServing.Value * item.Grams / servingG.Value);
+                    string found = null;
+                    yield return agent.SearchForScan(query, r => found = r);
+                    try
+                    {
+                        var j = JObject.Parse(found);
+                        var list = j["results"] as JArray;
+                        if (list == null || list.Count == 0) continue;
+                        string exact = (string)j["exact_match_food_id"];
+                        JToken pick = null; int best = int.MaxValue;
+                        for (int k = 0; k < Math.Min(10, list.Count); k++)
+                        {
+                            int score = MatchScore((string)list[k]["name"], query, k) - ((string)list[k]["food_id"] == exact ? 5 : 0);
+                            if (score < best) { best = score; pick = list[k]; }
+                        }
+                        item.FoodId = (string)pick["food_id"];
+                        string brand = (string)pick["brand"];
+                        item.MatchedName = (string)pick["name"] + (string.IsNullOrEmpty(brand) ? "" : $" ({brand})");
+                        double? perServing = DashboardData.Num(pick["kcal_per_serving"]), servingG = DashboardData.Num(pick["serving_g"]);
+                        if (perServing.HasValue && servingG > 0) item.Kcal = Math.Round(perServing.Value * item.Grams / servingG.Value);
+                        Debug.Log($"[Scan] '{item.Name}' matched '{item.MatchedName}' (searched '{query}')");
+                        break;
+                    }
+                    catch (Exception e) { Debug.LogWarning("[Scan] Match failed for " + item.Name + ": " + e.Message); }
                 }
-                catch (Exception e) { Debug.LogWarning("[Scan] Match failed for " + item.Name + ": " + e.Message); }
             }
             busy = false;
             done(result);
+        }
+
+        // Lower is better. The search's own order is the baseline; processed or dried forms and prepared dishes are pushed down unless the
+        // user's food name asked for them, and a name that starts with what we searched for, or is a plain raw or cooked food, is pulled up.
+        static int MatchScore(string foodName, string query, int rank)
+        {
+            string n = (foodName ?? "").ToLowerInvariant(), q = query.ToLowerInvariant();
+            int score = rank;
+            foreach (var word in new[] { "powder", "dried", "dehydrated", "instant", "flour", "crisps", "mix", "sauce", "soup", "extract", "paste", "puree", "canned", "tinned", "juice", "oil", "starch", "flakes", "granules" })
+                if (n.Contains(word) && !q.Contains(word)) score += 20;
+            if (n.StartsWith(q)) score -= 3;
+            if (n.Contains("raw") || n.Contains("boiled") || n.Contains("cooked") || n.Contains("grilled") || n.Contains("baked")) score -= 2;
+            return score;
         }
 
         IEnumerator SegmentItem(PlateItem item, string dataUrl, Action finished)
