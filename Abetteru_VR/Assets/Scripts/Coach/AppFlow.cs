@@ -270,8 +270,7 @@ namespace ABetterU.Coach
             VRGlass.Label(p, "Mind   ·   Movement   ·   Progress", new Vector3(lx, 0.12f, -0.02f), 0.0105f, Teal);
             VRGlass.Label(p, "Your complete wellness platform\nin virtual and real life.", new Vector3(lx, -0.10f, -0.02f), 0.0085f, VRUi.Ink);
 
-            VRGlass.Button(p, "Coach Login\nComing soon", new Vector3(lx - 0.40f, -0.62f, -0.02f), new Vector2(0.74f, 0.46f), GlassStyle.Disabled, 0.0085f, null, 0.05f);
-            VRGlass.Button(p, "Gym Login\nComing soon", new Vector3(lx + 0.40f, -0.62f, -0.02f), new Vector2(0.74f, 0.46f), GlassStyle.Disabled, 0.0085f, null, 0.05f);
+            VRGlass.Button(p, "Gym Login\nComing soon", new Vector3(lx, -0.62f, -0.02f), new Vector2(0.74f, 0.46f), GlassStyle.Disabled, 0.0085f, null, 0.05f);
 
             // Right column: the sign-in card.
             const float cx = 0.95f;
@@ -703,7 +702,7 @@ namespace ABetterU.Coach
             if (data.MealsToday == 0)
             {
                 VRGlass.Label(c, "Nothing logged today", new Vector3(0, 0.12f, -0.02f), 0.0095f, VRUi.Ink);
-                VRGlass.Label(c, "Tell your coach what you ate\nand it will appear here.", new Vector3(0, -0.02f, -0.02f), 0.0072f, VRUi.Muted);
+                VRGlass.Label(c, "Tell Atlas what you ate\nand it will appear here.", new Vector3(0, -0.02f, -0.02f), 0.0072f, VRUi.Muted);
                 return;
             }
 
@@ -769,7 +768,7 @@ namespace ABetterU.Coach
             if (data.Injuries.Count == 0)
             {
                 VRGlass.Label(c, "No recorded injuries", new Vector3(0, 0.12f, -0.02f), 0.0095f, VRUi.Ink);
-                VRGlass.Label(c, "Tell your coach if something\nhurts and it will be kept here.", new Vector3(0, -0.02f, -0.02f), 0.0072f, VRUi.Muted);
+                VRGlass.Label(c, "Tell Atlas if something\nhurts and it will be kept here.", new Vector3(0, -0.02f, -0.02f), 0.0072f, VRUi.Muted);
                 return;
             }
 
@@ -1018,10 +1017,10 @@ namespace ABetterU.Coach
                 new Vector3(-1.05f, 0.10f, -0.02f), 0.0082f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
 
             string tip = data.Injuries.Count > 0
-                ? $"You noted: {Describe(data.Injuries[0])}. Ask your coach to build a workout around it."
-                : "Ask your coach to build a workout, or just start a set.";
+                ? $"You noted: {Describe(data.Injuries[0])}. Ask Atlas to suggest some exercises around it."
+                : "Ask Atlas to set up a squat workout, or just start a set.";
             VRGlass.Label(g, tip, new Vector3(-1.05f, -0.12f, -0.02f), 0.0082f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
-            VRGlass.Label(g, "Left trigger starts and ends a set  ·  the coach saves it for you", new Vector3(-1.05f, -0.26f, -0.02f), 0.0072f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+            VRGlass.Label(g, "Left trigger starts and ends a set  ·  Atlas saves it for you", new Vector3(-1.05f, -0.26f, -0.02f), 0.0072f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
 
             VRGlass.Button(g, "Start Virtual Gym", new Vector3(1.05f, -0.0f, -0.02f), new Vector2(0.85f, 0.2f), GlassStyle.Primary, 0.0095f, EnterGym, 0.05f);
         }

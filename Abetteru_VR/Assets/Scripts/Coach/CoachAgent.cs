@@ -161,7 +161,7 @@ namespace ABetterU.Coach
             input.Add(userMsg);
 
             var now = DateTime.Now;
-            string instructions = config.atlasPrompt + AgentRules +
+            string instructions = config.assistantPrompt + AgentRules +
                 $" The user's name is {supabase.DisplayName ?? "unknown"}. Today is {now:yyyy-MM-dd}, local time {now:HH:mm}.";
 
             for (int step = 0; step < MaxSteps; step++)

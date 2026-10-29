@@ -72,7 +72,7 @@ namespace ABetterU.Coach
             string display = lastMessage;
             int timings = display.IndexOf("\n\nASR ", System.StringComparison.Ordinal);
             if (timings >= 0) display = display.Substring(0, timings);
-            int reply = display.LastIndexOf("Coach: ", System.StringComparison.Ordinal);
+            int reply = display.LastIndexOf("Atlas: ", System.StringComparison.Ordinal);
             if (reply >= 0) display = display.Substring(reply + 7);
             if (display.StartsWith("Listening...", System.StringComparison.Ordinal)) display = "Listening…";
             text.text = VRUi.Wrap(display, 68, 3);

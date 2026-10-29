@@ -3,6 +3,16 @@
 Source: the Participant Guide for the Meta Global AI Developer Hackathon (sections 1, 4 and 8), re-read on Oct 28.
 Track: **Indie Developer** (solo). Theme: **Build for Your World**.
 
+## Update Oct 29: rules posted on Discord by Ivan (Meta)
+
+- **Deadline: Wed Nov 4, 9:00 PM ET = 2:00 AM GMT on Nov 5.** Our own target stays 18:00 GMT on Nov 4.
+- "Everything you present has to be built during the hackathon" and the demo "has to show only the features, code and functionality your team built during the event"; if judges cannot tell what is new, the project is disqualified. So the video labels Existing vs New on screen.
+- Banned list wording: "Disqualified if they break legal, ethical or platform policies, or use code, data or assets you don't have the rights to. **Also avoid the generic stuff** such as AI medical or health advice, Basic RAG apps, Simple image analyzers, AI for education chatbots, Job application screeners, Nutrition coaches, Personality analyzers, Sports analyzers or coaches." The "avoid" wording is softer than "disqualified", but it is still a risk, so:
+  - Atlas is positioned as a **voice assistant that takes actions** (logs entries, opens screens, saves sets) on a real platform from inside VR. It is **not a coach**: the prompt, on-screen text and README say assistant, and it gives no medical advice.
+  - Keep the injury-adaptation path out of the demo video.
+  - The application was approved within hours after the project was described in detail.
+- Third-party assets need rights: sounds are generated in code; no downloaded art or audio is in the repo.
+
 ## What the rules actually require
 
 | Rule | Wording (short) | Our status |

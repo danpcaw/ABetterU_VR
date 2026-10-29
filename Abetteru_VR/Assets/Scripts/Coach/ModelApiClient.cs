@@ -38,7 +38,7 @@ namespace ABetterU.Coach
             var body = JsonUtility.ToJson(new Req
             {
                 model = config.model,
-                instructions = config.atlasPrompt,
+                instructions = config.assistantPrompt,
                 input = new[] { new InMsg { content = new[] { new InPart { text = userContext } } } },
                 reasoning = new Reasoning { effort = config.replyEffortV2 },
                 max_output_tokens = config.replyMaxTokens,

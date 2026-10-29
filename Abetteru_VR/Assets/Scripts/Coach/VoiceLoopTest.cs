@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace ABetterU.Coach
 {
-    /// The coach's voice loop. Hold the RIGHT trigger (or A) to talk, release to send:
+    /// Atlas's voice loop. Hold the RIGHT trigger (or A) to talk, release to send:
     /// mic -> Muse Voice Transcribe -> Muse Spark agent (tools on the real A Better U account) -> Wit.ai voice.
     /// It works on the dashboard screens and in the gym. In the gym the LEFT trigger also starts and ends a squat set.
     /// Add to any GameObject in the scene (the "VoiceLoop" object). It adds the other components it needs.
@@ -467,8 +467,8 @@ namespace ABetterU.Coach
 
             if (reply == null)
             {
-                board.Show("Coach failed:\n" + Wrap(Short(error ?? "no reply", 160)));
-                Debug.LogError("[VoiceLoop] Coach error: " + error);
+                board.Show("Atlas failed:\n" + Wrap(Short(error ?? "no reply", 160)));
+                Debug.LogError("[VoiceLoop] Assistant error: " + error);
                 Report(AssistantState.Error, "Something went wrong", "Hold right trigger to try again.");
                 readyAt = Time.unscaledTime + 7f;
                 busy = false;
@@ -491,7 +491,7 @@ namespace ABetterU.Coach
                 reply = "I couldn't open that. I can open Home, My World, your food diary, My Experiences or the virtual gym.";
             }
 
-            board.Show($"You: {Wrap(heard)}\n\nCoach: {Wrap(reply)}\n\nASR {tAsr:0.0}s  Spark {tSpark:0.0}s");
+            board.Show($"You: {Wrap(heard)}\n\nAtlas: {Wrap(reply)}\n\nASR {tAsr:0.0}s  Spark {tSpark:0.0}s");
             // Captions follow the voice: each sentence appears as it starts to play, not when the text arrives.
             bool spoken = false;
             tts.Speak(reply, () => spoken = true,
