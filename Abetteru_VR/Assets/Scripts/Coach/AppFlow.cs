@@ -477,6 +477,7 @@ namespace ABetterU.Coach
             Current = Stage.Home;
             EnsureAssistant();
             BuildHome();
+            if (voice != null) voice.Introduce();      // once per launch; Atlas says who she is and what she does not do
             StartCoroutine(RefreshData());
         }
 
