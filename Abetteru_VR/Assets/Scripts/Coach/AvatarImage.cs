@@ -25,13 +25,13 @@ namespace ABetterU.Coach
 
         IEnumerator Load(string url, float size)
         {
-            using var request = UnityWebRequestTexture.GetTexture(url, true);
+            using var request = UnityWebRequestTexture.GetTexture(url, false);
             request.timeout = 10;
             request.redirectLimit = 3;
             yield return request.SendWebRequest();
             if (request.result != UnityWebRequest.Result.Success) yield break;
             var raw = DownloadHandlerTexture.GetContent(request);
-            if (raw == null) yield break;
+            if (raw == null || !raw.isReadable) yield break;
             var round = Circle(raw);
             Destroy(raw);
             cache[url] = round;
