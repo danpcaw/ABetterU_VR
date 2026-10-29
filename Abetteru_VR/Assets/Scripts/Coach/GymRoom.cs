@@ -408,6 +408,22 @@ namespace ABetterU.Coach
             return SharedTemplate;
         }
 
+        /// Runs as soon as the scene has loaded, before the first frame is drawn: keeps the template material from the scene's
+        /// test cube, then hides the cube and plane and paints the sky navy, so the gap before the login screen is plain navy
+        /// instead of a lone cube floating in the default sky.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        static void HideStartupScene()
+        {
+            AcquireTemplate();
+            HideSceneTestObjects();
+            var cam = Camera.main;
+            if (cam != null)
+            {
+                cam.clearFlags = CameraClearFlags.SolidColor;
+                cam.backgroundColor = new Color(0.04f, 0.06f, 0.10f);
+            }
+        }
+
         public static void HideSceneTestObjects()
         {
             foreach (var name in new[] { "Cube", "Plane" })
