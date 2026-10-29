@@ -21,7 +21,7 @@ namespace ABetterU.Coach
 
         Transform headBall, visor, neck, torso, hipBall, shoulders;
         readonly Transform[] thigh = new Transform[2], shin = new Transform[2], knee = new Transform[2], foot = new Transform[2];
-        readonly Transform[] upperArm = new Transform[2], foreArm = new Transform[2], elbow = new Transform[2], hand = new Transform[2];
+        readonly Transform[] thumb = new Transform[2], upperArm = new Transform[2], foreArm = new Transform[2], elbow = new Transform[2], hand = new Transform[2];
 
         float standing;                  // standing neck height, tracked as a slowly decaying maximum
         Vector3 bodyForward = Vector3.forward;
@@ -53,7 +53,8 @@ namespace ABetterU.Coach
                 upperArm[i] = Part(PrimitiveType.Capsule, "Upper arm", Suit, 0, 0.8f, 0.35f, null, UpperArm());
                 foreArm[i] = Part(PrimitiveType.Capsule, "Forearm", Suit, 0, 0.8f, 0.35f, null, Forearm());
                 elbow[i] = Part(PrimitiveType.Sphere, "Elbow", Joint, 0, 0.9f, 0.3f, Joint * 0.6f);
-                hand[i] = Part(PrimitiveType.Sphere, "Hand", Pearl, 0, 0.9f, 0.1f);
+                hand[i] = Part(PrimitiveType.Capsule, "Hand", Pearl, 0, 0.9f, 0.1f, null, Palm());
+                thumb[i] = Part(PrimitiveType.Capsule, "Thumb", Pearl, 0, 0.9f, 0.1f, null, Thumb());
             }
         }
 
@@ -126,7 +127,12 @@ namespace ABetterU.Coach
                 Bone(upperArm[i], shoulderJoint, elbowPos, 0.052f);
                 Bone(foreArm[i], elbowPos, wrist, 0.045f);
                 Place(elbow[i], elbowPos, Quaternion.identity, Vector3.one * 0.05f);
-                Place(hand[i], wrist, Quaternion.identity, Vector3.one * 0.075f);
+                // A flat palm with fingers continuing along the forearm, and a thumb angled out from the side facing the body.
+                Vector3 along = (wrist - elbowPos).sqrMagnitude > 1e-6f ? (wrist - elbowPos).normalized : -Vector3.up;
+                Vector3 inward = -right * side;
+                Body(hand[i], wrist, wrist + along * 0.105f, 0.042f, 0.017f, inward);
+                Vector3 thumbBase = wrist + along * 0.025f + inward * 0.03f;
+                Bone(thumb[i], thumbBase, thumbBase + (along * 0.8f + inward * 0.45f).normalized * 0.06f, 0.0125f);
             }
         }
 
@@ -191,6 +197,8 @@ namespace ABetterU.Coach
         static Mesh UpperArm() => Shape("upperarm", (0f, 0.8f), (0.25f, 1f), (0.7f, 0.8f), (1f, 0.65f));
         static Mesh Forearm() => Shape("forearm", (0f, 0.75f), (0.2f, 1f), (0.85f, 0.55f), (1f, 0.5f));
         static Mesh Trunk() => Shape("trunk", (0f, 0.8f), (0.25f, 0.62f), (0.7f, 1f), (1f, 0.62f));
+        static Mesh Palm() => Shape("palm", (0f, 0.5f), (0.3f, 1f), (0.65f, 0.9f), (1f, 0.62f));
+        static Mesh Thumb() => Shape("thumb", (0f, 0.85f), (0.5f, 1f), (1f, 0.7f));
         static Mesh NeckShape() => Shape("neck", (0f, 0.9f), (0.5f, 0.7f), (1f, 0.8f));
 
                 // ── Maths helpers ────────────────────────────────────────────────────────

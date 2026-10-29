@@ -8,13 +8,40 @@ namespace ABetterU.Coach
     public class AssistantBar : MonoBehaviour
     {
         const float OrbSize = 0.30f;
-        Transform root, panel, orb;
-        TextMesh headline, detail, hintLabel;
+        Transform root, orb;
+        Line headline, detail, hintLabel;
         Renderer orbRenderer;
         AssistantState state = AssistantState.Ready;
         string[] hints = new string[0];
         int hintIndex;
         float nextHintAt;
+
+        /// Floating text with a soft dark shadow behind it, so it stays readable over anything without a panel.
+        sealed class Line
+        {
+            readonly TextMesh main;
+            readonly TextMesh[] shadows;
+            static readonly Vector3[] Offsets = { new Vector3(0f, -0.006f, 0.004f), new Vector3(0.005f, -0.004f, 0.004f), new Vector3(-0.005f, -0.004f, 0.004f) };
+
+            public Line(Transform root, Vector3 pos, float size, Color color, TextAnchor anchor)
+            {
+                shadows = new TextMesh[Offsets.Length];
+                for (int i = 0; i < shadows.Length; i++)
+                    shadows[i] = VRGlass.Label(root, "", pos + Offsets[i], size, new Color(0f, 0f, 0f, 0.55f), anchor, TextAlignment.Center, 5);
+                main = VRGlass.Label(root, "", pos, size, color, anchor, TextAlignment.Center, 6);
+            }
+
+            public string text
+            {
+                set { main.text = value; foreach (var s in shadows) s.text = value; }
+            }
+
+            public void SetActive(bool on)
+            {
+                main.gameObject.SetActive(on);
+                foreach (var s in shadows) s.gameObject.SetActive(on);
+            }
+        }
 
         public static AssistantBar Create(Vector3 position, Quaternion rotation)
         {
@@ -28,12 +55,11 @@ namespace ABetterU.Coach
         void Build(Transform parent)
         {
             root = parent;
-            panel = VRGlass.Panel(root, "Atlas bar", new Vector3(0, 0, 0.02f), new Vector2(2.6f, 0.50f), 0.08f, GlassStyle.Panel);
             orb = VRGlass.Image(root, "Orb", VRArt.Orb(Color.cyan, Color.cyan), new Vector3(0f, 0.09f, -0.01f), new Vector2(OrbSize, OrbSize), 2);
             orbRenderer = orb.GetComponent<Renderer>();
-            headline = VRGlass.Label(root, "", new Vector3(0f, -0.09f, -0.02f), 0.011f, VRUi.Ink, TextAnchor.MiddleCenter, TextAlignment.Center);
-            detail = VRGlass.Label(root, "", new Vector3(0f, -0.17f, -0.02f), 0.0082f, VRUi.Muted, TextAnchor.UpperCenter, TextAlignment.Center);
-            hintLabel = VRGlass.Label(root, "", new Vector3(0f, -0.28f, -0.02f), 0.0072f, VRUi.Muted, TextAnchor.MiddleCenter, TextAlignment.Center);
+            headline = new Line(root, new Vector3(0f, -0.09f, -0.02f), 0.011f, VRUi.Ink, TextAnchor.MiddleCenter);
+            detail = new Line(root, new Vector3(0f, -0.17f, -0.02f), 0.0082f, VRUi.Ink * 0.92f, TextAnchor.UpperCenter);
+            hintLabel = new Line(root, new Vector3(0f, -0.30f, -0.02f), 0.0072f, VRUi.Muted, TextAnchor.MiddleCenter);
             Set(AssistantState.Ready, VoiceLoopTest.ReadyHeadline, VoiceLoopTest.ReadyDetail);
         }
 
@@ -63,14 +89,8 @@ namespace ABetterU.Coach
 
         void Layout()
         {
-            if (panel == null) return;
-            bool ready = state == AssistantState.Ready;
-            bool showHint = ready && hints.Length > 0;
-            float height = ready ? (showHint ? 0.58f : 0.50f) : 0.60f;
-            // Keep the top edge fixed: responses expand downwards, away from the diary.
-            panel.localPosition = new Vector3(0, 0.24f - height / 2f, 0.02f);
-            panel.localScale = new Vector3(2.6f, height, 1f);
-            hintLabel.gameObject.SetActive(showHint);
+            if (hintLabel == null) return;
+            hintLabel.SetActive(state == AssistantState.Ready && hints.Length > 0);
         }
 
         public void SetHints(string[] phrases)
