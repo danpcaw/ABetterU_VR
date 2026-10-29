@@ -10,7 +10,7 @@ namespace ABetterU.Coach
     /// Nullable or empty means "not set", never zero. Views only read this.
     public class ProfileData
     {
-        public struct PostLine { public string Body, When, Visibility; }
+        public struct PostLine { public string Body, When, Visibility, ImageUrl; }
 
         public bool Loading, Loaded, HadError;
         public string Name, Username, Bio, GoalType, Experience;
@@ -49,14 +49,27 @@ namespace ABetterU.Coach
             Following = rows?.Count ?? 0;
 
             rows = null;
-            yield return Fetch(db, $"post?select=body,visibility,created_at&author_id=eq.{uid}&deleted_at=is.null&order=created_at.desc&limit=50", r => rows = r);
+            yield return Fetch(db, $"post?select=id,body,visibility,created_at&author_id=eq.{uid}&deleted_at=is.null&order=created_at.desc&limit=50", r => rows = r);
             if (rows != null)
             {
                 PostCount = rows.Count;
-                for (int i = 0; i < Math.Min(3, rows.Count); i++)
+                int shown = Math.Min(3, rows.Count);
+                var ids = new List<string>();
+                for (int i = 0; i < shown; i++) ids.Add((string)rows[i]["id"]);
+
+                // The first picture of each shown post, if it has one.
+                var firstImage = new Dictionary<string, string>();
+                JArray media = null;
+                if (ids.Count > 0)
+                    yield return Fetch(db, $"post_media?select=post_id,media_url,sort_order&post_id=in.({string.Join(",", ids)})&order=sort_order.asc", r => media = r);
+                if (media != null)
+                    foreach (var m in media) { string pid = (string)m["post_id"]; if (pid != null && !firstImage.ContainsKey(pid)) firstImage[pid] = (string)m["media_url"]; }
+
+                for (int i = 0; i < shown; i++)
                 {
                     string when = DateTime.TryParse((string)rows[i]["created_at"], out var d) ? d.ToLocalTime().ToString("d MMM") : "";
-                    Posts.Add(new PostLine { Body = (string)rows[i]["body"] ?? "(picture)", When = when, Visibility = (string)rows[i]["visibility"] });
+                    firstImage.TryGetValue((string)rows[i]["id"], out var image);
+                    Posts.Add(new PostLine { Body = (string)rows[i]["body"] ?? "(picture)", When = when, Visibility = (string)rows[i]["visibility"], ImageUrl = image });
                 }
             }
             Loading = false; Loaded = true;

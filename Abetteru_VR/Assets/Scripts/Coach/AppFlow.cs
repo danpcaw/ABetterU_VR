@@ -1040,35 +1040,38 @@ namespace ABetterU.Coach
                 return;
             }
 
+            // Layout, in panel units (the panel is 3.6 x 1.95): a 0.1 margin all round and 0.08 gaps between cards.
+            // Row 1 (y 0.66 down to -0.12): who you are, four numbers, goals. Row 2 (y -0.20 down to -0.90): your recent posts.
+
             // Who you are.
-            var who = Card(p, new Vector3(-1.08f, 0.30f, 0f), new Vector2(1.4f, 0.80f));
-            VRGlass.Image(who, "Avatar", VRArt.Orb(new Color(0.20f, 0.75f, 0.80f), new Color(0.20f, 0.75f, 0.80f)), new Vector3(-0.47f, 0.17f, -0.01f), new Vector2(0.34f, 0.34f), 3);
-            VRGlass.Label(who, Initial(profile.Name ?? DisplayName), new Vector3(-0.47f, 0.17f, -0.02f), 0.016f, VRUi.Ink);
-            VRGlass.Label(who, VRUi.Wrap(profile.Name ?? DisplayName, 20, 1), new Vector3(-0.24f, 0.25f, -0.02f), 0.0135f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+            var who = Card(p, new Vector3(-1.05f, 0.27f, 0f), new Vector2(1.30f, 0.78f));
+            VRGlass.Image(who, "Avatar", VRArt.Orb(new Color(0.20f, 0.75f, 0.80f), new Color(0.20f, 0.75f, 0.80f)), new Vector3(-0.46f, 0.20f, -0.01f), new Vector2(0.36f, 0.36f), 3);
+            VRGlass.Label(who, Initial(profile.Name ?? DisplayName), new Vector3(-0.46f, 0.20f, -0.02f), 0.017f, VRUi.Ink);
+            VRGlass.Label(who, VRUi.Wrap(profile.Name ?? DisplayName, 18, 1), new Vector3(-0.22f, 0.27f, -0.02f), 0.0135f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
             if (!string.IsNullOrEmpty(profile.Username))
-                VRGlass.Label(who, "@" + profile.Username, new Vector3(-0.24f, 0.14f, -0.02f), 0.0085f, Teal, TextAnchor.MiddleLeft, TextAlignment.Left);
+                VRGlass.Label(who, "@" + profile.Username, new Vector3(-0.22f, 0.16f, -0.02f), 0.0088f, Teal, TextAnchor.MiddleLeft, TextAlignment.Left);
             if (profile.MemberSince.HasValue)
-                VRGlass.Label(who, "Member since " + profile.MemberSince.Value.ToString("MMM yyyy"), new Vector3(-0.24f, 0.04f, -0.02f), 0.0075f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
-            VRGlass.Label(who, string.IsNullOrWhiteSpace(profile.Bio) ? "No bio yet" : VRUi.Wrap(profile.Bio, 42, 3),
-                new Vector3(-0.62f, -0.10f, -0.02f), 0.0082f, string.IsNullOrWhiteSpace(profile.Bio) ? VRUi.Muted : VRUi.Ink, TextAnchor.UpperLeft, TextAlignment.Left);
+                VRGlass.Label(who, "Member since " + profile.MemberSince.Value.ToString("MMM yyyy"), new Vector3(-0.22f, 0.06f, -0.02f), 0.0078f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+            VRGlass.Label(who, string.IsNullOrWhiteSpace(profile.Bio) ? "No bio yet" : VRUi.Wrap(profile.Bio, 36, 3),
+                new Vector3(-0.58f, -0.08f, -0.02f), 0.0085f, string.IsNullOrWhiteSpace(profile.Bio) ? VRUi.Muted : VRUi.Ink, TextAnchor.UpperLeft, TextAlignment.Left);
 
             // How you are doing: four plain numbers.
-            var stats = Card(p, new Vector3(0.12f, 0.30f, 0f), new Vector2(1.0f, 0.80f));
-            ProfileStat(stats, data.StreakDays.ToString(), data.StreakDays == 1 ? "day streak" : "day streak", -0.25f, 0.13f);
-            ProfileStat(stats, data.WorkoutsThisWeek.ToString(), "workouts this week", 0.25f, 0.13f);
-            ProfileStat(stats, profile.PostCount.ToString(), profile.PostCount == 1 ? "post" : "posts", -0.25f, -0.17f);
-            ProfileStat(stats, profile.Followers.ToString(), profile.Followers == 1 ? "follower" : "followers", 0.25f, -0.17f);
+            var stats = Card(p, new Vector3(0.155f, 0.27f, 0f), new Vector2(0.95f, 0.78f));
+            ProfileStat(stats, data.StreakDays.ToString(), "day streak", -0.23f, 0.16f);
+            ProfileStat(stats, data.WorkoutsThisWeek.ToString(), "workouts this week", 0.23f, 0.16f);
+            ProfileStat(stats, profile.PostCount.ToString(), profile.PostCount == 1 ? "post" : "posts", -0.23f, -0.16f);
+            ProfileStat(stats, profile.Followers.ToString(), profile.Followers == 1 ? "follower" : "followers", 0.23f, -0.16f);
 
             // What you are working towards.
-            var goals = Card(p, new Vector3(1.30f, 0.30f, 0f), new Vector2(1.0f, 0.80f));
-            VRGlass.Label(goals, "Goals", new Vector3(0, 0.33f, -0.02f), 0.011f, VRUi.Muted);
+            var goals = Card(p, new Vector3(1.21f, 0.27f, 0f), new Vector2(1.0f, 0.78f));
+            VRGlass.Label(goals, "Goals", new Vector3(0, 0.32f, -0.02f), 0.0105f, VRUi.Muted);
             float y = 0.20f;
             void Line(string label, string value)
             {
                 if (string.IsNullOrEmpty(value)) return;
-                VRGlass.Label(goals, label, new Vector3(-0.43f, y, -0.02f), 0.0072f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
-                VRGlass.Label(goals, VRUi.Wrap(value, 22, 1), new Vector3(0.43f, y, -0.02f), 0.0082f, VRUi.Ink, TextAnchor.MiddleRight, TextAlignment.Right);
-                y -= 0.115f;
+                VRGlass.Label(goals, label, new Vector3(-0.42f, y, -0.02f), 0.0074f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+                VRGlass.Label(goals, VRUi.Wrap(value, 20, 1), new Vector3(0.42f, y, -0.02f), 0.0082f, VRUi.Ink, TextAnchor.MiddleRight, TextAlignment.Right);
+                y -= 0.105f;
             }
             Line("Daily calories", profile.CalorieGoal.HasValue ? $"{profile.CalorieGoal.Value:N0} kcal" : null);
             Line("Weight", profile.WeightKg.HasValue ? $"{profile.WeightKg.Value:0.#} kg" : null);
@@ -1078,18 +1081,19 @@ namespace ABetterU.Coach
             Line("Experience", Pretty(profile.Experience));
             if (y > 0.19f) VRGlass.Label(goals, "No goals set yet", new Vector3(0, 0.1f, -0.02f), 0.0085f, VRUi.Muted);
 
-            // Your feed.
-            var feed = Card(p, new Vector3(0f, -0.43f, 0f), new Vector2(3.4f, 0.80f));
-            VRGlass.Label(feed, "Recent posts", new Vector3(-1.55f, 0.32f, -0.02f), 0.011f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+            // Your feed: a picture (or a plain icon for a text post), the words, and who can see it.
+            var feed = Card(p, new Vector3(0f, -0.55f, 0f), new Vector2(3.4f, 0.70f));
+            VRGlass.Label(feed, "Recent posts", new Vector3(-1.55f, 0.29f, -0.02f), 0.0105f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
             if (profile.Posts.Count == 0)
                 VRGlass.Label(feed, "Nothing posted yet. Ask Atlas to share your session.", new Vector3(0, -0.02f, -0.02f), 0.0095f, VRUi.Muted);
-            float py = 0.16f;
+            float py = 0.115f;
             foreach (var post in profile.Posts)
             {
-                VRGlass.Label(feed, post.When, new Vector3(-1.55f, py, -0.02f), 0.0078f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
-                VRGlass.Label(feed, VRUi.Wrap(post.Body.Replace('\n', ' '), 80, 1), new Vector3(-1.2f, py, -0.02f), 0.0085f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
-                VRGlass.Label(feed, post.Visibility == "public" ? "Public" : post.Visibility == "fof" ? "Friends of friends" : "Friends", new Vector3(1.55f, py, -0.02f), 0.0075f, Teal, TextAnchor.MiddleRight, TextAlignment.Right);
-                py -= 0.17f;
+                FoodThumbnail.Create(feed, new Vector3(-1.52f, py, -0.02f), post.ImageUrl, 0.15f, VRArt.IconKind.Group);
+                VRGlass.Label(feed, VRUi.Wrap(post.Body.Replace('\n', ' '), 88, 1), new Vector3(-1.36f, py + 0.035f, -0.02f), 0.0088f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+                VRGlass.Label(feed, post.When, new Vector3(-1.36f, py - 0.04f, -0.02f), 0.0074f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+                VRGlass.Label(feed, post.Visibility == "public" ? "Public" : post.Visibility == "fof" ? "Friends of friends" : "Friends", new Vector3(1.55f, py, -0.02f), 0.0078f, Teal, TextAnchor.MiddleRight, TextAlignment.Right);
+                py -= 0.19f;
             }
         }
 
