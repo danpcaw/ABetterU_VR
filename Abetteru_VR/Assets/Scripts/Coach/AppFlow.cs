@@ -1139,6 +1139,7 @@ namespace ABetterU.Coach
         // While aiming the camera you see the real room: the backdrop is hidden and passthrough shows behind the screens, so looking down at
         // the plate works. The screens stay where they are. Passthrough needs a moment to start after it is switched on, so this waits.
         OVRPassthroughLayer passLayer;
+        ViewFinder viewfinder;
         bool seeThrough;
 
         IEnumerator SeeThroughSoon()
@@ -1162,13 +1163,35 @@ namespace ABetterU.Coach
                 if (passLayer != null) passLayer.hidden = false;
                 if (cam != null) cam.backgroundColor = new Color(0f, 0f, 0f, 0f);       // transparent: passthrough shows through
                 if (retreat != null) retreat.SetVisible(false);
+                if (viewfinder == null && cam != null) viewfinder = ViewFinder.Create(cam.transform);
             }
             else
             {
                 if (passLayer != null) passLayer.hidden = true;
                 if (cam != null) cam.backgroundColor = Navy;
                 if (retreat != null) retreat.SetVisible(true);
+                if (viewfinder != null) { Destroy(viewfinder.gameObject); viewfinder = null; }
             }
+        }
+
+        // From the on-screen button, or the left trigger / X button, so it works while looking down at the plate.
+        void CaptureScan()
+        {
+            if (Current != Stage.Scan || scanShot != null || plateCam == null || !plateCam.Streaming) return;
+            var shot = plateCam.Capture();
+            if (shot == null) return;
+            scanShot = shot;
+            SetSeeThrough(false);
+            plateCam.Stop();
+            StartCoroutine(ShutterBuzz());
+            StartCoroutine(AnalyseScan());
+        }
+
+        IEnumerator ShutterBuzz()
+        {
+            OVRInput.SetControllerVibration(0.5f, 0.8f, OVRInput.Controller.LTouch);
+            yield return new WaitForSecondsRealtime(0.12f);
+            OVRInput.SetControllerVibration(0f, 0f, OVRInput.Controller.LTouch);
         }
 
         void ResetScan()
@@ -1231,9 +1254,9 @@ namespace ABetterU.Coach
             if (scanShot == null)
             {
                 bool ready = plateCam != null && plateCam.Streaming;
-                VRGlass.Label(p, VRUi.Wrap(ready ? "Point at your plate" : plateCam != null ? plateCam.Status : "", 22, 2), new Vector3(rx, 0.45f, -0.02f), 0.0105f, VRUi.Ink);
+                VRGlass.Label(p, VRUi.Wrap(ready ? "Point at your plate, then press the left trigger" : plateCam != null ? plateCam.Status : "", 22, 2), new Vector3(rx, 0.45f, -0.02f), 0.0105f, VRUi.Ink);
                 VRGlass.Button(p, "Capture", new Vector3(rx, 0.12f, -0.02f), new Vector2(0.9f, 0.18f), ready ? GlassStyle.Primary : GlassStyle.Disabled, 0.0095f,
-                    () => { var shot = plateCam.Capture(); if (shot != null) { scanShot = shot; SetSeeThrough(false); plateCam.Stop(); StartCoroutine(AnalyseScan()); } }, 0.04f);
+                    CaptureScan, 0.04f);
                 if (plateCam != null && plateCam.Failed)
                     VRGlass.Button(p, "Try again", new Vector3(rx, -0.12f, -0.02f), new Vector2(0.9f, 0.16f), GlassStyle.Secondary, 0.0088f, () => { plateCam.Begin(); BuildScan(); }, 0.04f);
                 return;
@@ -1493,6 +1516,9 @@ namespace ABetterU.Coach
 
         void Update()
         {
+            if (Current == Stage.Scan && scanShot == null &&
+                (OVRInput.GetDown(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.LTouch) || OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.LTouch)))
+                CaptureScan();
             // The camera only runs on the scan screen, and rebuilds that screen once when its picture starts.
             if (Current != Stage.Scan && plateCam != null && (plateCam.Live != null || scanShot != null || scanResult != null)) StopScan();
             else if (Current == Stage.Scan && plateCam != null && plateCam.Streaming != scanWasStreaming) BuildScan();
