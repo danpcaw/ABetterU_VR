@@ -1,8 +1,12 @@
 # A Better U VR
 
+**Talk to Atlas. She does things on a real platform.**
+
 Entry in the **Meta Global AI Developer Hackathon** (Indie Developer track, theme "Build for Your World"). Build window: Oct 26 to Nov 4, 2026.
 
 A Meta Quest 3S app where you talk to **Atlas**, a voice assistant powered by Meta's Muse Spark, and it **does things for you on a real platform**. Say "log my usual breakfast" and the meal lands in your A Better U food diary. Look at a plate and Atlas names the foods, outlines them with SAM 3.1, measures them and logs what you confirm. Say "set me up a squat workout, two sets of ten" and the headset tracks your reps and saves each set. Say "share my session" and it drafts a post, with a picture made by Muse Image, for you to approve.
+
+**The proof point:** the plate scan chains Muse Spark and SAM 3.1 to measure food from one photo. In a weigh-in of two foods on one plate it landed within **about 1% and 4% of the scales**, against 56% and 37% low for a vision guess alone.
 
 **Atlas is an assistant, not a coach.** It gives no medical or fitness advice, and says so when it introduces itself. Every request ends in a verified write to a live database, and the app only says "saved" or "posted" after the backend confirmed it.
 
@@ -18,7 +22,7 @@ A Meta Quest 3S app where you talk to **Atlas**, a voice assistant powered by Me
 
 | # | Meta tool | What it does in the app |
 |---|---|---|
-| 1 | **Muse Spark** (`muse-spark-1.3`, Meta Model API) | The tool-calling agent behind Atlas, and the vision step of the plate scan: it names the foods on a photo and says how each is shaped and how dense it is. |
+| 1 | **Muse Spark** (`muse-spark-1.3`, Meta Model API), used two ways | **(a) Agent:** the tool-calling brain behind Atlas. **(b) Vision:** in the plate scan it names the foods on a photo and says how each is shaped and how dense it is. |
 | 2 | **Muse Voice Transcribe** (`muse-voice-transcribe-1.0`) | Turns speech into text, over a realtime WebSocket (about 0.3 s after you stop speaking) with an upload fallback, with UK English and keyword biasing. |
 | 3 | **Muse Image** (`muse-image-1.0`) | Makes the photoreal 3D session card after a workout and the picture on a shared post. Numbers on the card are drawn by the app from the headset's own count, never by the model. |
 | 4 | **SAM 3.1** (`sam-3.1`, Meta Model API) | Outlines each food and the plate in the plate-scan photo. The plate's known width gives the scale for measuring the food. |
@@ -51,7 +55,7 @@ A post is only called "posted" after the platform's own `create_post` function s
 4. The app turns each food's outline into centimetres and works out a **measured weight** (footprint x thickness x shape x density). Spark's own guess is shown beside it.
 5. Each food is matched to the user's real food database (preferring foods they have logged before), with tap-to-swap and weight correction. **Nothing is logged until the user confirms**, and calories come only from the database, never from a model.
 
-In tests on a real plate, measured weights were within about 1% (a baking potato) and 4% (a pepper) of the scales, against 56% and 37% low for the guess alone. The angle and framing change the result, and the screen says so. Foods that are flat or piled (rice, a steak) rely more on Spark's thickness estimate and will be less exact.
+In a weigh-in on a real plate (two foods), measured weights were within **about 1% (a baking potato) and 4% (a pepper)** of the scales, against **56% and 37% low** for the guess alone. Two foods is a small test, not a benchmark. The angle and framing change the result, and the screen says so. Foods that are flat or piled (rice, a steak) rely more on Spark's thickness estimate and will be less exact.
 
 ## The experience
 
@@ -87,6 +91,7 @@ More detail in [docs/HACKATHON_COMPLIANCE.md](docs/HACKATHON_COMPLIANCE.md).
 
 ## Known limits
 
+- **Speech is only acted on if it starts with "Atlas".** Anything else is transcribed, ignored and not stored by the app.
 - Hands-free uses "transcribe, then filter", not on-device wake-word detection. The app holds a realtime connection to Muse Voice Transcribe open and sends it silence; the headset's own sound detector decides when someone is speaking, and only then is microphone audio streamed. The app acts only if the phrase starts with "Atlas" (or follows a reply within 8 seconds). Other phrases are discarded and not kept. If the realtime connection is down, a phrase is uploaded for transcription instead. Listening pauses while the assistant is thinking or speaking, during a squat set and on the login screen.
 - A voice turn takes about 5 to 6 seconds on the upload path (speech to text, then Muse Spark, then speech out). The realtime path cuts the speech-to-text wait from about 2 seconds to under half a second; measured numbers are in docs/MODEL_API.md.
 - Squat counting and the form check use head tracking only. Thresholds were tuned from logged on-device data (lean limit 15 cm) and may need adjusting for different body types.

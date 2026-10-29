@@ -80,4 +80,4 @@ Also: from Oct 28 Muse Code is used for implementation and as a second reviewer 
 - [x] README section "New versus existing" written (Oct 28).
 - [ ] Put an on-screen "Existing / New" label in the demo video.
 - [ ] Create the public GitHub repo, push, check it works logged out.
-- [x] Third Meta tool: Muse Image session card built (verify on headset, then confirm the count with the organisers). Optional fourth: SAM 3.1 if time allows around Nov 2.
+- [x] Meta tools in the working app (verified on headset): Muse Spark (agent and plate-scan vision), Muse Voice Transcribe (realtime and upload), Muse Image (session card and post pictures) and SAM 3.1 (plate and food outlines, built Oct 29). Confirm the count with the organisers.
