@@ -565,6 +565,12 @@ namespace ABetterU.Coach
             done(result);
         }
 
+        // For the plate scan: the same food search and log the voice agent uses, so a scanned item is matched and stored exactly like a spoken one.
+        public IEnumerator SearchForScan(string query, Action<string> done) => SearchFoods(query, done);
+        public IEnumerator LogForScan(string foodId, string meal, double grams, Action<string> done) =>
+            LogFood(new JObject { ["food_id"] = foodId, ["meal"] = meal, ["grams"] = grams }, done);
+        public static string MealNow() => DefaultMealSlot(DateTime.Now);
+
         IEnumerator LogFood(JObject args, Action<string> done)
         {
             string foodId = (string)args["food_id"];

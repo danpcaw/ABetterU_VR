@@ -1107,27 +1107,69 @@ namespace ABetterU.Coach
             VRGlass.Label(card, caption, new Vector3(x, y - 0.11f, -0.02f), 0.0075f, VRUi.Muted);
         }
 
-        // ── Scan a plate: step one is the headset camera. Live view, then freeze a frame. Recognition comes next. ──────
+        // ── Scan a plate: camera, then Muse Spark names the foods and SAM 3.1 outlines them, then the user confirms what to log ──
 
         PlateCamera plateCam;
         Texture2D scanShot;
-        bool scanWasStreaming;
+        bool scanWasStreaming, scanWorking, scanLogging, scanDone;
+        VoiceLoopTest.PlateResult scanResult;
+        string scanNote = "";
+
+        static readonly Color[] ScanColors =
+        {
+            new Color(0.30f, 0.95f, 0.85f), new Color(1.0f, 0.76f, 0.30f), new Color(0.55f, 0.75f, 1.0f),
+            new Color(1.0f, 0.55f, 0.65f), new Color(0.65f, 0.95f, 0.45f),
+        };
+
+        // The photo's frame on the left of the panel, in panel units (4:3).
+        static readonly Vector2 ScanFrameCentre = new Vector2(-0.70f, -0.07f);
+        const float ScanImageW = 1.90f, ScanImageH = 1.425f;
 
         void ShowScan()
         {
             Current = Stage.Scan;
             EnsureAssistant();
             if (plateCam == null) plateCam = gameObject.AddComponent<PlateCamera>();
-            if (scanShot != null) { Destroy(scanShot); scanShot = null; }
+            ResetScan();
             plateCam.Begin();
             BuildScan();
+        }
+
+        void ResetScan()
+        {
+            if (scanShot != null) { Destroy(scanShot); scanShot = null; }
+            scanResult = null; scanNote = ""; scanWorking = scanLogging = scanDone = false;
         }
 
         void StopScan()
         {
             plateCam.Stop();
-            if (scanShot != null) { Destroy(scanShot); scanShot = null; }
+            ResetScan();
             scanWasStreaming = false;
+        }
+
+        IEnumerator AnalyseScan()
+        {
+            var shot = scanShot;
+            scanResult = null; scanWorking = true; scanDone = false; scanNote = "Looking at your plate...";
+            BuildScan();
+            if (voice == null) { scanWorking = false; scanNote = "The assistant is not ready."; BuildScan(); yield break; }
+            byte[] jpg = shot.EncodeToJPG(85);
+            VoiceLoopTest.PlateResult result = null;
+            yield return voice.ScanPlate(jpg, r => result = r, note => { scanNote = note; if (Current == Stage.Scan && scanShot == shot) BuildScan(); });
+            if (Current != Stage.Scan || scanShot != shot) yield break;       // they left or retook meanwhile
+            scanResult = result; scanWorking = false;
+            BuildScan();
+        }
+
+        IEnumerator LogScanItems()
+        {
+            scanLogging = true; scanNote = "Logging...";
+            BuildScan();
+            string note = null;
+            yield return voice.LogScan(scanResult.Items, n => note = n);
+            scanLogging = false; scanDone = true; scanNote = note;
+            if (Current == Stage.Scan) BuildScan();
         }
 
         void BuildScan()
@@ -1138,30 +1180,97 @@ namespace ABetterU.Coach
             VRGlass.Label(p, "Scan a Plate", new Vector3(-1.62f, 0.81f, -0.02f), 0.019f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
             VRGlass.Button(p, "My World", new Vector3(1.445f, 0.81f, -0.02f), new Vector2(0.5f, 0.16f), GlassStyle.Secondary, 0.0085f, ShowMyWorld, 0.04f);
 
-            // The camera picture, or the frozen frame once captured, in a 4:3 frame on the left.
-            VRGlass.Panel(p, "Frame", new Vector3(-0.78f, -0.07f, 0.02f), new Vector2(2.14f, 1.52f), 0.05f, GlassStyle.Card, 1);
+            // The camera picture, or the frozen frame once captured.
+            VRGlass.Panel(p, "Frame", new Vector3(ScanFrameCentre.x, ScanFrameCentre.y, 0.02f), new Vector2(2.0f, 1.5f), 0.05f, GlassStyle.Card, 1);
             Texture picture = scanShot != null ? (Texture)scanShot : (plateCam != null && plateCam.Streaming ? plateCam.Live : null);
             if (picture != null)
-                VRGlass.Image(p, "Picture", picture, new Vector3(-0.78f, -0.07f, -0.01f), new Vector2(1.96f, 1.47f), 3);
+                VRGlass.Image(p, "Picture", picture, new Vector3(ScanFrameCentre.x, ScanFrameCentre.y, -0.01f), new Vector2(ScanImageW, ScanImageH), 3);
             else
-                VRGlass.Label(p, plateCam != null ? VRUi.Wrap(plateCam.Status, 30, 3) : "Starting...", new Vector3(-0.78f, -0.07f, -0.02f), 0.011f, VRUi.Muted);
+                VRGlass.Label(p, plateCam != null ? VRUi.Wrap(plateCam.Status, 30, 3) : "Starting...", new Vector3(ScanFrameCentre.x, ScanFrameCentre.y, -0.02f), 0.011f, VRUi.Muted);
 
-            // Controls on the right.
-            string status = scanShot != null ? "Frame captured" : plateCam != null && plateCam.Streaming ? "Point at your plate" : plateCam != null ? plateCam.Status : "";
-            VRGlass.Label(p, VRUi.Wrap(status, 22, 2), new Vector3(1.05f, 0.45f, -0.02f), 0.0105f, VRUi.Ink);
+            const float rx = 1.07f;     // centre of the right-hand column
+
+            // 1. Live camera.
             if (scanShot == null)
             {
                 bool ready = plateCam != null && plateCam.Streaming;
-                VRGlass.Button(p, "Capture", new Vector3(1.05f, 0.12f, -0.02f), new Vector2(0.9f, 0.18f), ready ? GlassStyle.Primary : GlassStyle.Disabled, 0.0095f,
-                    () => { var shot = plateCam.Capture(); if (shot != null) { scanShot = shot; plateCam.Stop(); BuildScan(); } }, 0.04f);
+                VRGlass.Label(p, VRUi.Wrap(ready ? "Point at your plate" : plateCam != null ? plateCam.Status : "", 22, 2), new Vector3(rx, 0.45f, -0.02f), 0.0105f, VRUi.Ink);
+                VRGlass.Button(p, "Capture", new Vector3(rx, 0.12f, -0.02f), new Vector2(0.9f, 0.18f), ready ? GlassStyle.Primary : GlassStyle.Disabled, 0.0095f,
+                    () => { var shot = plateCam.Capture(); if (shot != null) { scanShot = shot; plateCam.Stop(); StartCoroutine(AnalyseScan()); } }, 0.04f);
                 if (plateCam != null && plateCam.Failed)
-                    VRGlass.Button(p, "Try again", new Vector3(1.05f, -0.12f, -0.02f), new Vector2(0.9f, 0.16f), GlassStyle.Secondary, 0.0088f, () => { plateCam.Begin(); BuildScan(); }, 0.04f);
+                    VRGlass.Button(p, "Try again", new Vector3(rx, -0.12f, -0.02f), new Vector2(0.9f, 0.16f), GlassStyle.Secondary, 0.0088f, () => { plateCam.Begin(); BuildScan(); }, 0.04f);
+                return;
             }
-            else
+
+            // 2. Working, failed, or done.
+            bool failed = !scanWorking && (scanResult == null || scanResult.Error != null);
+            if (scanWorking || scanLogging || failed || scanDone)
             {
-                VRGlass.Button(p, "Retake", new Vector3(1.05f, 0.12f, -0.02f), new Vector2(0.9f, 0.18f), GlassStyle.Secondary, 0.0095f, ShowScan, 0.04f);
-                VRGlass.Label(p, VRUi.Wrap($"{scanShot.width} x {scanShot.height} pixels\nFood recognition is the next step.", 24, 3), new Vector3(1.05f, -0.2f, -0.02f), 0.008f, VRUi.Muted);
+                string line = failed ? (scanResult != null ? scanResult.Error : scanNote) : scanNote;
+                VRGlass.Label(p, VRUi.Wrap(line, 24, 4), new Vector3(rx, 0.30f, -0.02f), 0.0105f, VRUi.Ink);
+                if (scanWorking || scanLogging) VRGlass.Label(p, "This takes a few seconds", new Vector3(rx, 0.05f, -0.02f), 0.0078f, VRUi.Muted);
+                bool idle = !scanWorking && !scanLogging;
+                if (scanDone)
+                {
+                    VRGlass.Button(p, "Scan another", new Vector3(rx, 0.0f, -0.02f), new Vector2(0.9f, 0.17f), GlassStyle.Primary, 0.0092f, ShowScan, 0.04f);
+                    VRGlass.Button(p, "Food diary", new Vector3(rx, -0.24f, -0.02f), new Vector2(0.9f, 0.17f), GlassStyle.Secondary, 0.0092f, ShowDiary, 0.04f);
+                }
+                else VRGlass.Button(p, "Retake", new Vector3(rx, -0.20f, -0.02f), new Vector2(0.9f, 0.17f), idle ? GlassStyle.Secondary : GlassStyle.Disabled, 0.0092f, ShowScan, 0.04f);
+                if (!failed) return;
+                return;
             }
+
+            // 3. The result: outlines on the photo, and the foods to confirm.
+            var items = scanResult.Items;
+            for (int i = 0; i < items.Count; i++)
+            {
+                if (items[i].Dropped) continue;
+                var color = ScanColors[i % ScanColors.Length];
+                foreach (var r in items[i].Boxes) DrawScanBox(p, r, color, items[i].Boxes.IndexOf(r) == 0 ? items[i].Name : null);
+            }
+
+            VRGlass.Label(p, "Estimated from the photo. Check before logging.", new Vector3(rx, 0.70f, -0.02f), 0.0082f, VRUi.Muted);
+            double total = 0; int loggable = 0; float y = 0.52f;
+            for (int i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                if (item.Dropped) continue;
+                var color = ScanColors[i % ScanColors.Length];
+                VRGlass.Panel(p, "Food row", new Vector3(rx, y, 0.01f), new Vector2(1.30f, 0.20f), 0.03f, GlassStyle.Card, 1);
+                VRUi.Box(p, "Swatch", new Vector3(rx - 0.60f, y, -0.015f), new Vector3(0.035f, 0.14f, 0.01f), color, false);
+                VRGlass.Label(p, VRUi.Wrap(item.Name, 26, 1), new Vector3(rx - 0.55f, y + 0.045f, -0.02f), 0.0092f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+                string detail;
+                if (item.FoodId != null)
+                {
+                    detail = $"about {item.Grams:0} g" + (item.Kcal.HasValue ? $" · {item.Kcal.Value:0} kcal" : "");
+                    total += item.Kcal ?? 0; loggable++;
+                }
+                else detail = "Not found in your food database";
+                VRGlass.Label(p, VRUi.Wrap(detail, 42, 1), new Vector3(rx - 0.55f, y - 0.05f, -0.02f), 0.0074f, item.FoodId != null ? VRUi.Muted : new Color(1f, 0.76f, 0.30f), TextAnchor.MiddleLeft, TextAlignment.Left);
+                var captured = item;
+                VRGlass.Button(p, "x", new Vector3(rx + 0.55f, y, -0.025f), new Vector2(0.15f, 0.15f), GlassStyle.Secondary, 0.0095f, () => { captured.Dropped = true; BuildScan(); }, 0.03f);
+                y -= 0.23f;
+            }
+            if (loggable > 0) VRGlass.Label(p, $"About {total:0} kcal in total", new Vector3(rx, -0.57f, -0.02f), 0.0092f, VRUi.Ink);
+            else VRGlass.Label(p, "Nothing here can be logged", new Vector3(rx, -0.57f, -0.02f), 0.0092f, VRUi.Muted);
+            string meal = CoachAgent.MealNow();
+            VRGlass.Button(p, $"Log to {meal}", new Vector3(rx - 0.27f, -0.80f, -0.02f), new Vector2(0.76f, 0.15f), loggable > 0 ? GlassStyle.Primary : GlassStyle.Disabled, 0.0088f,
+                () => { if (loggable > 0 && !scanLogging) StartCoroutine(LogScanItems()); }, 0.04f);
+            VRGlass.Button(p, "Retake", new Vector3(rx + 0.40f, -0.80f, -0.02f), new Vector2(0.44f, 0.15f), GlassStyle.Secondary, 0.0088f, ShowScan, 0.04f);
+        }
+
+        // One SAM outline: four thin bars round the box, mapped from photo fractions (y from the top) onto the frame.
+        void DrawScanBox(Transform p, Rect r, Color color, string label)
+        {
+            float cx = ScanFrameCentre.x + (r.x + r.width / 2f - 0.5f) * ScanImageW;
+            float cy = ScanFrameCentre.y - (r.y + r.height / 2f - 0.5f) * ScanImageH;
+            float w = r.width * ScanImageW, h = r.height * ScanImageH, t = 0.012f;
+            VRUi.Box(p, "Box top", new Vector3(cx, cy + h / 2f, -0.025f), new Vector3(w, t, 0.01f), color, false);
+            VRUi.Box(p, "Box bottom", new Vector3(cx, cy - h / 2f, -0.025f), new Vector3(w, t, 0.01f), color, false);
+            VRUi.Box(p, "Box left", new Vector3(cx - w / 2f, cy, -0.025f), new Vector3(t, h, 0.01f), color, false);
+            VRUi.Box(p, "Box right", new Vector3(cx + w / 2f, cy, -0.025f), new Vector3(t, h, 0.01f), color, false);
+            if (!string.IsNullOrEmpty(label))
+                VRGlass.Label(p, label, new Vector3(cx - w / 2f + 0.02f, cy + h / 2f - 0.035f, -0.03f), 0.0078f, color, TextAnchor.MiddleLeft, TextAlignment.Left, 9);
         }
 
         // ── Exercise log: every recorded exercise for a day, from the real strength_sets and exercise_logs ──────────────
@@ -1348,7 +1457,7 @@ namespace ABetterU.Coach
         void Update()
         {
             // The camera only runs on the scan screen, and rebuilds that screen once when its picture starts.
-            if (Current != Stage.Scan && plateCam != null && (plateCam.Live != null || scanShot != null)) StopScan();
+            if (Current != Stage.Scan && plateCam != null && (plateCam.Live != null || scanShot != null || scanResult != null)) StopScan();
             else if (Current == Stage.Scan && plateCam != null && plateCam.Streaming != scanWasStreaming) BuildScan();
             if (Current == Stage.Gym && OVRInput.GetDown(OVRInput.Button.Start, OVRInput.Controller.LTouch))
             {
