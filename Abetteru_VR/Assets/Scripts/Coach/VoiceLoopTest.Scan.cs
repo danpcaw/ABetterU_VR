@@ -20,6 +20,13 @@ namespace ABetterU.Coach
             public string Name;
             public double Grams;                          // starts as Spark's visual estimate; the user can correct it with - and + (weigh it for a true figure)
             public double EstimatedGrams;                 // what Spark first guessed, kept so the log can show how far out it was
+
+            // How Spark describes the food, for turning its outline into a weight: round or oblong (like a potato), flat (a steak), or a pile (rice).
+            public string Shape = "oblong";
+            public double Density = 1.0;                  // g per cubic cm
+            public double DepthCm = 5;                    // typical thickness of one piece
+            public double? Measured;                      // grams worked out from the SAM outlines and the plate's size; null if no plate was found
+            public bool Adjusted;                         // the user changed the weight by hand, so a new plate size must not overwrite it
             public readonly List<Rect> Boxes = new List<Rect>();   // from SAM, as fractions of the photo, y measured from the top
             public string FoodId, MatchedName;
             public double? Kcal;                          // for Grams, from the database match
@@ -42,6 +49,7 @@ namespace ABetterU.Coach
 
             public void AdjustGrams(double delta)
             {
+                Adjusted = true;
                 Grams = Math.Max(10, Math.Min(2000, Math.Round(Grams + delta)));
                 Choose(Choice);                           // recalculates the calories for the new weight
             }
@@ -49,7 +57,47 @@ namespace ABetterU.Coach
 
         public struct PlateCandidate { public string FoodId, Label; public double? KcalPerServing, ServingG; }
 
-        public sealed class PlateResult { public string Error; public readonly List<PlateItem> Items = new List<PlateItem>(); }
+        public sealed class PlateResult
+        {
+            public string Error;
+            public readonly List<PlateItem> Items = new List<PlateItem>();
+            public Rect? Plate;                           // the plate's outline box (fractions of the photo), if SAM found one
+
+            /// Works out each food's weight from its SAM outline. The plate is round, so its box width and height give the real-world scale
+            /// on each axis separately (which also cancels the tilt of the camera). Then: footprint x thickness x shape x density.
+            /// Foods the user adjusted by hand keep their weight; the others take the measured weight (or Spark's guess with no plate).
+            public void Remeasure(double plateCm)
+            {
+                foreach (var item in Items)
+                {
+                    item.Measured = Plate.HasValue && item.Boxes.Count > 0 ? Measure(item, Plate.Value, plateCm) : (double?)null;
+                    if (item.Adjusted) continue;
+                    item.Grams = item.Measured ?? item.EstimatedGrams;
+                    item.Choose(item.Choice);                // recalculates the calories
+                }
+            }
+
+            static double Measure(PlateItem item, Rect plate, double plateCm)
+            {
+                double total = 0;
+                double fill = item.Shape == "flat" ? 0.8 : item.Shape == "pile" ? 0.65 : 0.785;            // how much of its box the food covers
+                double k = item.Shape == "flat" ? 1.0 : item.Shape == "pile" ? 0.5 : 2.0 / 3.0;            // ellipsoid volume is 2/3 of footprint x depth
+                foreach (var f in item.Boxes)
+                {
+                    double a = f.width / plate.width * plateCm, b = f.height / plate.height * plateCm;
+                    double depth = Math.Min(item.DepthCm, Math.Min(a, b) * 1.2);
+                    total += a * b * fill * depth * k * item.Density;
+                }
+                return Math.Max(10, Math.Min(1500, Math.Round(total)));
+            }
+        }
+
+        // The plate's real width, set once on the scan screen (measure the dinner plate you use). Saved on the headset.
+        public static double PlateCm
+        {
+            get => PlayerPrefs.GetFloat("plate_cm", 26f);
+            set => PlayerPrefs.SetFloat("plate_cm", (float)Math.Max(16, Math.Min(36, value)));
+        }
 
         public CoachAgent Agent => agent;
 
@@ -62,7 +110,10 @@ namespace ABetterU.Coach
             "For each give name: a plain, common food name that would be found in a food database, including how it is cooked when you can tell " +
             "(for example grilled chicken breast, boiled potatoes, white rice, raw red pepper, fried egg). A whole uncooked potato is called baking potato (or new potato if it is small), and a whole sweet or bell pepper is named by its colour, for example orange pepper or red pepper. Then grams: your best estimate of the total weight of that food on the plate, a whole number. " +
             "Think about real sizes: a baking potato is about 200 to 300 g, a whole bell pepper about 150 to 220 g, a chicken breast about 150 g, a cooked portion of rice about 180 g, a slice of bread about 35 g. " +
-            "Reply with JSON only and nothing else, exactly like {\"items\":[{\"name\":\"white rice\",\"grams\":150}]}. " +
+            "For each also give shape: round or oblong for whole pieces like potatoes and peppers, flat for steaks and fillets and slices, pile for rice, pasta and mash; " +
+            "density: grams per cubic centimetre of that food as it sits on the plate (for example potato 1.1, bell pepper 0.5, cooked rice 0.8, steak 1.05); " +
+            "and depth_cm: how thick one piece or the pile is in centimetres (for example baking potato 6, bell pepper 7, steak 2, rice 3). " +
+            "Reply with JSON only and nothing else, exactly like {\"items\":[{\"name\":\"baking potato\",\"grams\":250,\"shape\":\"oblong\",\"density\":1.1,\"depth_cm\":6}]}. " +
             "If there is no food, reply {\"items\":[]}.";
 
         public IEnumerator ScanPlate(byte[] jpg, Action<PlateResult> done, Action<string> progress)
@@ -89,7 +140,16 @@ namespace ABetterU.Coach
                 {
                     string name = ((string)i["name"] ?? "").Trim();
                     double grams = DashboardData.Num(i["grams"]) ?? 100;
-                    if (name.Length > 0) { double g = Math.Max(10, Math.Min(1500, Math.Round(grams))); result.Items.Add(new PlateItem { Name = name, Grams = g, EstimatedGrams = g }); }
+                    if (name.Length > 0) { double g = Math.Max(10, Math.Min(1500, Math.Round(grams))); 
+                        string shape = ((string)i["shape"] ?? "oblong").ToLowerInvariant();
+                        if (shape != "flat" && shape != "pile") shape = "oblong";
+                        result.Items.Add(new PlateItem
+                        {
+                            Name = name, Grams = g, EstimatedGrams = g, Shape = shape,
+                            Density = Math.Max(0.2, Math.Min(2.0, DashboardData.Num(i["density"]) ?? 1.0)),
+                            DepthCm = Math.Max(0.5, Math.Min(15, DashboardData.Num(i["depth_cm"]) ?? 5)),
+                        });
+                    }
                 }
             }
             catch (Exception e) { Debug.LogWarning("[Scan] Could not read Spark's answer: " + e.Message + " :: " + text); }
@@ -100,11 +160,22 @@ namespace ABetterU.Coach
                 busy = false; done(result); yield break;
             }
 
-            // 2. SAM 3.1 outlines each food, all at once.
+            // 2. SAM 3.1 outlines each food and the plate, all at once. The plate gives the scale for measuring the foods.
             progress("Outlining each food...");
-            int pending = result.Items.Count;
-            foreach (var item in result.Items) StartCoroutine(SegmentItem(item, dataUrl, () => pending--));
+            var plateBoxes = new List<Rect>();
+            int pending = result.Items.Count + 1;
+            foreach (var item in result.Items) StartCoroutine(SegmentInto(item.Boxes, PromptsFor(item.Name), dataUrl, () => pending--));
+            StartCoroutine(SegmentInto(plateBoxes, new List<string> { "plate", "dish" }, dataUrl, () => pending--));
             for (float t = 0f; pending > 0 && t < 60f; t += Time.unscaledDeltaTime) yield return null;
+
+            // The biggest plate-like outline (and not a tiny false hit) is taken as the plate.
+            Rect? plate = null;
+            foreach (var r in plateBoxes) if (r.width * r.height >= 0.06f && (!plate.HasValue || r.width * r.height > plate.Value.width * plate.Value.height)) plate = r;
+            result.Plate = plate;
+            result.Remeasure(PlateCm);
+            Debug.Log($"[Scan] plate {(plate.HasValue ? $"found, {plate.Value.width:0.00} x {plate.Value.height:0.00} of the photo, taken as {PlateCm:0} cm wide" : "not found: weights stay as Spark's guesses")}");
+            foreach (var item in result.Items)
+                Debug.Log($"[Scan] weight '{item.Name}': Spark {item.EstimatedGrams:0} g, measured {(item.Measured.HasValue ? item.Measured.Value.ToString("0") + " g" : "none")} ({item.Shape}, {item.Density:0.0#} g/cm3, {item.DepthCm:0.#} cm thick)");
 
             // 3. Match each food to the user's own food database. The search ranks by name only, so a plain "potato" can come back as
             // dehydrated potato powder first. Look at the top results and prefer the ordinary food: if the full name finds nothing, try
@@ -189,14 +260,18 @@ namespace ABetterU.Coach
             return score;
         }
 
-        IEnumerator SegmentItem(PlateItem item, string dataUrl, Action finished)
+        // The full name Spark gave ("baking potato") sometimes finds nothing in SAM where the plain noun ("potato") does, so try the last word too.
+        static List<string> PromptsFor(string name)
         {
-            // SAM is asked for one concept at a time. The full name Spark gave ("baking potato") sometimes finds nothing where the plain
-            // noun ("potato") does, so if the first try outlines nothing, try the last word before giving up.
-            var words = item.Name.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            var prompts = new List<string> { item.Name };
+            var words = name.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            var prompts = new List<string> { name };
             if (words.Length > 1) prompts.Add(words[words.Length - 1]);
+            return prompts;
+        }
 
+        // Asks SAM for each concept in turn until one finds something, and adds the outline boxes it returns (as fractions of the photo).
+        IEnumerator SegmentInto(List<Rect> boxes, List<string> prompts, string dataUrl, Action finished)
+        {
             foreach (var prompt in prompts)
             {
                 string text = null, error = null;
@@ -211,11 +286,11 @@ namespace ABetterU.Coach
                     float x1 = float.Parse(m.Groups[1].Value) / w, y1 = float.Parse(m.Groups[2].Value) / h;
                     float x2 = float.Parse(m.Groups[3].Value) / w, y2 = float.Parse(m.Groups[4].Value) / h;
                     float conf = m.Groups[7].Success ? float.Parse(m.Groups[7].Value, System.Globalization.CultureInfo.InvariantCulture) : 1f;
-                    if (conf < 0.4f || (x2 - x1) * (y2 - y1) < 0.004f || item.Boxes.Count >= 6) continue;
-                    item.Boxes.Add(new Rect(x1, y1, x2 - x1, y2 - y1));
+                    if (conf < 0.4f || (x2 - x1) * (y2 - y1) < 0.004f || boxes.Count >= 6) continue;
+                    boxes.Add(new Rect(x1, y1, x2 - x1, y2 - y1));
                 }
-                Debug.Log($"[Scan] SAM '{prompt}': {item.Boxes.Count} box(es)");
-                if (item.Boxes.Count > 0) break;
+                Debug.Log($"[Scan] SAM '{prompt}': {boxes.Count} box(es)");
+                if (boxes.Count > 0) break;
             }
             finished();
         }
@@ -305,7 +380,7 @@ namespace ABetterU.Coach
                     var j = JObject.Parse(reply);
                     if ((bool?)j["ok"] != true) { Debug.LogWarning("[Scan] Log failed: " + reply); continue; }
                     logged.Add((string)j["logged_name"]);
-                    Debug.Log($"[Scan] logged '{item.Name}' as '{(string)j["logged_name"]}': Spark guessed {item.EstimatedGrams:0} g, logged {item.Grams:0} g");
+                    Debug.Log($"[Scan] logged '{item.Name}' as '{(string)j["logged_name"]}': Spark guessed {item.EstimatedGrams:0} g, measured {(item.Measured.HasValue ? item.Measured.Value.ToString("0") : "none")} g, logged {item.Grams:0} g");
                     kcal += item.Kcal ?? 0;
                 }
                 catch (Exception) { }

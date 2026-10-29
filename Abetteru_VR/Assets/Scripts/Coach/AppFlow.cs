@@ -1289,7 +1289,7 @@ namespace ABetterU.Coach
                 foreach (var r in items[i].Boxes) DrawScanBox(p, r, color, items[i].Boxes.IndexOf(r) == 0 ? items[i].Name : null);
             }
 
-            VRGlass.Label(p, "Estimated from the photo. Use - and + to correct the weight.", new Vector3(rx, 0.70f, -0.02f), 0.0082f, VRUi.Muted);
+            VRGlass.Label(p, "Tap a name to change it. - and + correct the weight.", new Vector3(rx, 0.70f, -0.02f), 0.0082f, VRUi.Muted);
             double total = 0; int loggable = 0; float y = 0.52f;
             for (int i = 0; i < items.Count; i++)
             {
@@ -1305,7 +1305,8 @@ namespace ABetterU.Coach
                 string detail;
                 if (item.FoodId != null)
                 {
-                    detail = $"about {item.Grams:0} g" + (item.Kcal.HasValue ? $" · {item.Kcal.Value:0} kcal" : "") + (item.Candidates.Count > 1 ? " · tap name to change" : "");
+                    string weight = item.Measured.HasValue && !item.Adjusted ? $"{item.Grams:0} g measured (guess {item.EstimatedGrams:0})" : $"{item.Grams:0} g";
+                    detail = weight + (item.Kcal.HasValue ? $" · {item.Kcal.Value:0} kcal" : "");
                     total += item.Kcal ?? 0; loggable++;
                 }
                 else detail = "Not found in your food database";
@@ -1320,6 +1321,16 @@ namespace ABetterU.Coach
                 }
                 VRGlass.Button(p, "x", new Vector3(rx + 0.56f, y, -0.025f), new Vector2(0.15f, 0.15f), GlassStyle.Secondary, 0.0095f, () => { captured.Dropped = true; BuildScan(); }, 0.03f, 6);
                 y -= 0.23f;
+            }
+            // The plate's real width sets the scale for measuring the food. Measure the plate you use and set it once.
+            VRGlass.Label(p, scanResult.Plate.HasValue ? $"Plate width {VoiceLoopTest.PlateCm:0} cm" : "No plate found: weights are guesses",
+                new Vector3(-1.62f, -0.905f, -0.02f), 0.0085f, scanResult.Plate.HasValue ? VRUi.Ink : new Color(1f, 0.76f, 0.30f), TextAnchor.MiddleLeft, TextAlignment.Left);
+            if (scanResult.Plate.HasValue)
+            {
+                VRGlass.Button(p, "-", new Vector3(-0.62f, -0.905f, -0.02f), new Vector2(0.14f, 0.12f), GlassStyle.Secondary, 0.0095f,
+                    () => { VoiceLoopTest.PlateCm -= 1; scanResult.Remeasure(VoiceLoopTest.PlateCm); BuildScan(); }, 0.03f);
+                VRGlass.Button(p, "+", new Vector3(-0.44f, -0.905f, -0.02f), new Vector2(0.14f, 0.12f), GlassStyle.Secondary, 0.0095f,
+                    () => { VoiceLoopTest.PlateCm += 1; scanResult.Remeasure(VoiceLoopTest.PlateCm); BuildScan(); }, 0.03f);
             }
             if (loggable > 0) VRGlass.Label(p, $"About {total:0} kcal in total", new Vector3(rx, -0.57f, -0.02f), 0.0092f, VRUi.Ink);
             else VRGlass.Label(p, "Nothing here can be logged", new Vector3(rx, -0.57f, -0.02f), 0.0092f, VRUi.Muted);
