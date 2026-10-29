@@ -183,12 +183,41 @@ namespace ABetterU.Coach
         TextMesh cardStatus;
         Texture2D cardTexture;
 
+        // When the session card arrives the summary slides to the left and shrinks a little, and the card comes forward into the
+        // middle, in front of the user. Both ease in together; the card stays fixed in the world while the summary moves away.
+        const float CardShift = 1.2f, SummaryScale = 0.85f, CardScale = 1.15f, CardForward = 0.15f, SlideSeconds = 0.7f;
+        float slide, slideTarget;
+        bool haveHome;
+        Vector3 home;
+
+        void SlideTo(float target)
+        {
+            if (!haveHome) { home = transform.position; haveHome = true; }
+            slideTarget = target;
+        }
+
+        void ApplySlide()
+        {
+            if (!haveHome) return;
+            if (!Mathf.Approximately(slide, slideTarget)) slide = Mathf.MoveTowards(slide, slideTarget, Time.unscaledDeltaTime / SlideSeconds);
+            float e = slide * slide * (3f - 2f * slide);
+            float sc = Mathf.Lerp(1f, SummaryScale, e);
+            transform.localScale = Vector3.one * sc;
+            transform.position = home - transform.right * (CardShift * e);
+            if (cardRoot != null)
+            {
+                cardRoot.localPosition = new Vector3(CardShift * e / sc, 0f, -CardForward * e / sc);
+                cardRoot.localScale = Vector3.one * (Mathf.Lerp(1f, CardScale, e) / sc);
+            }
+        }
+
         public void ShowCardPending()
         {
-            HideCard();
+            DestroyCard();
             cardRoot = new GameObject("SessionCard").transform;
             cardRoot.SetParent(transform, false);
-            cardRoot.localPosition = new Vector3(1.28f, 0f, 0f);
+            cardRoot.localPosition = Vector3.zero;
+            SlideTo(1f);
             VRGlass.Panel(cardRoot, "CardPanel", new Vector3(0, 0, 0.03f), new Vector2(0.95f, 1.1f), 0.07f, GlassStyle.Panel, 0);
             cardStatus = VRGlass.Label(cardRoot, "Creating your\nsession card\nwith Muse Image...", new Vector3(0, 0.02f, -0.02f), 0.0125f, VRUi.Muted);
         }
@@ -213,6 +242,12 @@ namespace ABetterU.Coach
 
         public void HideCard()
         {
+            DestroyCard();
+            SlideTo(0f);                      // no card: the summary returns to the middle
+        }
+
+        void DestroyCard()
+        {
             if (cardRoot != null) Destroy(cardRoot.gameObject);
             if (cardTexture != null) Destroy(cardTexture);
             cardRoot = null; cardStatus = null; cardTexture = null;
@@ -230,6 +265,7 @@ namespace ABetterU.Coach
 
         void Update()
         {
+            ApplySlide();
             float pop = Time.unscaledTime < punchUntil ? 1f + 0.18f * Mathf.Sin((punchUntil - Time.unscaledTime) / 0.25f * Mathf.PI) : 1f;
             repNumber.transform.localScale = Vector3.one * pop;
         }
