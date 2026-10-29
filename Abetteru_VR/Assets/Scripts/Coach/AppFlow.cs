@@ -11,7 +11,7 @@ namespace ABetterU.Coach
     /// Also owns the in-gym menu (left Menu button). VoiceLoopTest builds the gym when this enters Stage.Gym.
     public class AppFlow : MonoBehaviour
     {
-        public enum Stage { Login, Home, MyWorld, Diary, Experiences, Gym }
+        public enum Stage { Login, Home, MyWorld, Diary, Experiences, Gym, Exercise }
         public Stage Current { get; private set; } = Stage.Login;
 
         /// True while the in-gym menu is open, so the right trigger clicks menu buttons instead of starting the mic.
@@ -36,6 +36,9 @@ namespace ABetterU.Coach
         AssistantBar assistant;
         readonly DashboardData data = new DashboardData();
         readonly DiaryData diary = new DiaryData();
+        readonly ExerciseData exercise = new ExerciseData();
+        DateTime exerciseDate = DateTime.Now.Date;
+        int exercisePage;
         DateTime diaryDate = DateTime.Now.Date;
         bool refreshing, refreshAgain;
 
@@ -200,6 +203,7 @@ namespace ABetterU.Coach
                 case "home": ShowHome(); return true;
                 case "my_world": ShowMyWorld(); return true;
                 case "food_diary": ShowDiary(); return true;
+                case "exercise_log": ShowExercise(); return true;
                 case "my_experiences": ShowExperiences(); return true;
                 case "virtual_gym": EnterGym(); return true;
                 default: return false;
@@ -418,6 +422,7 @@ namespace ABetterU.Coach
                 refreshAgain = false;
                 yield return data.Refresh(supabase, null);
                 if (Current == Stage.Diary && !diary.Loading) yield return diary.Load(supabase, diaryDate);   // a save may have changed the day on screen
+                if (Current == Stage.Exercise && !exercise.Loading) yield return exercise.Load(supabase, exerciseDate);
             }
             while (refreshAgain);
             refreshing = false;
@@ -432,6 +437,7 @@ namespace ABetterU.Coach
                 case Stage.Home: BuildHome(); break;
                 case Stage.MyWorld: BuildMyWorld(); break;
                 case Stage.Diary: BuildDiary(); break;
+                case Stage.Exercise: BuildExercise(); break;
                 case Stage.Experiences: BuildExperiences(); break;
             }
         }
@@ -747,6 +753,7 @@ namespace ABetterU.Coach
             {
                 VRGlass.Label(c, "No workouts this week", new Vector3(0, 0.12f, -0.02f), 0.0095f, VRUi.Ink);
                 VRGlass.Label(c, "Start one from My Experiences.", new Vector3(0, -0.02f, -0.02f), 0.0072f, VRUi.Muted);
+                VRGlass.Button(c, "View Exercise Log", new Vector3(0, -0.405f, -0.02f), new Vector2(0.8f, 0.11f), GlassStyle.Secondary, 0.0072f, ShowExercise, 0.035f);
                 return;
             }
 
@@ -758,7 +765,7 @@ namespace ABetterU.Coach
             VRGlass.Label(c, VRUi.Wrap(data.LatestWorkout ?? "", 24, 2), new Vector3(-0.38f, -0.22f, -0.02f), 0.0088f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
             if (!string.IsNullOrEmpty(data.LatestWorkoutWhen))
                 VRGlass.Label(c, data.LatestWorkoutWhen, new Vector3(-0.38f, -0.33f, -0.02f), 0.0075f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
-            VRGlass.Label(c, "Saved to your profile", new Vector3(0, -0.405f, -0.02f), 0.0062f, VRUi.Muted);
+            VRGlass.Button(c, "View Exercise Log", new Vector3(0, -0.405f, -0.02f), new Vector2(0.8f, 0.11f), GlassStyle.Secondary, 0.0072f, ShowExercise, 0.035f);
         }
 
         void BuildWellbeingCard(Transform c)
@@ -989,6 +996,112 @@ namespace ABetterU.Coach
         }
 
         // ── My Experiences: the way into the virtual gym ────────────────────────────────────────────────
+
+        // ── Exercise log: every recorded exercise for a day, from the real strength_sets and exercise_logs ──────────────
+
+        const int ExercisePageSize = 4;
+
+        void ShowExercise()
+        {
+            Current = Stage.Exercise;
+            EnsureAssistant();
+            exerciseDate = DateTime.Now.Date;
+            exercisePage = 0;
+            BuildExercise();
+            StartCoroutine(LoadExercise());
+        }
+
+        IEnumerator LoadExercise()
+        {
+            exercise.Loading = true; exercise.Loaded = false;
+            if (Current == Stage.Exercise) BuildExercise();
+            yield return exercise.Load(supabase, exerciseDate);
+            if (Current == Stage.Exercise) BuildExercise();
+        }
+
+        void GoToExerciseDay(int offsetDays)
+        {
+            if (exercise.Loading) return;
+            exercisePage = 0;
+            exerciseDate = exerciseDate.AddDays(offsetDays);
+            if (exerciseDate > DateTime.Now.Date) exerciseDate = DateTime.Now.Date;
+            BuildExercise();
+            StartCoroutine(LoadExercise());
+        }
+
+        void BuildExercise()
+        {
+            var accent = new Color(0.45f, 0.75f, 1.0f);
+            var p = NewRoot(new Vector3(0f, 1.65f, 2.55f));
+            VRGlass.Panel(p, "Exercise log", new Vector3(0, 0, 0.04f), new Vector2(3.6f, 1.95f), 0.08f, GlassStyle.Panel);
+            VRGlass.Label(p, "Exercise Log", new Vector3(-1.62f, 0.81f, -0.02f), 0.019f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+            VRGlass.Button(p, "< Previous", new Vector3(-0.55f, 0.81f, -0.02f), new Vector2(0.5f, 0.16f),
+                !exercise.Loading ? GlassStyle.Secondary : GlassStyle.Disabled, 0.0085f, () => GoToExerciseDay(-1), 0.04f);
+            VRGlass.Label(p, DayTitle(exerciseDate), new Vector3(0.2f, 0.81f, -0.02f), 0.013f, VRUi.Ink);
+            VRGlass.Button(p, "Next >", new Vector3(0.89f, 0.81f, -0.02f), new Vector2(0.5f, 0.16f),
+                !exercise.Loading && exerciseDate < DateTime.Now.Date ? GlassStyle.Secondary : GlassStyle.Disabled,
+                0.0085f, () => GoToExerciseDay(1), 0.04f);
+            VRGlass.Button(p, "My World", new Vector3(1.445f, 0.81f, -0.02f), new Vector2(0.5f, 0.16f), GlassStyle.Secondary, 0.0085f, ShowMyWorld, 0.04f);
+
+            if (!exercise.Loaded || exercise.Loading)
+                VRGlass.Label(p, "Loading your exercise log...", new Vector3(-0.55f, 0.15f, -0.02f), 0.011f, VRUi.Muted);
+            else if (exercise.HadError)
+            {
+                VRGlass.Label(p, "Couldn't load this day.", new Vector3(-0.55f, 0.2f, -0.02f), 0.011f, VRUi.Ink);
+                VRGlass.Button(p, "Retry", new Vector3(-0.55f, 0, -0.02f), new Vector2(0.6f, 0.16f), GlassStyle.Secondary,
+                    0.009f, () => StartCoroutine(LoadExercise()));
+            }
+            else if (exercise.Items.Count == 0)
+            {
+                VRGlass.Label(p, "No exercise recorded on this day", new Vector3(-0.55f, 0.25f, -0.02f), 0.012f, VRUi.Ink);
+                VRGlass.Label(p, "Do a squat set in the gym, or tell Atlas what you did.", new Vector3(-0.55f, 0.08f, -0.02f), 0.009f, VRUi.Muted);
+            }
+            else
+            {
+                int pages = Mathf.Max(1, (exercise.Items.Count + ExercisePageSize - 1) / ExercisePageSize);
+                exercisePage = Mathf.Clamp(exercisePage, 0, pages - 1);
+                VRGlass.Label(p, $"{exercise.Items.Count} exercise{(exercise.Items.Count == 1 ? "" : "s")}", new Vector3(-1.61f, 0.55f, -0.02f),
+                    0.0095f, accent, TextAnchor.MiddleLeft, TextAlignment.Left);
+                float y = 0.42f;
+                for (int i = exercisePage * ExercisePageSize; i < Mathf.Min(exercise.Items.Count, (exercisePage + 1) * ExercisePageSize); i++)
+                {
+                    var item = exercise.Items[i];
+                    VRGlass.Panel(p, "Exercise entry", new Vector3(-0.54f, y - 0.075f, 0.01f), new Vector2(2.2f, 0.28f), 0.035f, GlassStyle.Card, 1);
+                    VRGlass.Icon(p, VRArt.IconKind.Dumbbell, accent, new Vector3(-1.45f, y - 0.075f, -0.02f), 0.17f);
+                    VRGlass.Label(p, VRUi.Wrap(item.Name, 34, 1), new Vector3(-1.27f, y - 0.025f, -0.02f), 0.0105f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+                    VRGlass.Label(p, VRUi.Wrap(item.Detail, 46, 1), new Vector3(-1.27f, y - 0.11f, -0.02f), 0.0085f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+                    if (item.Minutes > 0)
+                        VRGlass.Label(p, $"{item.Minutes:0.#} min", new Vector3(0.46f, y - 0.025f, -0.02f), 0.009f, VRUi.Ink, TextAnchor.MiddleRight, TextAlignment.Right);
+                    if (!string.IsNullOrEmpty(item.Tag))
+                        VRGlass.Label(p, item.Tag, new Vector3(0.46f, y - 0.11f, -0.02f), 0.0075f, Teal, TextAnchor.MiddleRight, TextAlignment.Right);
+                    y -= 0.31f;
+                }
+                VRGlass.Button(p, "< Items", new Vector3(-1.25f, -0.79f, -0.02f), new Vector2(0.55f, 0.14f),
+                    exercisePage > 0 ? GlassStyle.Secondary : GlassStyle.Disabled, 0.0085f, () => { exercisePage--; BuildExercise(); });
+                VRGlass.Label(p, $"Page {exercisePage + 1} of {pages}", new Vector3(-0.55f, -0.79f, -0.02f), 0.009f, VRUi.Muted);
+                VRGlass.Button(p, "Items >", new Vector3(0.18f, -0.79f, -0.02f), new Vector2(0.55f, 0.14f),
+                    exercisePage + 1 < pages ? GlassStyle.Secondary : GlassStyle.Disabled, 0.0085f, () => { exercisePage++; BuildExercise(); });
+            }
+
+            var t = new GameObject("Day totals").transform;
+            t.SetParent(p, false);
+            t.localPosition = new Vector3(1.17f, -0.06f, 0f);
+            VRGlass.Panel(t, "Totals panel", new Vector3(0, 0, 0.02f), new Vector2(1.05f, 1.4f), 0.05f, GlassStyle.Card, 1);
+            VRGlass.Label(t, "Day total", new Vector3(0, 0.56f, -0.02f), 0.011f, VRUi.Muted);
+            if (exercise.Loaded && !exercise.Loading && !exercise.HadError)
+            {
+                ExerciseStat(t, exercise.TotalSets.ToString(), exercise.TotalSets == 1 ? "set" : "sets", 0.30f);
+                ExerciseStat(t, exercise.TotalReps.ToString(), exercise.TotalReps == 1 ? "rep" : "reps", -0.05f);
+                ExerciseStat(t, exercise.TotalMinutes > 0 ? exercise.TotalMinutes.ToString("0.#") : "-", "minutes", -0.40f);
+            }
+            else VRGlass.Label(t, exercise.HadError ? "Unavailable" : "Loading...", new Vector3(0, 0.2f, -0.02f), 0.011f, VRUi.Muted);
+        }
+
+        static void ExerciseStat(Transform parent, string value, string unit, float y)
+        {
+            VRGlass.Label(parent, value, new Vector3(0, y, -0.03f), 0.026f, VRUi.Ink);
+            VRGlass.Label(parent, unit, new Vector3(0, y - 0.12f, -0.02f), 0.0085f, VRUi.Muted);
+        }
 
         void ShowExperiences()
         {

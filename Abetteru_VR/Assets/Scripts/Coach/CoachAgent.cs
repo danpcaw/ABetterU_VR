@@ -70,9 +70,9 @@ namespace ABetterU.Coach
              ""grams"":{""type"":""number"",""description"":""Weight in grams if the user gave one (for example 100). Use this instead of servings.""}},
             ""required"":[""meal""]}},
           {""type"":""function"",""name"":""go_to"",
-           ""description"":""Open a screen in the app. Destinations: home; my_world (the profile, nutrition, today's activity and wellbeing notes cards, so 'wellness card' means my_world); food_diary; my_experiences; virtual_gym. Only say you opened something after this returns ok."",
+           ""description"":""Open a screen in the app. Destinations: home; my_world (the profile, nutrition, today's activity and wellbeing notes cards, so 'wellness card' means my_world); food_diary; exercise_log (every exercise recorded for the day); my_experiences; virtual_gym. Only say you opened something after this returns ok."",
            ""parameters"":{""type"":""object"",""properties"":{
-             ""destination"":{""type"":""string"",""enum"":[""home"",""my_world"",""food_diary"",""my_experiences"",""virtual_gym""]}},
+             ""destination"":{""type"":""string"",""enum"":[""home"",""my_world"",""food_diary"",""exercise_log"",""my_experiences"",""virtual_gym""]}},
             ""required"":[""destination""]}},
           {""type"":""function"",""name"":""report_injury"",
            ""description"":""Save an injury or sore area the user says they have. Record only what they say; never diagnose."",
@@ -119,7 +119,7 @@ namespace ABetterU.Coach
             "For any food request, call find_my_meals AND search_foods together in the same step, never one after the other (the user does not have to say 'meal' or 'combo'). " +
             "If one of their saved meals matches, even loosely, such as 'toast and banana' matching a saved 'Toast and banana', call log_meal " +
             "(not log_food) and say its logged_name and kcal. Otherwise log the foods. " +
-            "You can open screens with go_to: home, my_world (profile, nutrition, today's activity and wellbeing cards, so 'wellness card' means my_world), food_diary, my_experiences and virtual_gym. " +
+            "You can open screens with go_to: home, my_world (profile, nutrition, today's activity and wellbeing cards, so 'wellness card' means my_world), food_diary, exercise_log (the exercises recorded for a day), my_experiences and virtual_gym. " +
             "Only say you opened something after go_to returned ok:true. My Community and Discover are coming soon: say so, do not pretend to open them. " +
             "If the user gives a weight in grams, pass grams to log_food, not servings. " +
             "If search_foods returns exact_match_food_id, the user named exactly that food: log it straight away with log_food and do not offer choices. " +
