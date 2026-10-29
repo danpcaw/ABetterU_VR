@@ -469,7 +469,7 @@ namespace ABetterU.Coach
             if (wav == null)
             {
                 board.Show("Too short, try again.\nHold trigger while talking.");
-                Report(AssistantState.Ready, "Ask A Better U", "That was too short. Hold the trigger while you talk.");
+                Report(AssistantState.Ready, ReadyHeadline, "That was too short. Hold the trigger while you talk.");
                 yield break;
             }
 
@@ -567,7 +567,7 @@ namespace ABetterU.Coach
             // Captions follow the voice: each sentence appears as it starts to play, not when the text arrives.
             bool spoken = false;
             tts.Speak(reply, () => spoken = true,
-                s => Report(falseClaim ? AssistantState.Error : AssistantState.Speaking, falseClaim ? "Nothing was saved" : "A Better U", s));
+                (s, secs) => ShowCaption(falseClaim ? AssistantState.Error : AssistantState.Speaking, falseClaim ? "Nothing was saved" : WakeName, s, secs));
             while (!spoken) yield return null;
             Debug.Log($"[Timing] turn: asr {tAsr:0.00}s, agent {tSpark:0.00}s, speech started {tts.FirstAudioDelay:0.00}s after reply, speech to reply-heard total {Time.realtimeSinceStartup - t0:0.00}s");
 
@@ -586,6 +586,32 @@ namespace ABetterU.Coach
             listenAfter = Time.unscaledTime + 0.7f;                  // do not hear our own voice fading out
             followUntil = Time.unscaledTime + FollowUpSeconds;       // a natural reply needs no wake name
             busy = false;
+        }
+
+        // Subtitles: the words of a sentence appear as it is spoken, each one when the voice reaches it (paced by letters, since
+        // speech time is roughly proportional to length). The reveal ends a little early so the text is never behind the voice.
+        Coroutine captionRoutine;
+
+        void ShowCaption(AssistantState state, string head, string sentence, float seconds)
+        {
+            if (captionRoutine != null) StopCoroutine(captionRoutine);
+            captionRoutine = StartCoroutine(RevealWords(state, head, sentence, seconds));
+        }
+
+        IEnumerator RevealWords(AssistantState state, string head, string sentence, float seconds)
+        {
+            var words = sentence.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            int total = Mathf.Max(1, sentence.Length);
+            float start = Time.unscaledTime;
+            int before = 0;                                           // letters spoken before the current word
+            for (int i = 0; i < words.Length; i++)
+            {
+                float due = seconds * 0.9f * before / total;
+                while (Time.unscaledTime - start < due) yield return null;
+                Report(state, head, string.Join(" ", words, 0, i + 1));
+                before += words[i].Length + 1;
+            }
+            captionRoutine = null;
         }
 
         // Turns the agent's "[tool] {args}" progress text into something a person would want to read.

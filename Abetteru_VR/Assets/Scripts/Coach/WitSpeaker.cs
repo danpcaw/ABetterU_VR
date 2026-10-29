@@ -62,14 +62,14 @@ namespace ABetterU.Coach
 
         public void Speak(string text, Action onDone = null) => Speak(text, onDone, null);
 
-        /// onSentence is raised with each sentence at the moment it starts playing, so captions can follow the voice like subtitles.
-        public void Speak(string text, Action onDone, Action<string> onSentence)
+        /// onSentence is raised with each sentence (and its length in seconds) at the moment it starts playing, so captions can follow the voice.
+        public void Speak(string text, Action onDone, Action<string, float> onSentence)
         {
-            if (!Ready || string.IsNullOrWhiteSpace(text)) { onSentence?.Invoke(text); onDone?.Invoke(); return; }
+            if (!Ready || string.IsNullOrWhiteSpace(text)) { onSentence?.Invoke(text, 0f); onDone?.Invoke(); return; }
             StartCoroutine(SpeakRoutine(text, onDone, onSentence));
         }
 
-        IEnumerator SpeakRoutine(string text, Action onDone, Action<string> onSentence)
+        IEnumerator SpeakRoutine(string text, Action onDone, Action<string, float> onSentence)
         {
             IsSpeaking = true;
             float tStart = Time.realtimeSinceStartup;
@@ -87,10 +87,10 @@ namespace ABetterU.Coach
             for (int i = 0; i < parts.Count; i++)
             {
                 while (!finished[i]) yield return null;
-                if (clips[i] == null) { onSentence?.Invoke(parts[i]); continue; }   // no audio for it: still show the words
+                if (clips[i] == null) { onSentence?.Invoke(parts[i], 0f); continue; }   // no audio for it: still show the words
                 source.clip = clips[i];
                 source.Play();
-                onSentence?.Invoke(parts[i]);
+                onSentence?.Invoke(parts[i], clips[i].length);
                 if (i == 0) FirstAudioDelay = Time.realtimeSinceStartup - tStart;
                 while (source.isPlaying) yield return null;
             }
