@@ -11,7 +11,7 @@ namespace ABetterU.Coach
     /// Also owns the in-gym menu (left Menu button). VoiceLoopTest builds the gym when this enters Stage.Gym.
     public class AppFlow : MonoBehaviour
     {
-        public enum Stage { Login, Home, MyWorld, Diary, Experiences, Gym, Exercise }
+        public enum Stage { Login, Home, MyWorld, Diary, Experiences, Gym, Exercise, Profile }
         public Stage Current { get; private set; } = Stage.Login;
 
         /// True while the in-gym menu is open, so the right trigger clicks menu buttons instead of starting the mic.
@@ -37,6 +37,7 @@ namespace ABetterU.Coach
         readonly DashboardData data = new DashboardData();
         readonly DiaryData diary = new DiaryData();
         readonly ExerciseData exercise = new ExerciseData();
+        readonly ProfileData profile = new ProfileData();
         DateTime exerciseDate = DateTime.Now.Date;
         int exercisePage;
         DateTime diaryDate = DateTime.Now.Date;
@@ -204,6 +205,7 @@ namespace ABetterU.Coach
                 case "my_world": ShowMyWorld(); return true;
                 case "food_diary": ShowDiary(); return true;
                 case "exercise_log": ShowExercise(); return true;
+                case "my_profile": ShowProfile(); return true;
                 case "my_experiences": ShowExperiences(); return true;
                 case "virtual_gym": EnterGym(); return true;
                 default: return false;
@@ -423,6 +425,7 @@ namespace ABetterU.Coach
                 yield return data.Refresh(supabase, null);
                 if (Current == Stage.Diary && !diary.Loading) yield return diary.Load(supabase, diaryDate);   // a save may have changed the day on screen
                 if (Current == Stage.Exercise && !exercise.Loading) yield return exercise.Load(supabase, exerciseDate);
+                if (Current == Stage.Profile && !profile.Loading) yield return profile.Load(supabase);
             }
             while (refreshAgain);
             refreshing = false;
@@ -438,6 +441,7 @@ namespace ABetterU.Coach
                 case Stage.MyWorld: BuildMyWorld(); break;
                 case Stage.Diary: BuildDiary(); break;
                 case Stage.Exercise: BuildExercise(); break;
+                case Stage.Profile: BuildProfile(); break;
                 case Stage.Experiences: BuildExperiences(); break;
             }
         }
@@ -618,7 +622,7 @@ namespace ABetterU.Coach
                 ? $"Goal {data.CalorieGoal.Value:N0} kcal a day"
                 : "A Better U member";
             VRGlass.Label(profile, sub, new Vector3(-0.13f, 0.03f, -0.02f), 0.0075f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
-            VRGlass.Button(profile, "View Food Diary", new Vector3(0f, -0.155f, -0.02f), new Vector2(0.72f, 0.11f), GlassStyle.Secondary, 0.0072f, ShowDiary, 0.035f);
+            VRGlass.Button(profile, "My Profile", new Vector3(0f, -0.155f, -0.02f), new Vector2(0.72f, 0.11f), GlassStyle.Secondary, 0.0072f, ShowProfile, 0.035f);
         }
 
         void BuildWeightCard(Transform c)
@@ -700,10 +704,13 @@ namespace ABetterU.Coach
             VRGlass.Label(c, title, new Vector3(-0.25f, y, -0.02f), 0.0105f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
         }
 
+        // The buttons under the two big cards sit just below them, on one line, so they never collide with the card text.
+        const float CardButtonY = -0.56f;
+
         void BuildNutritionCard(Transform c)
         {
             CardTitle(c, VRArt.IconKind.Apple, new Color(0.40f, 0.95f, 0.70f), "Today's Nutrition", 0.37f);
-            VRGlass.Button(c, "View Food Diary", new Vector3(0, -0.365f, -0.02f), new Vector2(0.8f, 0.13f), GlassStyle.Secondary, 0.0075f, ShowDiary, 0.035f);
+            VRGlass.Button(c, "View Food Diary", new Vector3(0, CardButtonY, -0.02f), new Vector2(0.8f, 0.12f), GlassStyle.Secondary, 0.0078f, ShowDiary, 0.035f);
 
             if (!data.Loaded) { VRGlass.Label(c, "Loading...", new Vector3(0, 0.1f, -0.02f), 0.009f, VRUi.Muted); return; }
             if (data.MealsToday == 0)
@@ -747,13 +754,13 @@ namespace ABetterU.Coach
         void BuildActivityCard(Transform c)
         {
             CardTitle(c, VRArt.IconKind.Dumbbell, new Color(0.45f, 0.75f, 1.0f), "This Week's Activity", 0.37f);
+            VRGlass.Button(c, "View Exercise Log", new Vector3(0, CardButtonY, -0.02f), new Vector2(0.8f, 0.12f), GlassStyle.Secondary, 0.0078f, ShowExercise, 0.035f);
 
             if (!data.Loaded) { VRGlass.Label(c, "Loading...", new Vector3(0, 0.1f, -0.02f), 0.009f, VRUi.Muted); return; }
             if (data.WorkoutsThisWeek == 0)
             {
                 VRGlass.Label(c, "No workouts this week", new Vector3(0, 0.12f, -0.02f), 0.0095f, VRUi.Ink);
                 VRGlass.Label(c, "Start one from My Experiences.", new Vector3(0, -0.02f, -0.02f), 0.0072f, VRUi.Muted);
-                VRGlass.Button(c, "View Exercise Log", new Vector3(0, -0.405f, -0.02f), new Vector2(0.8f, 0.11f), GlassStyle.Secondary, 0.0072f, ShowExercise, 0.035f);
                 return;
             }
 
@@ -765,7 +772,6 @@ namespace ABetterU.Coach
             VRGlass.Label(c, VRUi.Wrap(data.LatestWorkout ?? "", 24, 2), new Vector3(-0.38f, -0.22f, -0.02f), 0.0088f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
             if (!string.IsNullOrEmpty(data.LatestWorkoutWhen))
                 VRGlass.Label(c, data.LatestWorkoutWhen, new Vector3(-0.38f, -0.33f, -0.02f), 0.0075f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
-            VRGlass.Button(c, "View Exercise Log", new Vector3(0, -0.405f, -0.02f), new Vector2(0.8f, 0.11f), GlassStyle.Secondary, 0.0072f, ShowExercise, 0.035f);
         }
 
         void BuildWellbeingCard(Transform c)
@@ -996,6 +1002,102 @@ namespace ABetterU.Coach
         }
 
         // ── My Experiences: the way into the virtual gym ────────────────────────────────────────────────
+
+        // ── My Profile: the user's own profile page, from their real profile row and feed ───────────────────────────
+
+        void ShowProfile()
+        {
+            Current = Stage.Profile;
+            EnsureAssistant();
+            BuildProfile();
+            StartCoroutine(LoadProfile());
+            StartCoroutine(RefreshData());
+        }
+
+        IEnumerator LoadProfile()
+        {
+            profile.Loading = true; profile.Loaded = false;
+            if (Current == Stage.Profile) BuildProfile();
+            yield return profile.Load(supabase);
+            if (Current == Stage.Profile) BuildProfile();
+        }
+
+        static string Pretty(string s) => string.IsNullOrEmpty(s) ? null : char.ToUpper(s[0]) + s.Substring(1).Replace('_', ' ');
+
+        void BuildProfile()
+        {
+            var p = NewRoot(new Vector3(0f, 1.65f, 2.55f));
+            VRGlass.Panel(p, "Profile", new Vector3(0, 0, 0.04f), new Vector2(3.6f, 1.95f), 0.08f, GlassStyle.Panel);
+            VRGlass.Label(p, "My Profile", new Vector3(-1.62f, 0.81f, -0.02f), 0.019f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+            VRGlass.Button(p, "My World", new Vector3(1.445f, 0.81f, -0.02f), new Vector2(0.5f, 0.16f), GlassStyle.Secondary, 0.0085f, ShowMyWorld, 0.04f);
+
+            if (!profile.Loaded || profile.Loading)
+            { VRGlass.Label(p, "Loading your profile...", new Vector3(0, 0.1f, -0.02f), 0.011f, VRUi.Muted); return; }
+            if (profile.HadError)
+            {
+                VRGlass.Label(p, "Couldn't load your profile.", new Vector3(0, 0.2f, -0.02f), 0.011f, VRUi.Ink);
+                VRGlass.Button(p, "Retry", new Vector3(0, 0, -0.02f), new Vector2(0.6f, 0.16f), GlassStyle.Secondary, 0.009f, () => StartCoroutine(LoadProfile()));
+                return;
+            }
+
+            // Who you are.
+            var who = Card(p, new Vector3(-1.08f, 0.30f, 0f), new Vector2(1.4f, 0.80f));
+            VRGlass.Image(who, "Avatar", VRArt.Orb(new Color(0.20f, 0.75f, 0.80f), new Color(0.20f, 0.75f, 0.80f)), new Vector3(-0.47f, 0.17f, -0.01f), new Vector2(0.34f, 0.34f), 3);
+            VRGlass.Label(who, Initial(profile.Name ?? DisplayName), new Vector3(-0.47f, 0.17f, -0.02f), 0.016f, VRUi.Ink);
+            VRGlass.Label(who, VRUi.Wrap(profile.Name ?? DisplayName, 20, 1), new Vector3(-0.24f, 0.25f, -0.02f), 0.0135f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+            if (!string.IsNullOrEmpty(profile.Username))
+                VRGlass.Label(who, "@" + profile.Username, new Vector3(-0.24f, 0.14f, -0.02f), 0.0085f, Teal, TextAnchor.MiddleLeft, TextAlignment.Left);
+            if (profile.MemberSince.HasValue)
+                VRGlass.Label(who, "Member since " + profile.MemberSince.Value.ToString("MMM yyyy"), new Vector3(-0.24f, 0.04f, -0.02f), 0.0075f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+            VRGlass.Label(who, string.IsNullOrWhiteSpace(profile.Bio) ? "No bio yet" : VRUi.Wrap(profile.Bio, 42, 3),
+                new Vector3(-0.62f, -0.10f, -0.02f), 0.0082f, string.IsNullOrWhiteSpace(profile.Bio) ? VRUi.Muted : VRUi.Ink, TextAnchor.UpperLeft, TextAlignment.Left);
+
+            // How you are doing: four plain numbers.
+            var stats = Card(p, new Vector3(0.12f, 0.30f, 0f), new Vector2(1.0f, 0.80f));
+            ProfileStat(stats, data.StreakDays.ToString(), data.StreakDays == 1 ? "day streak" : "day streak", -0.25f, 0.13f);
+            ProfileStat(stats, data.WorkoutsThisWeek.ToString(), "workouts this week", 0.25f, 0.13f);
+            ProfileStat(stats, profile.PostCount.ToString(), profile.PostCount == 1 ? "post" : "posts", -0.25f, -0.17f);
+            ProfileStat(stats, profile.Followers.ToString(), profile.Followers == 1 ? "follower" : "followers", 0.25f, -0.17f);
+
+            // What you are working towards.
+            var goals = Card(p, new Vector3(1.30f, 0.30f, 0f), new Vector2(1.0f, 0.80f));
+            VRGlass.Label(goals, "Goals", new Vector3(0, 0.33f, -0.02f), 0.011f, VRUi.Muted);
+            float y = 0.20f;
+            void Line(string label, string value)
+            {
+                if (string.IsNullOrEmpty(value)) return;
+                VRGlass.Label(goals, label, new Vector3(-0.43f, y, -0.02f), 0.0072f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+                VRGlass.Label(goals, VRUi.Wrap(value, 22, 1), new Vector3(0.43f, y, -0.02f), 0.0082f, VRUi.Ink, TextAnchor.MiddleRight, TextAlignment.Right);
+                y -= 0.115f;
+            }
+            Line("Daily calories", profile.CalorieGoal.HasValue ? $"{profile.CalorieGoal.Value:N0} kcal" : null);
+            Line("Weight", profile.WeightKg.HasValue ? $"{profile.WeightKg.Value:0.#} kg" : null);
+            Line("Goal weight", profile.GoalWeightKg.HasValue ? $"{profile.GoalWeightKg.Value:0.#} kg" : null);
+            Line("Focus", Pretty(profile.GoalType));
+            Line("Training days", profile.DaysPerWeek.HasValue ? $"{profile.DaysPerWeek.Value} a week" : null);
+            Line("Experience", Pretty(profile.Experience));
+            if (y > 0.19f) VRGlass.Label(goals, "No goals set yet", new Vector3(0, 0.1f, -0.02f), 0.0085f, VRUi.Muted);
+
+            // Your feed.
+            var feed = Card(p, new Vector3(0f, -0.43f, 0f), new Vector2(3.4f, 0.80f));
+            VRGlass.Label(feed, "Recent posts", new Vector3(-1.55f, 0.32f, -0.02f), 0.011f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+            if (profile.Posts.Count == 0)
+                VRGlass.Label(feed, "Nothing posted yet. Ask Atlas to share your session.", new Vector3(0, -0.02f, -0.02f), 0.0095f, VRUi.Muted);
+            float py = 0.16f;
+            foreach (var post in profile.Posts)
+            {
+                VRGlass.Label(feed, post.When, new Vector3(-1.55f, py, -0.02f), 0.0078f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+                VRGlass.Label(feed, VRUi.Wrap(post.Body.Replace('\n', ' '), 80, 1), new Vector3(-1.2f, py, -0.02f), 0.0085f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+                VRGlass.Label(feed, post.Visibility == "public" ? "Public" : post.Visibility == "fof" ? "Friends of friends" : "Friends", new Vector3(1.55f, py, -0.02f), 0.0075f, Teal, TextAnchor.MiddleRight, TextAlignment.Right);
+                py -= 0.17f;
+            }
+        }
+
+        static void ProfileStat(Transform card, string value, string caption, float x, float y)
+        {
+            VRGlass.Label(card, value, new Vector3(x, y, -0.03f), 0.024f, VRUi.Ink);
+            VRGlass.Label(card, caption, new Vector3(x, y - 0.11f, -0.02f), 0.0075f, VRUi.Muted);
+        }
 
         // ── Exercise log: every recorded exercise for a day, from the real strength_sets and exercise_logs ──────────────
 
