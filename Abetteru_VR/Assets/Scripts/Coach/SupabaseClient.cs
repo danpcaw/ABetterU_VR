@@ -81,6 +81,24 @@ namespace ABetterU.Coach
         public IEnumerator Rpc(string fn, string json, Action<string> ok, Action<string> fail) =>
             Send($"{config.supabaseUrl}/rest/v1/rpc/{fn}", "POST", json, false, ok, fail);
 
+        /// Uploads a file into a storage bucket as the signed-in user and returns its public URL. The bucket's policy decides where
+        /// they may write (atlas-post-images: only into a folder named after their own user id).
+        public IEnumerator UploadPublic(string bucket, string path, byte[] data, string contentType, Action<string> ok, Action<string> fail)
+        {
+            if (!SignedIn) { fail("Sign in first."); yield break; }
+            using var req = new UnityWebRequest($"{config.supabaseUrl}/storage/v1/object/{bucket}/{path}", "POST")
+            {
+                uploadHandler = new UploadHandlerRaw(data),
+                downloadHandler = new DownloadHandlerBuffer(),
+            };
+            req.SetRequestHeader("apikey", config.supabaseAnonKey);
+            req.SetRequestHeader("Authorization", "Bearer " + accessToken);
+            req.SetRequestHeader("Content-Type", contentType);
+            yield return req.SendWebRequest();
+            if (req.result == UnityWebRequest.Result.Success) ok($"{config.supabaseUrl}/storage/v1/object/public/{bucket}/{path}");
+            else fail($"{req.responseCode}: {req.downloadHandler.text}");
+        }
+
         /// Reads rows through PostgREST, e.g. Get("user_injuries?select=body_area&status=eq.active", ...).
         public IEnumerator Get(string pathAndQuery, Action<string> ok, Action<string> fail) =>
             Send($"{config.supabaseUrl}/rest/v1/{pathAndQuery}", "GET", null, false, ok, fail);

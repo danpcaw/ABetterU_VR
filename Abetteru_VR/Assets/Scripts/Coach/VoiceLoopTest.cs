@@ -152,6 +152,8 @@ namespace ABetterU.Coach
             agent.Navigate = dest => flow != null && flow.NavigateTo(dest);
             agent.StartSquatSession = ConfigureSquatWorkout;
             agent.ControlSquatSession = ControlSquatWorkout;
+            agent.DraftPost = DraftPostRoutine;
+            agent.PublishPost = PublishRoutine;
             agent.HasTrackedSquatWorkout = () => workout != null;
             agent.ChoicesOffered += (list, servings, grams) => OnChoices?.Invoke(list, servings, grams);
 
@@ -175,6 +177,7 @@ namespace ABetterU.Coach
         void Update()
         {
             if (mic == null || flow == null) return;
+            PostTick();
             HandsFreeTick();
             var stage = flow.Current;
             if (stage == AppFlow.Stage.Login) return;           // nothing to talk to until someone is signed in
@@ -371,13 +374,12 @@ namespace ABetterU.Coach
         IEnumerator MakeSessionCard(SquatHud forHud, int n)
         {
             forHud.ShowCardPending();
-            const string prompt = "Achievement card artwork for a bodyweight squat workout. Dark navy background with teal accents, " +
-                                  "a stylised athlete silhouette mid squat in the upper two thirds, flat vector style, the athlete exactly centred horizontally, uncluttered. " +
-                                  "Leave the lower third empty. Absolutely no text, no letters and no numbers anywhere in the image.";
+            string prompt = RealisticPrompt("a fit athlete caught mid bodyweight squat, seen from the front, face softly out of focus");
             Texture2D art = null; string err = null;
             yield return museImage.Generate(prompt, 768, t => art = t, e => err = e);
             if (forHud == null) { if (art != null) Destroy(art); yield break; }    // a new set started meanwhile
             if (art == null) { Debug.LogWarning("[MuseImage] card failed: " + err); forHud.HideCard(); yield break; }
+            lastCardJpg = art.EncodeToJPG(88);                      // kept so a post can reuse this exact artwork
             forHud.ShowCard(art, n, n == 1 ? "SQUAT" : "SQUATS");
         }
 
@@ -556,6 +558,8 @@ namespace ABetterU.Coach
                 case "report_injury": return "Saving your note...";
                 case "build_workout": return "Building your workout...";
                 case "log_set": return "Saving your set...";
+                case "draft_post": return "Making your post...";
+                case "publish_post": return "Posting...";
                 case "go_to": return "Opening that...";
                 default: return "Working on it...";
             }
@@ -585,6 +589,10 @@ namespace ABetterU.Coach
                     text = ((bool?)result["already_recorded"] == true ? "Already noted: " : "Noted: ") + shortName;
                     break;
                 }
+                case "publish_post":
+                    shortName = "post";
+                    text = $"Posted to your A Better U feed ({((string)result["visibility"] == "public" ? "public" : "friends only")})";
+                    break;
                 case "log_set":
                     shortName = $"{(int)result["reps"]} reps {(string)result["logged_exercise"]}";
                     text = $"{(int)result["reps"]} reps of {(string)result["logged_exercise"]} saved to your activity";

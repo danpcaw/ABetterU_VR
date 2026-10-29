@@ -44,6 +44,8 @@ Impact 30 · Use of Meta AI tooling 25 (creative, beyond a basic integration) ·
 - Muse Spark tool-calling agent (search_foods, log_food, report_injury, build_workout, log_set) with honesty checks.
 - Muse Voice Transcribe client, voice loop, Wit.ai speech output.
 - Live dashboards and food diary reading the real account.
+- Share to feed: Atlas drafts a post (caption from real data, optional photoreal Muse Image picture), shows a preview with a Friends/Public toggle, and posts through the platform's own `create_post` function only after the user taps Post or asks. Posts as the signed-in user in the in-app feed; it never touches the separate `social_posts` marketing pipeline. Backend: `atlas-post-images` storage bucket and owner-folder insert policy (docs/migrations/003_atlas_post_images_bucket.sql).
+- Exercise Log screen: every recorded exercise for a day, read from `strength_sets` and `exercise_logs`.
 - Backend changes made for this project: `user_injuries` table and RLS (docs/migrations/001_user_injuries.sql);
   web app injuries card, injury history page and servings calorie fix (web repo commits 13769f13, e17eb74f, 3be96973; Oct 27).
 

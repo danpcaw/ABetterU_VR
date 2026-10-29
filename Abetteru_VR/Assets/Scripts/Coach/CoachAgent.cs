@@ -31,6 +31,8 @@ namespace ABetterU.Coach
         public Func<bool> HasTrackedSquatWorkout;
         public Func<int, int, int, string> StartSquatSession;
         public Func<string, int, int, string> ControlSquatSession;
+        public Func<JObject, Action<string>, IEnumerator> DraftPost;
+        public Func<string, Action<string>, IEnumerator> PublishPost;
 
         public CoachAgent(ModelApiConfig config, SupabaseClient supabase)
         {
@@ -101,6 +103,16 @@ namespace ABetterU.Coach
              ""action"":{""type"":""string"",""enum"":[""finish"",""start_next"",""skip_rest"",""add_rest"",""change_sets""]},
              ""seconds"":{""type"":""integer"",""minimum"":1,""maximum"":300,""description"":""Extra rest, default 30""},
              ""sets"":{""type"":""integer"",""minimum"":1,""maximum"":10}},""required"":[""action""]}},
+          {""type"":""function"",""name"":""draft_post"",
+           ""description"":""Prepare a post for the user's A Better U feed and show a preview on screen. Use when the user asks to share or post their session or something they did. Write a short, upbeat, first-person caption under 280 characters using only facts from the message context or tool results, never invented numbers. Optionally give image_prompt: a short description of a scene for a photorealistic 3D render, with no text in it; leave it out to reuse the session card made after a set. This does NOT post anything: the user must tap Post or ask you to post it."",
+           ""parameters"":{""type"":""object"",""properties"":{
+             ""caption"":{""type"":""string""},
+             ""hashtags"":{""type"":""array"",""items"":{""type"":""string""},""description"":""Up to 3, letters and numbers only""},
+             ""image_prompt"":{""type"":""string""}},""required"":[""caption""]}},
+          {""type"":""function"",""name"":""publish_post"",
+           ""description"":""Publish the draft post the user has just approved, for example when they say post it. Only call after a draft_post and the user's go-ahead. Posts are friends-only unless the user says public."",
+           ""parameters"":{""type"":""object"",""properties"":{
+             ""visibility"":{""type"":""string"",""enum"":[""friends"",""public""]}}}},
           {""type"":""function"",""name"":""build_workout"",
            ""description"":""Fetch exercise candidates from the A Better U library, already filtered to avoid the user's active injuries. Then choose 3 and give sets and reps."",
            ""parameters"":{""type"":""object"",""properties"":{
@@ -143,6 +155,8 @@ namespace ABetterU.Coach
             "and pick exactly 3 exercises from its candidates, giving sets and reps. For legs, prefer gentle glute, hip and bodyweight squat options. " +
             "When the user asks to do or start squats, call start_squat_session with their requested sets and reps, default one set of ten and 60 seconds rest. " +
             "For an ongoing headset workout use control_squat_session to stop, skip rest, extend rest or change the number of sets. " +
+            "When the user asks to share or post their session or something they did, call draft_post, then tell them the preview is on screen and they can tap Post or say post it. " +
+            "Never say anything is posted until publish_post returns ok. Posts are friends-only unless the user chooses public. " +
             "Headset-measured sets are saved automatically; never log_set those reps again. Do not claim a session was started or changed without a successful tool result. " +
             "When the user says they finished an exercise outside the tracked headset workout, call log_set with the exercise and the reps they stated, then say what was recorded. " +
             "Say the exercise names aloud in one short sentence, and add that you are not a medical professional only if they ask about treatment.";
@@ -259,6 +273,12 @@ namespace ABetterU.Coach
                 case "go_to": done(GoTo(args)); break;
                 case "report_injury": yield return ReportInjury(args, done); break;
                 case "build_workout": yield return BuildWorkout(args, done); break;
+                case "draft_post":
+                    if (DraftPost != null) yield return DraftPost(args, done); else done(Fail("posting is unavailable"));
+                    break;
+                case "publish_post":
+                    if (PublishPost != null) yield return PublishPost((string)args["visibility"], done); else done(Fail("posting is unavailable"));
+                    break;
                 case "log_set":
                     if (HasTrackedSquatWorkout?.Invoke() == true && ((string)args["exercise_name"] ?? "").IndexOf("squat", StringComparison.OrdinalIgnoreCase) >= 0)
                         done(Fail("The headset owns this workout's measured reps and saves each set automatically. Use control_squat_session instead."));
