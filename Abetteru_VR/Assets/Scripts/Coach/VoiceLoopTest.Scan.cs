@@ -36,7 +36,7 @@ namespace ABetterU.Coach
         const string PlatePrompt =
             "You are looking at a photo of a plate or tray of food. List each distinct food or drink you can clearly see, at most 5. " +
             "For each give name: a plain, common food name that would be found in a food database, including how it is cooked when you can tell " +
-            "(for example grilled chicken breast, boiled potatoes, white rice, raw red pepper, fried egg). A whole uncooked vegetable, including a baking or jacket potato that has not been cooked, is called raw, for example raw potato. Then grams: your best estimate of the weight shown, a whole number. " +
+            "(for example grilled chicken breast, boiled potatoes, white rice, raw red pepper, fried egg). A whole uncooked potato is called baking potato (or new potato if it is small), and a whole sweet or bell pepper is named by its colour, for example orange pepper or red pepper. Then grams: your best estimate of the weight shown, a whole number. " +
             "Reply with JSON only and nothing else, exactly like {\"items\":[{\"name\":\"white rice\",\"grams\":150}]}. " +
             "If there is no food, reply {\"items\":[]}.";
 
