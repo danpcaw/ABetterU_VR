@@ -1254,7 +1254,7 @@ namespace ABetterU.Coach
             if (scanShot == null)
             {
                 bool ready = plateCam != null && plateCam.Streaming;
-                VRGlass.Label(p, VRUi.Wrap(ready ? "Point at your plate, then press the left trigger" : plateCam != null ? plateCam.Status : "", 22, 2), new Vector3(rx, 0.45f, -0.02f), 0.0105f, VRUi.Ink);
+                VRGlass.Label(p, VRUi.Wrap(ready ? "Hold the headset above the plate at a slight angle, with the whole plate inside the frame, then press the left trigger" : plateCam != null ? plateCam.Status : "", 22, 2), new Vector3(rx, 0.45f, -0.02f), 0.0105f, VRUi.Ink);
                 VRGlass.Button(p, "Capture", new Vector3(rx, 0.12f, -0.02f), new Vector2(0.9f, 0.18f), ready ? GlassStyle.Primary : GlassStyle.Disabled, 0.0095f,
                     CaptureScan, 0.04f);
                 if (plateCam != null && plateCam.Failed)
@@ -1332,6 +1332,7 @@ namespace ABetterU.Coach
                 VRGlass.Button(p, "+", new Vector3(-0.44f, -0.905f, -0.02f), new Vector2(0.14f, 0.12f), GlassStyle.Secondary, 0.0095f,
                     () => { VoiceLoopTest.PlateCm += 1; scanResult.Remeasure(VoiceLoopTest.PlateCm); BuildScan(); }, 0.03f);
             }
+            VRGlass.Label(p, "Weights are measured from the photo, so the angle and framing change them.", new Vector3(rx, -0.665f, -0.02f), 0.0068f, VRUi.Muted);
             if (loggable > 0) VRGlass.Label(p, $"About {total:0} kcal in total", new Vector3(rx, -0.57f, -0.02f), 0.0092f, VRUi.Ink);
             else VRGlass.Label(p, "Nothing here can be logged", new Vector3(rx, -0.57f, -0.02f), 0.0092f, VRUi.Muted);
             string meal = CoachAgent.MealNow();
