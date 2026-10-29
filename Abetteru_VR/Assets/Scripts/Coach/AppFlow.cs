@@ -617,6 +617,7 @@ namespace ABetterU.Coach
         {
             VRGlass.Image(profile, "Avatar", VRArt.Orb(new Color(0.20f, 0.75f, 0.80f), new Color(0.20f, 0.75f, 0.80f)), new Vector3(-0.31f, 0.05f, -0.01f), new Vector2(0.28f, 0.28f), 3);
             VRGlass.Label(profile, Initial(DisplayName), new Vector3(-0.31f, 0.05f, -0.02f), 0.013f, VRUi.Ink);
+            AvatarImage.Create(profile, new Vector3(-0.31f, 0.05f, -0.01f), data.AvatarUrl, 0.24f);
             VRGlass.Label(profile, VRUi.Wrap(DisplayName, 18, 1), new Vector3(-0.13f, 0.13f, -0.02f), 0.0125f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
             string sub = data.CalorieGoal.HasValue && data.CalorieGoal.Value > 0
                 ? $"Goal {data.CalorieGoal.Value:N0} kcal a day"
@@ -1047,6 +1048,7 @@ namespace ABetterU.Coach
             var who = Card(p, new Vector3(-1.05f, 0.27f, 0f), new Vector2(1.30f, 0.78f));
             VRGlass.Image(who, "Avatar", VRArt.Orb(new Color(0.20f, 0.75f, 0.80f), new Color(0.20f, 0.75f, 0.80f)), new Vector3(-0.46f, 0.20f, -0.01f), new Vector2(0.36f, 0.36f), 3);
             VRGlass.Label(who, Initial(profile.Name ?? DisplayName), new Vector3(-0.46f, 0.20f, -0.02f), 0.017f, VRUi.Ink);
+            AvatarImage.Create(who, new Vector3(-0.46f, 0.20f, -0.01f), profile.AvatarUrl, 0.31f);      // the real picture covers the initial once it loads
             VRGlass.Label(who, VRUi.Wrap(profile.Name ?? DisplayName, 18, 1), new Vector3(-0.22f, 0.27f, -0.02f), 0.0135f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
             if (!string.IsNullOrEmpty(profile.Username))
                 VRGlass.Label(who, "@" + profile.Username, new Vector3(-0.22f, 0.16f, -0.02f), 0.0088f, Teal, TextAnchor.MiddleLeft, TextAlignment.Left);

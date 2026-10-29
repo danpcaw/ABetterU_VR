@@ -13,7 +13,7 @@ namespace ABetterU.Coach
         public struct PostLine { public string Body, When, Visibility, ImageUrl; }
 
         public bool Loading, Loaded, HadError;
-        public string Name, Username, Bio, GoalType, Experience;
+        public string Name, Username, Bio, GoalType, Experience, AvatarUrl;
         public DateTime? MemberSince;
         public double? WeightKg, GoalWeightKg, HeightCm;
         public int? CalorieGoal, DaysPerWeek;
@@ -29,9 +29,10 @@ namespace ABetterU.Coach
             string uid = db.UserId;
 
             JArray rows = null;
-            yield return Fetch(db, $"profiles?select=name,username,bio,goals,weight_kg,height_cm,goal_weight_kg,goal_type,daily_calorie_goal,workout_days_per_week,fitness_experience,created_at&user_id=eq.{uid}", r => rows = r);
+            yield return Fetch(db, $"profiles?select=name,username,bio,avatar,avatar_url,goals,weight_kg,height_cm,goal_weight_kg,goal_type,daily_calorie_goal,workout_days_per_week,fitness_experience,created_at&user_id=eq.{uid}", r => rows = r);
             if (rows == null || rows.Count == 0) { HadError = true; Loading = false; Loaded = true; yield break; }
             var p = rows[0];
+            AvatarUrl = (string)p["avatar"] ?? (string)p["avatar_url"];
             Name = (string)p["name"]; Username = (string)p["username"]; Bio = (string)p["bio"];
             GoalType = (string)p["goal_type"]; Experience = (string)p["fitness_experience"];
             WeightKg = DashboardData.Num(p["weight_kg"]); GoalWeightKg = DashboardData.Num(p["goal_weight_kg"]); HeightCm = DashboardData.Num(p["height_cm"]);

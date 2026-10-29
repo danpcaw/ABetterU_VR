@@ -16,7 +16,7 @@ namespace ABetterU.Coach
         public bool Loading, Loaded;
         public bool HadError;
 
-        public string Name;
+        public string Name, AvatarUrl;
         public double? CalorieGoal;
 
         public int MealsToday;
@@ -56,10 +56,11 @@ namespace ABetterU.Coach
 
             // Profile: name and the daily calorie goal.
             JArray rows = null;
-            yield return Fetch(db, $"profiles?select=name,daily_calorie_goal&user_id=eq.{uid}", r => rows = r);
+            yield return Fetch(db, $"profiles?select=name,avatar,avatar_url,daily_calorie_goal&user_id=eq.{uid}", r => rows = r);
             if (rows != null && rows.Count > 0)
             {
                 Name = (string)rows[0]["name"];
+                AvatarUrl = (string)rows[0]["avatar"] ?? (string)rows[0]["avatar_url"];
                 CalorieGoal = Num(rows[0]["daily_calorie_goal"]);
             }
 
