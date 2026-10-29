@@ -222,6 +222,7 @@ namespace ABetterU.Coach
             hud.SetWorkoutControls(
                 () =>
                 {
+                    Debug.Log($"[Workout] button next/new: busy={busy}, complete={complete}");
                     if (busy) return;
                     if (complete)
                     {
@@ -230,9 +231,9 @@ namespace ABetterU.Coach
                     }
                     else { workout.SkipRest(); pendingSetStart = true; }
                 },
-                () => { if (!busy) { workout.AddRest(30); hud.SetRest(workout); } },
-                () => RequestFinishWorkout(),
-                () => { if (!busy) StartCoroutine(RetryWorkoutSaves()); }, complete, workout.UnsavedSets > 0);
+                () => { Debug.Log($"[Workout] button +30: busy={busy}"); if (!busy) { workout.AddRest(30); hud.SetRest(workout); } },
+                () => { Debug.Log($"[Workout] button finish: busy={busy}, inProgress={WorkoutInProgress}"); RequestFinishWorkout(); },
+                () => { Debug.Log($"[Workout] button retry: busy={busy}"); if (!busy) StartCoroutine(RetryWorkoutSaves()); }, complete, workout.UnsavedSets > 0);
             flow.SetWorkoutPointer(!busy);
             board.Show(complete ? $"Workout finished: {(workout.Results.Count == 0 ? "0" : workout.RepBreakdown)} reps. {workout.SavedSets} sets saved."
                 : $"Rest · Next is set {workout.NextSet} of {workout.PlannedSets}. Left trigger when ready.");

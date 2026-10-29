@@ -153,16 +153,16 @@ namespace ABetterU.Coach
             if (workoutControls != null) Destroy(workoutControls.gameObject);
             workoutControls = new GameObject("Workout controls").transform;
             workoutControls.SetParent(transform, false);
-            workoutControls.localPosition = new Vector3(0, -0.70f, 0);
-            VRGlass.Panel(workoutControls, "Controls", new Vector3(0, 0, 0.02f), new Vector2(1.6f, 0.25f), 0.05f, GlassStyle.Panel);
-            VRGlass.Button(workoutControls, complete ? "New workout" : "Next set", new Vector3(-0.585f, 0, -0.02f),
-                new Vector2(0.37f, 0.15f), GlassStyle.Primary, 0.0075f, next);
-            VRGlass.Button(workoutControls, "+30 sec", new Vector3(-0.195f, 0, -0.02f), new Vector2(0.37f, 0.15f),
-                complete ? GlassStyle.Disabled : GlassStyle.Secondary, 0.0075f, moreRest);
-            VRGlass.Button(workoutControls, "Finish", new Vector3(0.195f, 0, -0.02f), new Vector2(0.37f, 0.15f),
-                complete ? GlassStyle.Disabled : GlassStyle.Secondary, 0.0075f, finish);
-            VRGlass.Button(workoutControls, "Retry saves", new Vector3(0.585f, 0, -0.02f), new Vector2(0.37f, 0.15f),
-                hasUnsaved ? GlassStyle.Secondary : GlassStyle.Disabled, 0.0075f, retry);
+            workoutControls.localPosition = new Vector3(0, -0.82f, 0);
+            VRGlass.Panel(workoutControls, "Controls", new Vector3(0, 0, 0.02f), new Vector2(1.72f, 0.25f), 0.05f, GlassStyle.Panel);
+            VRGlass.Button(workoutControls, complete ? "New workout" : "Next set", new Vector3(-0.63f, 0, -0.02f),
+                new Vector2(0.40f, 0.15f), GlassStyle.Primary, 0.0068f, next);
+            VRGlass.Button(workoutControls, "+30 sec", new Vector3(-0.21f, 0, -0.02f), new Vector2(0.40f, 0.15f),
+                complete ? GlassStyle.Disabled : GlassStyle.Secondary, 0.0068f, moreRest);
+            VRGlass.Button(workoutControls, "Finish", new Vector3(0.21f, 0, -0.02f), new Vector2(0.40f, 0.15f),
+                complete ? GlassStyle.Disabled : GlassStyle.Secondary, 0.0068f, finish);
+            VRGlass.Button(workoutControls, "Retry saves", new Vector3(0.63f, 0, -0.02f), new Vector2(0.40f, 0.15f),
+                hasUnsaved ? GlassStyle.Secondary : GlassStyle.Disabled, 0.0068f, retry);
         }
 
         // ── Session card: art made by Muse Image beside the summary. The numbers on it are drawn by us from the headset's
