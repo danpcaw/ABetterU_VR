@@ -10,6 +10,7 @@ namespace ABetterU.Coach
         SquatWorkoutSession workout;
         MeasuredSetWriter workoutWriter;
         string workoutOwner;
+        int lastCountdown = -1;
         bool pendingSetStart, pendingWorkoutFinish, workoutCalibrated, restAnnounced, applicationPaused;
 
         public bool WorkoutControlsVisible => !busy && workout != null &&
@@ -122,6 +123,13 @@ namespace ABetterU.Coach
             if (workout != null && workout.Phase == WorkoutPhase.Rest && !busy)
             {
                 workout.TickRest(Time.unscaledDeltaTime);
+                int whole = Mathf.CeilToInt(workout.RestRemaining);
+                if (whole != lastCountdown)
+                {
+                    lastCountdown = whole;
+                    if (whole >= 1 && whole <= 3) reps?.Cues?.CountdownTick();
+                    else if (whole == 0) reps?.Cues?.CountdownGo();
+                }
                 if (Time.unscaledTime >= nextMeter) { nextMeter = Time.unscaledTime + 0.1f; hud?.SetRest(workout); }
                 if (workout.RestRemaining <= 0 && !restAnnounced && (tts == null || !tts.IsSpeaking))
                 {
@@ -174,7 +182,8 @@ namespace ABetterU.Coach
                 yield return SaveMeasuredSet(result);
                 workout.FinishSaving();
             }
-            restAnnounced = false; busy = false;
+            restAnnounced = false; busy = false; lastCountdown = -1;
+            reps?.Cues?.SetComplete();
             ShowWorkoutView();
             if (workout.Phase == WorkoutPhase.Complete && workout.TotalReps > 0 && hud != null)
                 StartCoroutine(MakeSessionCard(hud, workout.TotalReps));

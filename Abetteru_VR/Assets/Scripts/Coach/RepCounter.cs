@@ -169,8 +169,9 @@ namespace ABetterU.Coach
                 repFlagged = false;
                 Debug.Log($"[Squat] {(rejected ? "REJECTED" : "counted")}: deepest {DeepestDrop * 100f:0}%, peak lean {repMaxLean:0.00} m (limit {leanLimitMetres:0.00}), peak look-down {repMaxLookDown:0} deg (limit {lookDownLimitDeg:0})");
                 repMaxLean = repMaxLookDown = 0f;
-                if (rejected) { FlaggedReps++; lastRepTime = Time.time; return; }
+                if (rejected) { FlaggedReps++; lastRepTime = Time.time; Cues.RepRejected(); return; }
                 RepCount++;
+                Cues.RepCounted(RepCount);
                 SecondsPerRep = (Time.time - lastRepTime) / 1f;
                 lastRepTime = Time.time;
                 if (voice != null && RepCount % 5 == 0)
@@ -179,6 +180,7 @@ namespace ABetterU.Coach
         }
 
         // ── Depth cue: a short tick plus a controller buzz when you pass the "down" line, so you know the rep will count.
+        public FeedbackCues Cues { get; private set; }
         AudioSource beeper;
         AudioClip tick;
 
@@ -193,6 +195,7 @@ namespace ABetterU.Coach
             }
             tick = AudioClip.Create("depth-tick", samples.Length, 1, rate, false);
             tick.SetData(samples, 0);
+            Cues = gameObject.AddComponent<FeedbackCues>();
             beeper = gameObject.AddComponent<AudioSource>();
             beeper.playOnAwake = false;
             beeper.spatialBlend = 0f;
