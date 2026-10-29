@@ -147,6 +147,9 @@ namespace ABetterU.Coach
             SetBarVisible(false);
         }
 
+        // The glass panel's visible body sits a little high of its quad, so it is nudged down to centre the buttons in it. Tune here.
+        const float PanelDrop = -0.025f;
+
         public void SetWorkoutControls(System.Action next, System.Action moreRest, System.Action finish, System.Action retry,
             System.Action leave, bool complete, bool hasUnsaved)
         {
@@ -157,6 +160,7 @@ namespace ABetterU.Coach
             var size = new Vector2(0.40f, 0.15f);
             if (complete)
             {
+                VRGlass.Panel(workoutControls, "Controls", new Vector3(0, PanelDrop, 0.02f), new Vector2(hasUnsaved ? 1.30f : 0.92f, 0.28f), 0.05f, GlassStyle.Panel);
                 // Nothing left to extend or end, so offer the two things people actually want: go again, or leave the gym.
                 float x0 = hasUnsaved ? -0.42f : -0.21f, step = hasUnsaved ? 0.42f : 0.42f;
                 VRGlass.Button(workoutControls, "New workout", new Vector3(x0, 0, -0.02f), size, GlassStyle.Primary, 0.0068f, next);
@@ -165,6 +169,7 @@ namespace ABetterU.Coach
                     VRGlass.Button(workoutControls, "Retry saves", new Vector3(x0 + 2 * step, 0, -0.02f), size, GlassStyle.Amber, 0.0068f, retry);
                 return;
             }
+            VRGlass.Panel(workoutControls, "Controls", new Vector3(0, PanelDrop, 0.02f), new Vector2(1.72f, 0.28f), 0.05f, GlassStyle.Panel);
             VRGlass.Button(workoutControls, "Next set", new Vector3(-0.63f, 0, -0.02f), size, GlassStyle.Primary, 0.0068f, next);
             VRGlass.Button(workoutControls, "+30 sec", new Vector3(-0.21f, 0, -0.02f), size, GlassStyle.Secondary, 0.0068f, moreRest);
             VRGlass.Button(workoutControls, "End workout", new Vector3(0.21f, 0, -0.02f), size, GlassStyle.Secondary, 0.0068f, finish);
