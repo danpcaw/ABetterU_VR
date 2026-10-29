@@ -59,8 +59,8 @@ More detail in [docs/HACKATHON_COMPLIANCE.md](docs/HACKATHON_COMPLIANCE.md).
 
 ## Known limits
 
-- Hands-free uses "transcribe, then filter": while it is listening, each phrase you speak is sent to Muse Voice Transcribe, and the app acts only if it starts with "Atlas" (or follows a reply within 8 seconds). Other phrases are discarded and not kept. It is not on-device wake-word detection. Listening pauses while the assistant is thinking or speaking, during a squat set and on the login screen.
-- A voice turn takes about 6 seconds (speech to text, then Muse Spark, then speech out). Reducing it is the next engineering task.
+- Hands-free uses "transcribe, then filter", not on-device wake-word detection. The app holds a realtime connection to Muse Voice Transcribe open and sends it silence; the headset's own sound detector decides when someone is speaking, and only then is microphone audio streamed. The app acts only if the phrase starts with "Atlas" (or follows a reply within 8 seconds). Other phrases are discarded and not kept. If the realtime connection is down, a phrase is uploaded for transcription instead. Listening pauses while the assistant is thinking or speaking, during a squat set and on the login screen.
+- A voice turn takes about 5 to 6 seconds on the upload path (speech to text, then Muse Spark, then speech out). The realtime path cuts the speech-to-text wait from about 2 seconds to under half a second; measured numbers are in docs/MODEL_API.md.
 - Squat counting and the form check use head tracking only. Thresholds were tuned from logged on-device data (lean limit 15 cm) and may need adjusting for different body types.
 - The gym is built from simple shapes, and the voice is a US voice.
 - The Meta Model API key is bundled in the APK for the demo build. **Do not distribute built APKs publicly.**

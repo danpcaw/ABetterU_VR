@@ -63,7 +63,7 @@ namespace ABetterU.Coach
         }
 
         // The saved settings asset keeps its old keyword list, so add the wake name here: biasing fixed "Ember" and "Nova" in testing.
-        string[] KeywordsWithWakeName()
+        public string[] KeywordsWithWakeName()
         {
             var list = new System.Collections.Generic.List<string>(config.transcribeKeywords ?? new string[0]);
             if (!string.IsNullOrEmpty(config.wakeName) && !list.Contains(config.wakeName)) list.Add(config.wakeName);

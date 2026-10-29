@@ -20,6 +20,11 @@ namespace ABetterU.Coach
 
         public event Action<byte[]> UtteranceReady;
         public event Action SpeechStarted;           // raised when sound that looks like speech begins (before it is known to be for us)
+        // Live audio for the realtime transcriber, as 16 kHz mono samples. AudioStarted carries the buffered pre-roll (so the first word
+        // is not clipped), AudioChunk each 50 ms after it, AudioEnded when the phrase is over. Nothing is raised while it is quiet.
+        public event Action<float[]> AudioStarted;
+        public event Action<float[]> AudioChunk;
+        public event Action AudioEnded;
         public bool Listening { get; private set; }
 
         AudioClip clip;
@@ -143,11 +148,13 @@ namespace ABetterU.Coach
                     speechSeconds = loudRun * ChunkSeconds;
                     Debug.Log($"[HandsFree] speech started (level {rms:0.000}, threshold {threshold:0.000})");
                     SpeechStarted?.Invoke();
+                    AudioStarted?.Invoke(To16k(phrase.ToArray()));
                 }
                 return;
             }
 
             phrase.AddRange(chunk);
+            AudioChunk?.Invoke(To16k(chunk));
             if (rms > threshold * 0.7f) { silentFor = 0f; speechSeconds += ChunkSeconds; }
             else silentFor += ChunkSeconds;
 
@@ -155,8 +162,11 @@ namespace ABetterU.Coach
             if (silentFor >= EndSilenceSeconds || total >= MaxPhraseSeconds) Finish();
         }
 
+        float[] To16k(float[] samples) => srcRate == OutRate ? samples : MicRecorder.Resample(samples, srcRate, OutRate);
+
         void Finish()
         {
+            AudioEnded?.Invoke();
             float speech = speechSeconds, silence = silentFor;
             var samples = phrase.ToArray();
             ResetState();

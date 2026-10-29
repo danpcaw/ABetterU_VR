@@ -120,7 +120,21 @@ Official reference: https://dev.meta.ai/docs/api-reference/voice/realtime and ht
 - Node's built-in `WebSocket` failed (error 1006, no detail); the `ws` npm package connected fine. In Unity use `System.Net.WebSockets.ClientWebSocket` (untested on Quest).
 - Probe script: `scripts/realtime-asr-probe.mjs`.
 
-### Unity integration plan (not started)
-1. `RealtimeTranscriber` using `ClientWebSocket`. Open a session when the local speech detector fires, stream 16 kHz mic audio resampled to 24 kHz (or test `PCM_16KHZ`), 80 ms frames at real-time pace.
-2. Unknowns to test: whether a short burst of pre-roll audio at the start trips the 1008 pacing rule; handshake time on the Quest; whether to keep one session open (send silence frames while the assistant speaks) or open one per phrase; pricing for streaming (check the Pricing and rate limits page).
-3. Use partials to spot "Atlas" early; act on `speechComplete`. Keep the HTTP upload path as the fallback.
+### Unity integration (built Oct 29, `RealtimeTranscriber.cs`, not yet run on a headset)
+
+Mac measurements that shaped the design:
+- **Handshake takes 1.2 to 2.4 s** (connect plus ack). A session per phrase would lose most of the saving on short phrases, so the app keeps one session **warm**.
+- **An idle session is killed**: no audio for 15 s gave `1008 Ingress below real-time` (3 s and 6 s were fine). The docs recommend sending PCM silence in quiet periods, and 30 s of streamed zeros then a phrase worked, final transcript 91 ms after speech ended.
+- **Bursts are accepted**: 640 ms and 1280 ms of audio sent at once at the start gave no 1008. So the local detector's pre-roll can go out as a burst, then live audio.
+- **One session handles several phrases** (turn 0, turn 1, each with `speechStart` and `speechComplete`).
+- `PCM_16KHZ` with `languageBias: ["en-GB"]` works, so the Quest's native 16 kHz microphone needs no resampling.
+- Pricing: **$0.18 per hour** of audio, the same as file upload; sessions last up to 60 minutes (the app reconnects at 55); 256 concurrent streams per tenant. The silent stream is about $0.003 a minute.
+
+How the app uses it:
+1. While hands-free is allowed (signed in, not in a set or the gym menu) a background thread keeps the session open and sends real-time silence. **No microphone audio leaves the headset until the local detector hears speech.**
+2. On speech start, the 0.55 s pre-roll goes out as a burst (with a gain lift, since the Quest microphone is quiet), then live 50 ms chunks.
+3. `speechComplete` is handled like an uploaded transcript: wake name, follow-up window, command. About 0.1 to 0.3 s after you stop, against 2 to 2.5 s for an upload.
+4. The upload path stays as the fallback: if the session is not connected when a phrase starts (first seconds after login, a dropped connection), that phrase is uploaded as before. Whichever path takes a phrase first claims it.
+5. Switch off with `realtimeAsr` in the `ModelApiSecrets` asset.
+
+Still to measure on the Quest: handshake time, whether `ClientWebSocket` behaves under IL2CPP, and real end-to-end turn time. Logs are prefixed `[Realtime]` (connected, complete) and `[HandsFree] ... via realtime|upload`.

@@ -43,6 +43,9 @@ namespace ABetterU.Coach
         HandsFreeListener hf;
         bool handsFree = true;
         float listenAfter, followUntil;
+        RealtimeTranscriber rt;                          // warm realtime session; null when switched off in the settings asset
+        int utteranceId, claimedId = -1;                 // phrase in progress, and the last one already taken (by realtime or by upload)
+        bool rtUtterance;                                // this phrase is being streamed to the realtime session
         Regex wakeRegex;
         const string WakeYes = "Yes?";
         const string AckHello = "Hi there.", AckThanks = "No problem.";
@@ -112,8 +115,29 @@ namespace ABetterU.Coach
             spark = new ModelApiClient(config);
             mic = gameObject.AddComponent<MicRecorder>();
             hf = gameObject.AddComponent<HandsFreeListener>();
-            hf.UtteranceReady += wav => { if (!busy) StartCoroutine(HandsFreeTurn(wav)); };
+            // The upload path takes a phrase only if realtime did not already (or was not connected): the first to claim it wins.
+            hf.UtteranceReady += wav =>
+            {
+                if (busy || claimedId == utteranceId) return;
+                claimedId = utteranceId;
+                StartCoroutine(HandsFreeTurn(wav));
+            };
             hf.SpeechStarted += () => { if (!busy) Report(AssistantState.Ready, "Hearing you...", ""); };
+
+            if (config.realtimeAsr)
+            {
+                rt = new RealtimeTranscriber(config, asr.KeywordsWithWakeName());
+                rt.Complete += OnRealtimeComplete;
+                hf.AudioStarted += pre =>
+                {
+                    utteranceId++;
+                    rtUtterance = rt.BeginUtterance(pre);
+                    if (!rtUtterance) Debug.Log("[Realtime] not connected yet, this phrase will use the upload path");
+                };
+                hf.AudioChunk += chunk => { if (rtUtterance) rt.Push(chunk); };
+                hf.AudioEnded += () => { if (rtUtterance) rt.EndUtterance(); rtUtterance = false; };
+            }
+            else hf.AudioStarted += _ => utteranceId++;
 
             tts = gameObject.AddComponent<WitSpeaker>();
             tts.Init(config);
@@ -264,6 +288,13 @@ namespace ABetterU.Coach
         void HandsFreeTick()
         {
             if (hf == null) return;
+            if (rt != null)
+            {
+                rt.Pump();
+                // The session stays open (streaming silence) through replies, so there is no reconnect gap before a follow-up.
+                // It closes on the login screen, in a set and in the gym menu, where the microphone is not in use.
+                rt.SetWanted(handsFree && !inSet && !flow.MenuOpen && flow.Current != AppFlow.Stage.Login);
+            }
             bool allowed = handsFree && !busy && !inSet && !mic.IsRecording && !flow.MenuOpen
                            && flow.Current != AppFlow.Stage.Login
                            && Time.unscaledTime >= listenAfter && (tts == null || !tts.IsSpeaking);
@@ -272,6 +303,10 @@ namespace ABetterU.Coach
         }
 
         bool PauseHandsFree() { hf?.Pause(); return true; }
+
+        // Headset off or app closed: drop the realtime socket now (the next frame after resuming reopens it).
+        void OnApplicationPause(bool paused) { if (paused) rt?.SetWanted(false); }
+        void OnDestroy() => rt?.SetWanted(false);
 
         // True if the phrase starts with the wake name; rest is what followed it.
         bool TryStripWake(string heard, out string rest)
@@ -299,10 +334,26 @@ namespace ABetterU.Coach
                 yield break;
             }
 
+            yield return HandsFreeHeard(heard, t0, tAsr, "upload");
+        }
+
+        // A finished phrase from the realtime session: the same wake-name handling as the upload path, with no transcription wait.
+        void OnRealtimeComplete(string text)
+        {
+            if (busy || hf == null || !hf.Listening) return;     // we were already busy or paused: this was not meant as a command
+            claimedId = utteranceId;                             // stops the upload path from taking the same phrase
+            Debug.Log($"[Realtime] complete \"{text}\"");
+            if (string.IsNullOrWhiteSpace(text)) return;
+            StartCoroutine(HandsFreeHeard(text, Time.realtimeSinceStartup, 0f, "realtime"));
+        }
+
+        IEnumerator HandsFreeHeard(string heard, float t0, float tAsr, string via)
+        {
+            busy = true;
             bool followUp = Time.unscaledTime < followUntil;
             bool woke = TryStripWake(heard, out string command);
             if (!woke && followUp) command = heard;
-            Debug.Log($"[HandsFree] heard \"{heard}\" -> {(woke ? "wake name" : followUp ? "follow-up" : "ignored (no wake name)")}, transcribe {tAsr:0.0}s");
+            Debug.Log($"[HandsFree] heard \"{heard}\" -> {(woke ? "wake name" : followUp ? "follow-up" : "ignored (no wake name)")}, via {via}{(via == "upload" ? $" {tAsr:0.0}s" : "")}");
 
             if (command == null)                                       // not meant for us: dropped, nothing kept
             {
