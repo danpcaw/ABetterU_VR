@@ -89,6 +89,10 @@ In a weigh-in on a real plate (two foods), measured weights were within **about 
 
 More detail in [docs/HACKATHON_COMPLIANCE.md](docs/HACKATHON_COMPLIANCE.md).
 
+## Roadmap (not built yet)
+
+- **Optional posting to Facebook and Instagram** from the same approve-then-post step, once OAuth approval for those networks is in place. Each user would connect their own accounts, and nothing would be posted outside A Better U without an explicit go-ahead each time. Today, posts go to the A Better U social feed only.
+
 ## Known limits
 
 - **Speech is only acted on if it starts with "Atlas".** Anything else is transcribed, ignored and not stored by the app.
