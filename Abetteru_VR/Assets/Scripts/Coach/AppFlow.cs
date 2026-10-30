@@ -350,10 +350,11 @@ namespace ABetterU.Coach
             }
 
             float bottom = top - rows.Length * step;
-            shiftButton = VRGlass.Button(k, "Shift", new Vector3(-0.60f, bottom, -0.02f), new Vector2(0.5f, size), GlassStyle.Secondary, 0.0085f,
+            shiftButton = VRGlass.Button(k, "Shift", new Vector3(-0.68f, bottom, -0.02f), new Vector2(0.38f, size), GlassStyle.Secondary, 0.0085f,
                 () => { shift = !shift; RefreshKeys(); }, 0.03f, 1);
-            VRGlass.Button(k, "Delete", new Vector3(0.60f, bottom, -0.02f), new Vector2(0.5f, size), GlassStyle.Secondary, 0.0085f, Backspace, 0.03f, 1);
-            VRGlass.Button(k, "Done", new Vector3(0f, bottom, -0.02f), new Vector2(0.6f, size), GlassStyle.Primary, 0.0095f, CloseKeyboard, 0.03f, 1);
+            VRGlass.Button(k, "Clear", new Vector3(-0.27f, bottom, -0.02f), new Vector2(0.38f, size), GlassStyle.Secondary, 0.0085f, ClearField, 0.03f, 1);
+            VRGlass.Button(k, "Done", new Vector3(0.17f, bottom, -0.02f), new Vector2(0.46f, size), GlassStyle.Primary, 0.0095f, CloseKeyboard, 0.03f, 1);
+            VRGlass.Button(k, "Back", new Vector3(0.62f, bottom, -0.02f), new Vector2(0.42f, size), GlassStyle.Secondary, 0.0085f, Backspace, 0.03f, 1);
             RefreshKeys();
         }
 
@@ -377,6 +378,12 @@ namespace ABetterU.Coach
         {
             if (editingPassword) { if (password.Length > 0) password = password.Substring(0, password.Length - 1); }
             else if (email.Length > 0) email = email.Substring(0, email.Length - 1);
+            RefreshFields();
+        }
+
+        void ClearField()
+        {
+            if (editingPassword) password = ""; else email = "";
             RefreshFields();
         }
 
@@ -1054,6 +1061,8 @@ namespace ABetterU.Coach
             VRGlass.Panel(p, "Profile", new Vector3(0, 0, 0.04f), new Vector2(3.6f, 1.95f), 0.08f, GlassStyle.Panel);
             VRGlass.Label(p, "My Profile", new Vector3(-1.62f, 0.81f, -0.02f), 0.019f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
             VRGlass.Button(p, "My World", new Vector3(1.445f, 0.81f, -0.02f), new Vector2(0.5f, 0.16f), GlassStyle.Secondary, 0.0085f, ShowMyWorld, 0.04f);
+            VRGlass.Button(p, Imperial ? "Show kg" : "Show st lb", new Vector3(0.87f, 0.81f, -0.02f), new Vector2(0.55f, 0.16f), GlassStyle.Secondary, 0.0085f,
+                () => { Imperial = !Imperial; BuildProfile(); }, 0.04f);
 
             if (!profile.Loaded || profile.Loading)
             { VRGlass.Label(p, "Loading your profile...", new Vector3(0, 0.1f, -0.02f), 0.011f, VRUi.Muted); return; }
@@ -1090,8 +1099,6 @@ namespace ABetterU.Coach
             // What you are working towards.
             var goals = Card(p, new Vector3(1.21f, 0.27f, 0f), new Vector2(1.0f, 0.78f));
             VRGlass.Label(goals, "Goals", new Vector3(0, 0.32f, -0.02f), 0.0105f, VRUi.Muted);
-            VRGlass.Button(goals, Imperial ? "Show kg" : "Show st lb", new Vector3(0.36f, 0.32f, -0.02f), new Vector2(0.3f, 0.1f), GlassStyle.Secondary, 0.0066f,
-                () => { Imperial = !Imperial; BuildProfile(); }, 0.03f);
             float y = 0.20f;
             void Line(string label, string value)
             {
