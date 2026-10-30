@@ -21,6 +21,7 @@ namespace ABetterU.Coach
 
         public int MealsToday;
         public double Kcal, Protein, Carbs, Fat;
+        public double BurntKcal;                  // estimated calories burnt by today's exercise (VR or logged by hand)
         public string LatestMeal;                 // "Lunch: Big Mac"
 
         public int WorkoutsThisWeek;
@@ -84,6 +85,11 @@ namespace ABetterU.Coach
                         LatestMeal = $"{Capitalise((string)entry["meal_slot"])}: {itemName}";
                 }
             }
+
+            // Today's exercise, so the nutrition card can show calories eaten less calories burnt.
+            var todays = new ExerciseData();
+            yield return todays.Load(db, DateTime.Now);
+            BurntKcal = todays.Loaded && !todays.HadError ? todays.TotalKcal : 0;
 
             // Weight: latest value plus recent history for the sparkline and change since the oldest shown.
             rows = null;

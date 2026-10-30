@@ -11,34 +11,43 @@ namespace ABetterU.Coach
     /// squat set is shown once, never twice. Views only read this.
     public class ExerciseData
     {
-        public struct Item { public string Name, Detail, Tag; public int Sets, Reps; public double Minutes; }
+        public struct Item { public string Name, Detail, Tag, ImageUrl; public int Sets, Reps; public double Minutes, Kcal; }
 
         public readonly List<Item> Items = new List<Item>();
         public bool Loading, Loaded, HadError;
         public int TotalSets, TotalReps;
-        public double TotalMinutes;
+        public double TotalMinutes, TotalKcal;                 // estimated calories burnt, worked out the way the web Fitness page does
+
+        struct Lib { public double Met, PerRep; public string ThumbMale, ThumbFemale; }
+        static Dictionary<string, Lib> library;                // read once per session: the library never changes while the app runs
+        const double DefaultMet = 5.0;
 
         sealed class Group
         {
             public string Name;
             public readonly List<int> SetReps = new List<int>();
-            public double MaxKg, Minutes;
+            public double MaxKg, Minutes, Kcal;
             public int LoggedSets, LoggedReps;
             public string LoggedDetail;
-            public bool Vr;
+            public bool Vr, HadLog;
+            public double LogKcal;
         }
 
         public IEnumerator Load(SupabaseClient db, DateTime day)
         {
             Loading = true; Loaded = false; HadError = false;
             Items.Clear();
-            TotalSets = TotalReps = 0; TotalMinutes = 0;
+            TotalSets = TotalReps = 0; TotalMinutes = TotalKcal = 0;
             if (db == null || !db.SignedIn) { HadError = true; Loading = false; Loaded = true; yield break; }
 
             string date = day.ToString("yyyy-MM-dd"), uid = db.UserId;
-            JArray strength = null, logs = null;
+            JArray strength = null, logs = null, prof = null;
+            yield return LoadLibrary(db);
+            yield return Fetch(db, $"profiles?select=sex,weight_kg&user_id=eq.{uid}", r => prof = r);
+            string sex = prof != null && prof.Count > 0 ? (string)prof[0]["sex"] : null;
+            double? bodyKg = prof != null && prof.Count > 0 ? DashboardData.Num(prof[0]["weight_kg"]) : null;
             yield return Fetch(db, $"strength_sets?select=exercise_name,set_number,reps,weight_kg&user_id=eq.{uid}&date=eq.{date}&order=created_at.asc", r => strength = r);
-            yield return Fetch(db, $"exercise_logs?select=exercise_name,sets_completed,reps_completed,duration_min,source&user_id=eq.{uid}&date=eq.{date}&order=created_at.asc", r => logs = r);
+            yield return Fetch(db, $"exercise_logs?select=exercise_name,sets_completed,reps_completed,duration_min,source,calories_burned_override&user_id=eq.{uid}&date=eq.{date}&order=created_at.asc", r => logs = r);
             if (strength == null || logs == null) { HadError = true; Loading = false; Loaded = true; yield break; }
 
             var order = new List<Group>();
@@ -63,7 +72,10 @@ namespace ABetterU.Coach
             {
                 string name = (string)l["exercise_name"];
                 var g = Get(name);
-                g.Minutes += DashboardData.Num(l["duration_min"]) ?? 0;
+                double mins = DashboardData.Num(l["duration_min"]) ?? 0;
+                g.Minutes += mins;
+                g.LogKcal += BurnFor(name, mins, DashboardData.Num(l["sets_completed"]) ?? 0, (string)l["reps_completed"], DashboardData.Num(l["calories_burned_override"]), bodyKg);
+                g.HadLog = true;
                 if ((string)l["source"] == "vr") g.Vr = true;
                 if (g.SetReps.Count == 0)
                 {
@@ -91,10 +103,53 @@ namespace ABetterU.Coach
                 }
                 else detail = g.LoggedDetail ?? (sets > 0 ? $"{sets} set{(sets == 1 ? "" : "s")}" : "Recorded");
 
-                Items.Add(new Item { Name = g.Name, Detail = detail, Tag = g.Vr ? "Tracked in VR" : null, Sets = sets, Reps = reps, Minutes = g.Minutes });
-                TotalSets += sets; TotalReps += reps; TotalMinutes += g.Minutes;
+                // Calories: from the log rows when there are any; a strength set with no log row falls back to kcal per rep x reps.
+                double kcal = g.HadLog ? g.LogKcal : (library != null && library.TryGetValue(g.Name.ToLowerInvariant(), out var lb) ? lb.PerRep * reps : 0);
+                string thumb = null;
+                if (library != null && library.TryGetValue(g.Name.ToLowerInvariant(), out var lib2))
+                    thumb = sex == "female" ? (lib2.ThumbFemale ?? lib2.ThumbMale) : (lib2.ThumbMale ?? lib2.ThumbFemale);
+
+                Items.Add(new Item { Name = g.Name, Detail = detail, Tag = g.Vr ? "Tracked in VR" : null, ImageUrl = thumb, Sets = sets, Reps = reps, Minutes = g.Minutes, Kcal = Math.Round(kcal) });
+                TotalSets += sets; TotalReps += reps; TotalMinutes += g.Minutes; TotalKcal += Math.Round(kcal);
             }
             Loading = false; Loaded = true;
+        }
+
+        // The web Fitness page's rule: a typed-in figure wins, then duration x MET x bodyweight, then sets x reps x kcal per rep.
+        static double BurnFor(string name, double minutes, double sets, string reps, double? overrideKcal, double? bodyKg)
+        {
+            if (overrideKcal.HasValue) return overrideKcal.Value;
+            Lib lib = default; library?.TryGetValue((name ?? "").Trim().ToLowerInvariant(), out lib);
+            if (minutes > 0 && bodyKg.HasValue) return Math.Round((lib.Met > 0 ? lib.Met : DefaultMet) * bodyKg.Value * (minutes / 60.0));
+            var first = System.Text.RegularExpressions.Regex.Match(reps ?? "", @"\d+");     // the web page reads the first number too
+            int repCount = first.Success ? int.Parse(first.Value) : 0;
+            return lib.PerRep > 0 && sets > 0 && repCount > 0 ? Math.Round(lib.PerRep * sets * repCount) : 0;
+        }
+
+        static IEnumerator LoadLibrary(SupabaseClient db)
+        {
+            if (library != null) yield break;
+            string raw = null, err = null;
+            yield return db.Rpc("get_exercise_library?select=name,met_value,kcal_per_rep,thumb_url_male,thumb_url_female,image_url_male,image_url_female", "{}", r => raw = r, e => err = e);
+            var map = new Dictionary<string, Lib>();
+            if (err == null)
+            {
+                try
+                {
+                    foreach (var row in JArray.Parse(raw))
+                    {
+                        string n = ((string)row["name"] ?? "").Trim().ToLowerInvariant();
+                        if (n.Length == 0) continue;
+                        string male = (string)row["thumb_url_male"], female = (string)row["thumb_url_female"];
+                        if (string.IsNullOrEmpty(male)) male = (string)row["image_url_male"];
+                        if (string.IsNullOrEmpty(female)) female = (string)row["image_url_female"];
+                        map[n] = new Lib { Met = DashboardData.Num(row["met_value"]) ?? 0, PerRep = DashboardData.Num(row["kcal_per_rep"]) ?? 0,
+                                           ThumbMale = string.IsNullOrEmpty(male) ? null : male, ThumbFemale = string.IsNullOrEmpty(female) ? null : female };
+                    }
+                    library = map;
+                }
+                catch (Exception) { }
+            }
         }
 
         static int SumNumbers(string text, out int count)

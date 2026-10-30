@@ -44,6 +44,8 @@ namespace ABetterU.Coach
         bool refreshing, refreshAgain;
 
         Transform screen;                // the current screen; replaced as the stage changes
+        Vector3 screenBasePos;           // where the current screen was placed before any zoom
+        float screenZoom;                // metres the right thumbstick has pulled the screen towards you (negative = pushed back); kept between screens
         Transform keyboardRoot;          // the on-screen keyboard (login only)
         Transform quitDialog;
         Transform menuRoot;              // the in-gym menu
@@ -235,6 +237,8 @@ namespace ABetterU.Coach
             var go = new GameObject("Screen");
             go.transform.position = position;
             screen = go.transform;
+            screenBasePos = position;
+            ApplyScreenZoom();
             VRGlass.Button(screen, "Quit App", nextQuitPos, new Vector2(0.55f, 0.15f),
                 GlassStyle.Secondary, 0.009f, ShowQuitConfirmation, 0.04f);
             nextQuitPos = DefaultQuitPos;                 // a screen that wants it elsewhere sets this again before calling NewRoot
@@ -504,6 +508,7 @@ namespace ABetterU.Coach
 
         void BuildHome()
         {
+            nextQuitPos = new Vector3(1.585f, 1.15f, -0.02f);       // right edge flush with Switch account below it
             var p = NewRoot(new Vector3(0f, 1.55f, 2.5f));
 
             var logo = Resources.Load<Texture2D>("Branding/logo");
@@ -732,9 +737,12 @@ namespace ABetterU.Coach
             // Donut on the left: calories against the daily goal (a plain count when there is no goal).
             bool goal = data.CalorieGoal.HasValue && data.CalorieGoal.Value > 0;
             float frac = goal ? (float)(data.Kcal / data.CalorieGoal.Value) : 0f;
-            VRGlass.Ring(c, new Vector3(-0.29f, 0.05f, -0.02f), 0.44f, frac, NutritionRing);
-            VRGlass.Label(c, $"{data.Kcal:N0}", new Vector3(-0.29f, 0.075f, -0.03f), 0.019f, VRUi.Ink);
-            VRGlass.Label(c, goal ? $"of {data.CalorieGoal.Value:N0} kcal" : "kcal today", new Vector3(-0.29f, -0.015f, -0.03f), 0.0075f, VRUi.Muted);
+            // Calories burnt by today's exercise come off what was eaten, so the ring shows the net figure.
+            double net = Math.Max(0.0, data.Kcal - data.BurntKcal);
+            if (goal) frac = (float)(net / data.CalorieGoal.Value);
+            VRGlass.Ring(c, new Vector3(-0.23f, 0.05f, -0.02f), 0.40f, frac, NutritionRing);
+            VRGlass.Label(c, $"{net:N0}", new Vector3(-0.23f, 0.075f, -0.03f), 0.019f, VRUi.Ink);
+            VRGlass.Label(c, goal ? $"of {data.CalorieGoal.Value:N0} kcal" : "kcal today", new Vector3(-0.23f, -0.015f, -0.03f), 0.0075f, VRUi.Muted);
 
             // Macros on the right: grams, with bars showing each macro's share of the total grams.
             double totalMacro = Math.Max(1.0, data.Protein + data.Carbs + data.Fat);
@@ -742,8 +750,14 @@ namespace ABetterU.Coach
             MacroRow(c, "Carbs", data.Carbs, data.Carbs / totalMacro, CarbsTint, 0.07f);
             MacroRow(c, "Fat", data.Fat, data.Fat / totalMacro, FatTint, -0.10f);
 
+            float mealY = -0.26f;
+            if (data.BurntKcal >= 1)
+            {
+                VRGlass.Label(c, $"Eaten {data.Kcal:N0}  -  Burnt {data.BurntKcal:N0} kcal", new Vector3(0, -0.26f, -0.02f), 0.0072f, VRUi.Muted);
+                mealY = -0.37f;
+            }
             if (!string.IsNullOrEmpty(data.LatestMeal))
-                VRGlass.Label(c, VRUi.Wrap(data.LatestMeal, 30, 1), new Vector3(0, -0.26f, -0.02f), 0.0082f, VRUi.Ink);
+                VRGlass.Label(c, VRUi.Wrap(data.LatestMeal, 30, 1), new Vector3(0, mealY, -0.02f), 0.0082f, VRUi.Ink);
         }
 
         /// Plain name-and-grams row (the diary's totals block).
@@ -1482,11 +1496,14 @@ namespace ABetterU.Coach
                 {
                     var item = exercise.Items[i];
                     VRGlass.Panel(p, "Exercise entry", new Vector3(-0.54f, y - 0.075f, 0.01f), new Vector2(2.2f, 0.28f), 0.035f, GlassStyle.Card, 1);
-                    VRGlass.Icon(p, VRArt.IconKind.Dumbbell, accent, new Vector3(-1.45f, y - 0.075f, -0.02f), 0.17f);
-                    VRGlass.Label(p, VRUi.Wrap(item.Name, 34, 1), new Vector3(-1.27f, y - 0.025f, -0.02f), 0.0105f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
-                    VRGlass.Label(p, VRUi.Wrap(item.Detail, 46, 1), new Vector3(-1.27f, y - 0.11f, -0.02f), 0.0085f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
-                    if (item.Minutes > 0)
-                        VRGlass.Label(p, $"{item.Minutes:0.#} min", new Vector3(0.46f, y - 0.025f, -0.02f), 0.009f, VRUi.Ink, TextAnchor.MiddleRight, TextAlignment.Right);
+                    FoodThumbnail.Create(p, new Vector3(-1.49f, y - 0.075f, 0.005f), item.ImageUrl, 0.20f, VRArt.IconKind.Dumbbell);      // same size and place as the diary's food thumbnails
+                    VRGlass.Label(p, VRUi.Wrap(item.Name, 34, 1), new Vector3(-1.30f, y - 0.025f, -0.02f), 0.0105f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
+                    VRGlass.Label(p, VRUi.Wrap(item.Detail, 46, 1), new Vector3(-1.30f, y - 0.11f, -0.02f), 0.0085f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
+                    string right = item.Minutes > 0 && item.Kcal > 0 ? $"{item.Minutes:0.#} min  -  {item.Kcal:N0} kcal"
+                                 : item.Kcal > 0 ? $"{item.Kcal:N0} kcal burnt"
+                                 : item.Minutes > 0 ? $"{item.Minutes:0.#} min" : null;
+                    if (right != null)
+                        VRGlass.Label(p, right, new Vector3(0.46f, y - 0.025f, -0.02f), 0.009f, VRUi.Ink, TextAnchor.MiddleRight, TextAlignment.Right);
                     if (!string.IsNullOrEmpty(item.Tag))
                         VRGlass.Label(p, item.Tag, new Vector3(0.46f, y - 0.11f, -0.02f), 0.0075f, Teal, TextAnchor.MiddleRight, TextAlignment.Right);
                     y -= 0.31f;
@@ -1505,9 +1522,10 @@ namespace ABetterU.Coach
             VRGlass.Label(t, "Day total", new Vector3(0, 0.56f, -0.02f), 0.011f, VRUi.Muted);
             if (exercise.Loaded && !exercise.Loading && !exercise.HadError)
             {
-                ExerciseStat(t, exercise.TotalSets.ToString(), exercise.TotalSets == 1 ? "set" : "sets", 0.30f);
-                ExerciseStat(t, exercise.TotalReps.ToString(), exercise.TotalReps == 1 ? "rep" : "reps", -0.05f);
-                ExerciseStat(t, exercise.TotalMinutes > 0 ? exercise.TotalMinutes.ToString("0.#") : "-", "minutes", -0.40f);
+                ExerciseStat(t, exercise.TotalSets.ToString(), exercise.TotalSets == 1 ? "set" : "sets", 0.38f);
+                ExerciseStat(t, exercise.TotalReps.ToString(), exercise.TotalReps == 1 ? "rep" : "reps", 0.10f);
+                ExerciseStat(t, exercise.TotalMinutes > 0 ? exercise.TotalMinutes.ToString("0.#") : "-", "minutes", -0.18f);
+                ExerciseStat(t, exercise.TotalKcal > 0 ? exercise.TotalKcal.ToString("N0") : "-", "kcal burnt (est.)", -0.46f);
             }
             else VRGlass.Label(t, exercise.HadError ? "Unavailable" : "Loading...", new Vector3(0, 0.2f, -0.02f), 0.011f, VRUi.Muted);
         }
@@ -1592,8 +1610,28 @@ namespace ABetterU.Coach
 
         // ── In-gym menu: the left Menu button opens it ──────────────────────────────────────────────────
 
+        void ApplyScreenZoom()
+        {
+            if (screen == null) return;
+            var cam = Camera.main;
+            Vector3 head = cam != null ? cam.transform.position : Vector3.zero;
+            Vector3 toScreen = new Vector3(screenBasePos.x - head.x, 0f, screenBasePos.z - head.z);
+            if (toScreen.sqrMagnitude < 0.01f) return;
+            screen.position = screenBasePos - toScreen.normalized * screenZoom;
+        }
+
         void Update()
         {
+            // Right thumbstick up/down pulls the screen closer or pushes it back (not in the gym or on the plate camera, which use the stick).
+            if (screen != null && Current != Stage.Gym && Current != Stage.Scan && !MenuOpen)
+            {
+                float stick = OVRInput.Get(OVRInput.Axis2D.SecondaryThumbstick).y;
+                if (Mathf.Abs(stick) > 0.2f)
+                {
+                    screenZoom = Mathf.Clamp(screenZoom + stick * Time.deltaTime * 1.0f, -1.5f, 1.2f);
+                    ApplyScreenZoom();
+                }
+            }
             if (Current == Stage.Scan && scanShot == null &&
                 (OVRInput.GetDown(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.LTouch) || OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.LTouch)))
                 CaptureScan();
