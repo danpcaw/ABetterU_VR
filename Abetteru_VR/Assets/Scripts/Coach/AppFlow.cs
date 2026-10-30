@@ -1618,16 +1618,17 @@ namespace ABetterU.Coach
             menuRoot.position = new Vector3(head.position.x, Mathf.Max(head.position.y - 0.05f, 1.1f), head.position.z) + forward * 1.3f;
             menuRoot.rotation = Quaternion.LookRotation(forward, Vector3.up);    // its +Z points away from you, so the text faces you
 
-            VRGlass.Panel(menuRoot, "Panel", new Vector3(0, 0, 0.03f), new Vector2(1.3f, voice != null && voice.WorkoutInProgress ? 1.55f : 1.2f), 0.06f, GlassStyle.Panel, 0);
+            VRGlass.Panel(menuRoot, "Panel", new Vector3(0, 0, 0.03f), new Vector2(1.3f, voice != null && voice.WorkoutInProgress ? 1.75f : 1.4f), 0.06f, GlassStyle.Panel, 0);
             VRGlass.Label(menuRoot, "Menu", new Vector3(0, 0.46f, -0.02f), 0.016f, VRUi.Ink);
 
             VRGlass.Button(menuRoot, "Resume", new Vector3(0, 0.25f, -0.02f), new Vector2(1.0f, 0.16f), GlassStyle.Primary, 0.010f, CloseMenu);
-            VRGlass.Button(menuRoot, "Back to hub", new Vector3(0, 0.05f, -0.02f), new Vector2(1.0f, 0.16f), GlassStyle.Secondary, 0.009f, BackToHub);
-            VRGlass.Button(menuRoot, "Switch account", new Vector3(0, -0.15f, -0.02f), new Vector2(1.0f, 0.16f), GlassStyle.Secondary, 0.009f, LeaveToLogin);
-            VRGlass.Button(menuRoot, "Quit App", new Vector3(0, -0.38f, -0.02f), new Vector2(1.0f, 0.16f), GlassStyle.Secondary, 0.009f, ShowQuitConfirmation);
+            VRGlass.Button(menuRoot, "Squat demo video", new Vector3(0, 0.05f, -0.02f), new Vector2(1.0f, 0.16f), GlassStyle.Secondary, 0.009f, () => { CloseMenu(); voice.ShowHowTo("Bodyweight Squat"); });
+            VRGlass.Button(menuRoot, "Back to hub", new Vector3(0, -0.15f, -0.02f), new Vector2(1.0f, 0.16f), GlassStyle.Secondary, 0.009f, BackToHub);
+            VRGlass.Button(menuRoot, "Switch account", new Vector3(0, -0.35f, -0.02f), new Vector2(1.0f, 0.16f), GlassStyle.Secondary, 0.009f, LeaveToLogin);
+            VRGlass.Button(menuRoot, "Quit App", new Vector3(0, -0.55f, -0.02f), new Vector2(1.0f, 0.16f), GlassStyle.Secondary, 0.009f, ShowQuitConfirmation);
 
             if (voice != null && voice.WorkoutInProgress)
-                VRGlass.Button(menuRoot, "Finish workout", new Vector3(0, -0.60f, -0.02f), new Vector2(1.0f, 0.16f),
+                VRGlass.Button(menuRoot, "Finish workout", new Vector3(0, -0.75f, -0.02f), new Vector2(1.0f, 0.16f),
                     GlassStyle.Secondary, 0.009f, () => { voice.RequestFinishWorkout(); CloseMenu(); });
 
             pointer = gameObject.AddComponent<VRPointer>();
