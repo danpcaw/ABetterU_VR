@@ -10,15 +10,18 @@ namespace ABetterU.Coach
     /// shows meanwhile and stays if there is no picture or it fails. Pictures are cached, because the dashboards redraw often.
     public class AvatarImage : MonoBehaviour
     {
+        GameObject[] hide;
         static readonly Dictionary<string, Texture2D> cache = new Dictionary<string, Texture2D>();
 
-        public static void Create(Transform parent, Vector3 position, string url, float size)
+        /// hideWhenLoaded (the fallback orb and initial) are switched off once the real picture is showing, so it is never drawn over by them.
+        public static void Create(Transform parent, Vector3 position, string url, float size, params GameObject[] hideWhenLoaded)
         {
             if (string.IsNullOrEmpty(url) || !Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps) return;
             var go = new GameObject("Avatar picture");
             go.transform.SetParent(parent, false);
             go.transform.localPosition = position;
             var avatar = go.AddComponent<AvatarImage>();
+            avatar.hide = hideWhenLoaded;
             if (cache.TryGetValue(url, out var tex) && tex != null) avatar.Show(tex, size);
             else avatar.StartCoroutine(avatar.Load(url, size));
         }
@@ -38,7 +41,11 @@ namespace ABetterU.Coach
             Show(round, size);
         }
 
-        void Show(Texture2D tex, float size) => VRGlass.Image(transform, "Picture", tex, new Vector3(0f, 0f, -0.012f), new Vector2(size, size), 5);
+        void Show(Texture2D tex, float size)
+        {
+            VRGlass.Image(transform, "Picture", tex, new Vector3(0f, 0f, -0.012f), new Vector2(size, size), 5);
+            if (hide != null) foreach (var g in hide) if (g != null) g.SetActive(false);
+        }
 
         /// Centre square of the picture, scaled to 256 px, with everything outside a circle made transparent (soft 2 px edge).
         static Texture2D Circle(Texture2D src)

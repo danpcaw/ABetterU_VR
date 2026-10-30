@@ -215,6 +215,9 @@ namespace ABetterU.Coach
         /// True while the pointer is resting on a button, so voice capture can ignore the trigger.
         public bool PointerOverButton => quitDialog != null || (pointer != null && pointer.HoveringButton);
 
+        static readonly Vector3 DefaultQuitPos = new Vector3(1.5f, 1.15f, -0.02f);
+        Vector3 nextQuitPos = DefaultQuitPos;
+
         Transform NewRoot(Vector3 position)
         {
             CloseQuitConfirmation();
@@ -226,8 +229,9 @@ namespace ABetterU.Coach
             var go = new GameObject("Screen");
             go.transform.position = position;
             screen = go.transform;
-            VRGlass.Button(screen, "Quit App", new Vector3(1.5f, 1.15f, -0.02f), new Vector2(0.55f, 0.15f),
+            VRGlass.Button(screen, "Quit App", nextQuitPos, new Vector2(0.55f, 0.15f),
                 GlassStyle.Secondary, 0.009f, ShowQuitConfirmation, 0.04f);
+            nextQuitPos = DefaultQuitPos;                 // a screen that wants it elsewhere sets this again before calling NewRoot
             return screen;
         }
 
@@ -573,6 +577,7 @@ namespace ABetterU.Coach
 
         void BuildMyWorld()
         {
+            nextQuitPos = new Vector3(1.225f, 0.95f, -0.02f);      // on the date row, flush with the right edge of the cards
             var p = NewRoot(new Vector3(0f, 1.62f, 2.8f));
 
             // Navigation rail. It sits far to the user's left, so it is turned to face them; otherwise the buttons,
@@ -594,8 +599,8 @@ namespace ABetterU.Coach
             VRGlass.Label(p, "Your personal information and daily activity.", new Vector3(-1.4f, 0.88f, -0.02f), 0.0085f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
 
             // Date pill, top right (as in the reference design).
-            var datePill = VRGlass.Panel(p, "Date pill", new Vector3(1.14f, 0.95f, 0f), new Vector2(0.72f, 0.15f), 0.07f, GlassStyle.Secondary, 1);
-            VRGlass.Label(datePill.parent, DateTime.Now.ToString("ddd d MMM yyyy"), new Vector3(1.14f, 0.95f, -0.02f), 0.0085f, VRUi.Ink);
+            var datePill = VRGlass.Panel(p, "Date pill", new Vector3(0.55f, 0.95f, 0f), new Vector2(0.72f, 0.15f), 0.07f, GlassStyle.Secondary, 1);
+            VRGlass.Label(datePill.parent, DateTime.Now.ToString("ddd d MMM yyyy"), new Vector3(0.55f, 0.95f, -0.02f), 0.0085f, VRUi.Ink);
 
             // Row 1 spans the same -1.40 to +1.50 edges as the main cards.
             // A consistent 0.055 m gap separates the profile and four metric cards.
@@ -616,9 +621,10 @@ namespace ABetterU.Coach
 
         void BuildProfileCard(Transform profile)
         {
-            VRGlass.Image(profile, "Avatar", VRArt.Orb(new Color(0.20f, 0.75f, 0.80f), new Color(0.20f, 0.75f, 0.80f)), new Vector3(-0.31f, 0.05f, -0.01f), new Vector2(0.28f, 0.28f), 3);
-            VRGlass.Label(profile, Initial(DisplayName), new Vector3(-0.31f, 0.05f, -0.02f), 0.013f, VRUi.Ink);
-            AvatarImage.Create(profile, new Vector3(-0.31f, 0.05f, -0.01f), data.AvatarUrl, 0.24f);
+            var avatarOrb = VRGlass.Image(profile, "Avatar", VRArt.Orb(new Color(0.20f, 0.75f, 0.80f), new Color(0.20f, 0.75f, 0.80f)), new Vector3(-0.31f, 0.05f, -0.01f), new Vector2(0.28f, 0.28f), 3);
+            var avatarInitial = VRGlass.Label(profile, Initial(DisplayName), new Vector3(-0.31f, 0.05f, -0.02f), 0.013f, VRUi.Ink);
+            // The orb and initial are only the stand-in: they go away once the real picture has loaded.
+            AvatarImage.Create(profile, new Vector3(-0.31f, 0.05f, -0.01f), data.AvatarUrl, 0.28f, avatarOrb.gameObject, avatarInitial.gameObject);
             VRGlass.Label(profile, VRUi.Wrap(DisplayName, 18, 1), new Vector3(-0.13f, 0.13f, -0.02f), 0.0125f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
             string sub = data.CalorieGoal.HasValue && data.CalorieGoal.Value > 0
                 ? $"Goal {data.CalorieGoal.Value:N0} kcal a day"
@@ -1048,9 +1054,9 @@ namespace ABetterU.Coach
 
             // Who you are.
             var who = Card(p, new Vector3(-1.05f, 0.27f, 0f), new Vector2(1.30f, 0.78f));
-            VRGlass.Image(who, "Avatar", VRArt.Orb(new Color(0.20f, 0.75f, 0.80f), new Color(0.20f, 0.75f, 0.80f)), new Vector3(-0.46f, 0.20f, -0.01f), new Vector2(0.36f, 0.36f), 3);
-            VRGlass.Label(who, Initial(profile.Name ?? DisplayName), new Vector3(-0.46f, 0.20f, -0.02f), 0.017f, VRUi.Ink);
-            AvatarImage.Create(who, new Vector3(-0.46f, 0.20f, -0.01f), profile.AvatarUrl, 0.31f);      // the real picture covers the initial once it loads
+            var profileOrb = VRGlass.Image(who, "Avatar", VRArt.Orb(new Color(0.20f, 0.75f, 0.80f), new Color(0.20f, 0.75f, 0.80f)), new Vector3(-0.46f, 0.20f, -0.01f), new Vector2(0.36f, 0.36f), 3);
+            var profileInitial = VRGlass.Label(who, Initial(profile.Name ?? DisplayName), new Vector3(-0.46f, 0.20f, -0.02f), 0.017f, VRUi.Ink);
+            AvatarImage.Create(who, new Vector3(-0.46f, 0.20f, -0.01f), profile.AvatarUrl, 0.36f, profileOrb.gameObject, profileInitial.gameObject);   // stand-ins go away once the picture loads
             VRGlass.Label(who, VRUi.Wrap(profile.Name ?? DisplayName, 18, 1), new Vector3(-0.22f, 0.27f, -0.02f), 0.0135f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
             if (!string.IsNullOrEmpty(profile.Username))
                 VRGlass.Label(who, "@" + profile.Username, new Vector3(-0.22f, 0.16f, -0.02f), 0.0088f, Teal, TextAnchor.MiddleLeft, TextAlignment.Left);
