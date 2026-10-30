@@ -1125,11 +1125,19 @@ namespace ABetterU.Coach
         static readonly Vector2 ScanFrameCentre = new Vector2(-0.70f, -0.07f);
         const float ScanImageW = 1.90f, ScanImageH = 1.425f;
 
-        void ShowScan()
+        void ShowScan() => OpenScan(false);
+
+        // Calibration mode uses the same camera screen: an empty plate with a bank card on it gives the plate's real width.
+        bool scanCalibrating, calWorking, calSaved;
+        VoiceLoopTest.PlateCalibration calResult;
+        double calWidth;
+
+        void OpenScan(bool calibrating)
         {
             Current = Stage.Scan;
             EnsureAssistant();
             if (plateCam == null) plateCam = gameObject.AddComponent<PlateCamera>();
+            scanCalibrating = calibrating;
             ResetScan();
             plateCam.Begin();
             StartCoroutine(SeeThroughSoon());
@@ -1184,7 +1192,7 @@ namespace ABetterU.Coach
             SetSeeThrough(false);
             plateCam.Stop();
             StartCoroutine(ShutterBuzz());
-            StartCoroutine(AnalyseScan());
+            StartCoroutine(scanCalibrating ? AnalyseCalibration() : AnalyseScan());
         }
 
         IEnumerator ShutterBuzz()
@@ -1198,6 +1206,7 @@ namespace ABetterU.Coach
         {
             if (scanShot != null) { Destroy(scanShot); scanShot = null; }
             scanResult = null; scanNote = ""; scanWorking = scanLogging = scanDone = false;
+            calResult = null; calWorking = calSaved = false;
         }
 
         void StopScan()
@@ -1206,6 +1215,21 @@ namespace ABetterU.Coach
             plateCam.Stop();
             ResetScan();
             scanWasStreaming = false;
+        }
+
+        IEnumerator AnalyseCalibration()
+        {
+            var shot = scanShot;
+            calResult = null; calWorking = true; calSaved = false; scanNote = "Finding the plate and the card...";
+            BuildScan();
+            if (voice == null) { calWorking = false; scanNote = "The assistant is not ready."; BuildScan(); yield break; }
+            byte[] jpg = shot.EncodeToJPG(85);
+            VoiceLoopTest.PlateCalibration result = null;
+            yield return voice.CalibratePlate(jpg, shot.width / (float)shot.height, r => result = r, note => { scanNote = note; if (Current == Stage.Scan && scanShot == shot) BuildScan(); });
+            if (Current != Stage.Scan || scanShot != shot) yield break;
+            calResult = result; calWorking = false;
+            calWidth = result != null && result.Error == null ? result.WidthCm : VoiceLoopTest.PlateCm;
+            BuildScan();
         }
 
         IEnumerator AnalyseScan()
@@ -1256,11 +1280,50 @@ namespace ABetterU.Coach
             if (scanShot == null)
             {
                 bool ready = plateCam != null && plateCam.Streaming;
-                VRGlass.Label(p, VRUi.Wrap(ready ? "Hold the headset above the plate at a slight angle, with the whole plate inside the frame, then press the left trigger" : plateCam != null ? plateCam.Status : "", 22, 2), new Vector3(rx, 0.45f, -0.02f), 0.0105f, VRUi.Ink);
+                string hint = scanCalibrating
+                    ? "Lay a bank or credit card flat on an empty plate, then press the left trigger"
+                    : "Hold the headset above the plate at a slight angle, with the whole plate inside the frame, then press the left trigger";
+                VRGlass.Label(p, VRUi.Wrap(ready ? hint : plateCam != null ? plateCam.Status : "", 22, 3), new Vector3(rx, 0.45f, -0.02f), 0.0105f, VRUi.Ink);
                 VRGlass.Button(p, "Capture", new Vector3(rx, 0.12f, -0.02f), new Vector2(0.9f, 0.18f), ready ? GlassStyle.Primary : GlassStyle.Disabled, 0.0095f,
                     CaptureScan, 0.04f);
                 if (plateCam != null && plateCam.Failed)
                     VRGlass.Button(p, "Try again", new Vector3(rx, -0.12f, -0.02f), new Vector2(0.9f, 0.16f), GlassStyle.Secondary, 0.0088f, () => { plateCam.Begin(); BuildScan(); }, 0.04f);
+
+                // Optional: measure your plate once with a bank card, so food weights use its real width.
+                VRGlass.Label(p, scanCalibrating ? "Calibrating your plate" : VRUi.Wrap("Would you like to calibrate your plate? You will need a bank or credit card.", 30, 3),
+                    new Vector3(rx, -0.40f, -0.02f), 0.0078f, VRUi.Muted);
+                VRGlass.Button(p, scanCalibrating ? "Back to scanning food" : "Calibrate plate", new Vector3(rx, -0.62f, -0.02f), new Vector2(1.0f, 0.15f), GlassStyle.Secondary, 0.0085f,
+                    () => OpenScan(!scanCalibrating), 0.04f);
+                return;
+            }
+
+            // 1b. A calibration photo: the plate and the card outlined, and the plate's width worked out.
+            if (scanCalibrating)
+            {
+                if (calWorking)
+                {
+                    VRGlass.Label(p, VRUi.Wrap(scanNote, 24, 3), new Vector3(rx, 0.30f, -0.02f), 0.0105f, VRUi.Ink);
+                    VRGlass.Label(p, "This takes a few seconds", new Vector3(rx, 0.05f, -0.02f), 0.0078f, VRUi.Muted);
+                    return;
+                }
+                if (calResult == null || calResult.Error != null)
+                {
+                    VRGlass.Label(p, VRUi.Wrap(calResult != null ? calResult.Error : scanNote, 26, 5), new Vector3(rx, 0.28f, -0.02f), 0.0095f, VRUi.Ink);
+                    VRGlass.Button(p, "Retake", new Vector3(rx, -0.20f, -0.02f), new Vector2(0.9f, 0.17f), GlassStyle.Primary, 0.0092f, () => OpenScan(true), 0.04f);
+                    VRGlass.Button(p, "Back to scanning food", new Vector3(rx, -0.42f, -0.02f), new Vector2(0.9f, 0.17f), GlassStyle.Secondary, 0.0085f, () => OpenScan(false), 0.04f);
+                    return;
+                }
+                DrawScanBox(p, calResult.Plate.Value, ScanColors[0], "plate");
+                DrawScanBox(p, calResult.Card.Value, ScanColors[1], "card");
+                VRGlass.Label(p, calSaved ? "Saved. Food scans will use this width." : "Your plate is about", new Vector3(rx, 0.52f, -0.02f), 0.0095f, VRUi.Muted);
+                VRGlass.Label(p, $"{calWidth:0.0} cm", new Vector3(rx, 0.30f, -0.03f), 0.026f, VRUi.Ink);
+                VRGlass.Button(p, "-", new Vector3(rx - 0.30f, 0.06f, -0.025f), new Vector2(0.2f, 0.15f), GlassStyle.Secondary, 0.0105f,
+                    () => { calWidth = Math.Max(16, calWidth - 0.5); calSaved = false; BuildScan(); }, 0.03f);
+                VRGlass.Button(p, "+", new Vector3(rx + 0.30f, 0.06f, -0.025f), new Vector2(0.2f, 0.15f), GlassStyle.Secondary, 0.0105f,
+                    () => { calWidth = Math.Min(36, calWidth + 0.5); calSaved = false; BuildScan(); }, 0.03f);
+                VRGlass.Button(p, calSaved ? "Scan food now" : "Save plate width", new Vector3(rx, -0.18f, -0.02f), new Vector2(0.9f, 0.17f), GlassStyle.Primary, 0.0092f,
+                    () => { if (calSaved) OpenScan(false); else { VoiceLoopTest.PlateCm = calWidth; calSaved = true; BuildScan(); } }, 0.04f);
+                VRGlass.Button(p, "Retake", new Vector3(rx, -0.40f, -0.02f), new Vector2(0.9f, 0.17f), GlassStyle.Secondary, 0.0088f, () => OpenScan(true), 0.04f);
                 return;
             }
 
@@ -1544,7 +1607,7 @@ namespace ABetterU.Coach
                 (OVRInput.GetDown(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.LTouch) || OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.LTouch)))
                 CaptureScan();
             // The camera only runs on the scan screen, and rebuilds that screen once when its picture starts.
-            if (Current != Stage.Scan && plateCam != null && (plateCam.Live != null || scanShot != null || scanResult != null)) StopScan();
+            if (Current != Stage.Scan && plateCam != null && (plateCam.Live != null || scanShot != null || scanResult != null || calResult != null)) StopScan();
             else if (Current == Stage.Scan && plateCam != null && plateCam.Streaming != scanWasStreaming) BuildScan();
             if (Current == Stage.Gym && OVRInput.GetDown(OVRInput.Button.Start, OVRInput.Controller.LTouch))
             {

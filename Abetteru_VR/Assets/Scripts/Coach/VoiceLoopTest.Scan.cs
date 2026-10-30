@@ -92,6 +92,67 @@ namespace ABetterU.Coach
             }
         }
 
+        // ── Plate calibration with a bank card ───────────────────────────────────
+        // A bank or credit card is a standard size (85.6 x 54 mm), so a card lying on the empty plate is a ruler in the same photo.
+        // SAM outlines the plate and the card; the plate's size relative to the card's gives the plate's real width. Each axis is worked
+        // out separately (the photo squashes them by different amounts when tilted), and the two answers should agree.
+        public sealed class PlateCalibration
+        {
+            public string Error;
+            public Rect? Plate, Card;
+            public double WidthCm;
+        }
+
+        const double CardLongCm = 8.56, CardShortCm = 5.398;
+
+        public IEnumerator CalibratePlate(byte[] jpg, float imageAspect, Action<PlateCalibration> done, Action<string> progress)
+        {
+            busy = true;
+            var result = new PlateCalibration();
+            string dataUrl = "data:image/jpeg;base64," + Convert.ToBase64String(jpg);
+            progress("Finding the plate and the card...");
+
+            var plateBoxes = new List<Rect>();
+            var cardBoxes = new List<Rect>();
+            int pending = 2;
+            StartCoroutine(SegmentInto(plateBoxes, new List<string> { "plate", "dish" }, dataUrl, () => pending--));
+            StartCoroutine(SegmentInto(cardBoxes, new List<string> { "credit card", "bank card", "card" }, dataUrl, () => pending--, 0.0006f));
+            for (float t = 0f; pending > 0 && t < 60f; t += Time.unscaledDeltaTime) yield return null;
+            busy = false;
+
+            Rect? plate = null;
+            foreach (var r in plateBoxes) if (r.width * r.height >= 0.06f && (!plate.HasValue || r.width * r.height > plate.Value.width * plate.Value.height)) plate = r;
+            if (!plate.HasValue) { result.Error = "I couldn't see the plate. Put the empty plate in the frame and try again."; done(result); yield break; }
+            result.Plate = plate;
+
+            // The card: inside the plate, a lot smaller than it, and the shape closest to a bank card (1.59 : 1).
+            Rect? card = null; double bestShape = double.MaxValue;
+            var p = plate.Value;
+            foreach (var r in cardBoxes)
+            {
+                if (!p.Contains(r.center) || r.width * r.height > p.width * p.height * 0.25f) continue;
+                double pixelAspect = r.width / r.height * imageAspect;
+                double shape = Math.Abs(Math.Log(Math.Max(pixelAspect, 1 / pixelAspect) / (CardLongCm / CardShortCm)));
+                if (shape < bestShape) { bestShape = shape; card = r; }
+            }
+            if (!card.HasValue) { result.Error = "I couldn't see the card. Lay it flat on the plate, edges straight, and try again."; done(result); yield break; }
+            result.Card = card;
+
+            var c = card.Value;
+            bool longAlongX = c.width / c.height * imageAspect >= 1.0;
+            double lx = longAlongX ? CardLongCm : CardShortCm, ly = longAlongX ? CardShortCm : CardLongCm;
+            double dx = p.width / c.width * lx, dy = p.height / c.height * ly;
+            Debug.Log($"[Scan] calibration: plate {p.width:0.00}x{p.height:0.00}, card {c.width:0.000}x{c.height:0.000}, width estimates {dx:0.0} and {dy:0.0} cm");
+            if (Math.Abs(dx - dy) / Math.Max(dx, dy) > 0.30)
+            {
+                result.Error = "The card and plate don't line up well. Lay the card flat and straight on the plate and hold the headset steady.";
+                done(result); yield break;
+            }
+            result.WidthCm = Math.Round((dx + dy) / 2.0, 1);
+            if (result.WidthCm < 16 || result.WidthCm > 36) { result.Error = $"That came out as {result.WidthCm:0} cm, which doesn't look right. Try again."; done(result); yield break; }
+            done(result);
+        }
+
         // The plate's real width, set once on the scan screen (measure the dinner plate you use). Saved on the headset.
         public static double PlateCm
         {
@@ -270,7 +331,7 @@ namespace ABetterU.Coach
         }
 
         // Asks SAM for each concept in turn until one finds something, and adds the outline boxes it returns (as fractions of the photo).
-        IEnumerator SegmentInto(List<Rect> boxes, List<string> prompts, string dataUrl, Action finished)
+        IEnumerator SegmentInto(List<Rect> boxes, List<string> prompts, string dataUrl, Action finished, float minArea = 0.004f)
         {
             foreach (var prompt in prompts)
             {
@@ -286,7 +347,7 @@ namespace ABetterU.Coach
                     float x1 = float.Parse(m.Groups[1].Value) / w, y1 = float.Parse(m.Groups[2].Value) / h;
                     float x2 = float.Parse(m.Groups[3].Value) / w, y2 = float.Parse(m.Groups[4].Value) / h;
                     float conf = m.Groups[7].Success ? float.Parse(m.Groups[7].Value, System.Globalization.CultureInfo.InvariantCulture) : 1f;
-                    if (conf < 0.4f || (x2 - x1) * (y2 - y1) < 0.004f || boxes.Count >= 6) continue;
+                    if (conf < 0.4f || (x2 - x1) * (y2 - y1) < minArea || boxes.Count >= 6) continue;
                     boxes.Add(new Rect(x1, y1, x2 - x1, y2 - y1));
                 }
                 Debug.Log($"[Scan] SAM '{prompt}': {boxes.Count} box(es)");
