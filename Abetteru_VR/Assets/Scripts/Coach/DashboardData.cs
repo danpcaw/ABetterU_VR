@@ -28,7 +28,7 @@ namespace ABetterU.Coach
         public string LatestWorkout;              // "Bodyweight Squat, 10 reps"
         public string LatestWorkoutWhen;          // "Today", "Yesterday" or a date
 
-        public double? WeightKg;
+        public double? WeightKg, ProfileWeightKg;
         public readonly List<float> WeightHistory = new List<float>();   // oldest to newest, for the sparkline
         public double? WeightDelta;                                      // newest minus oldest in WeightHistory
         public double? SleepMinutes;                                     // last recorded night (sleep_logs)
@@ -57,12 +57,13 @@ namespace ABetterU.Coach
 
             // Profile: name and the daily calorie goal.
             JArray rows = null;
-            yield return Fetch(db, $"profiles?select=name,avatar,avatar_url,daily_calorie_goal&user_id=eq.{uid}", r => rows = r);
+            yield return Fetch(db, $"profiles?select=name,avatar,avatar_url,daily_calorie_goal,weight_kg&user_id=eq.{uid}", r => rows = r);
             if (rows != null && rows.Count > 0)
             {
                 Name = (string)rows[0]["name"];
                 AvatarUrl = (string)rows[0]["avatar"] ?? (string)rows[0]["avatar_url"];
                 CalorieGoal = Num(rows[0]["daily_calorie_goal"]);
+                ProfileWeightKg = Num(rows[0]["weight_kg"]);
             }
 
             // Today's food, joined to the foods table so we can total calories and macros.
@@ -107,7 +108,7 @@ namespace ABetterU.Coach
                 if (WeightHistory.Count >= 2)
                     WeightDelta = WeightHistory[WeightHistory.Count - 1] - WeightHistory[0];
             }
-            else WeightKg = null;
+            else WeightKg = ProfileWeightKg;        // nothing in the weight log yet: show the weight on the profile
 
             // Last recorded night's sleep. Score mirrors the web app: duration against an 8-hour goal.
             rows = null;

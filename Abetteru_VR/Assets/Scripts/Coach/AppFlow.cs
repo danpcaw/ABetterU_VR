@@ -645,12 +645,12 @@ namespace ABetterU.Coach
             if (!data.Loaded) { VRGlass.Label(c, "...", new Vector3(0f, 0.02f, -0.02f), 0.014f, VRUi.Muted); return; }
             if (!data.WeightKg.HasValue) { VRGlass.Label(c, "Not logged", new Vector3(0f, 0.02f, -0.02f), 0.011f, VRUi.Ink); return; }
 
-            VRGlass.Label(c, $"{data.WeightKg.Value:0.#} kg", new Vector3(0f, 0.10f, -0.02f), 0.0145f, VRUi.Ink);
+            VRGlass.Label(c, Wt(data.WeightKg.Value), new Vector3(0f, 0.10f, -0.02f), 0.0145f, VRUi.Ink);
             if (data.WeightDelta.HasValue && Math.Abs(data.WeightDelta.Value) >= 0.05)
             {
                 bool down = data.WeightDelta.Value < 0;
                 var tint = down ? new Color(0.35f, 0.95f, 0.70f) : new Color(1.0f, 0.75f, 0.40f);
-                VRGlass.Label(c, $"{(down ? "v" : "^")} {Math.Abs(data.WeightDelta.Value):0.#} kg", new Vector3(0f, -0.015f, -0.02f), 0.0085f, tint);
+                VRGlass.Label(c, $"{(down ? "v" : "^")} {Wt(Math.Abs(data.WeightDelta.Value))}", new Vector3(0f, -0.015f, -0.02f), 0.0085f, tint);
             }
             if (data.WeightHistory.Count >= 2)
                 VRGlass.Sparkline(c, new Vector3(0f, -0.135f, -0.02f), new Vector2(0.34f, 0.105f), data.WeightHistory.ToArray(), new Color(0.30f, 0.85f, 0.95f));
@@ -718,6 +718,14 @@ namespace ABetterU.Coach
             VRGlass.Label(c, title, new Vector3(-0.25f, y, -0.02f), 0.0105f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
         }
 
+        // Weight shows in kg or lb, whichever the user last chose (the switch is on the profile page).
+        static bool Imperial
+        {
+            get => PlayerPrefs.GetInt("weight_imperial", 0) == 1;
+            set => PlayerPrefs.SetInt("weight_imperial", value ? 1 : 0);
+        }
+        static string Wt(double kg) => Imperial ? $"{kg * 2.20462:0.#} lb" : $"{kg:0.#} kg";
+
         // The buttons under the two big cards sit just below them, on one line, so they never collide with the card text.
         const float CardButtonY = -0.56f;
 
@@ -742,7 +750,7 @@ namespace ABetterU.Coach
             if (goal) frac = (float)(net / data.CalorieGoal.Value);
             VRGlass.Ring(c, new Vector3(-0.23f, 0.05f, -0.02f), 0.40f, frac, NutritionRing);
             VRGlass.Label(c, $"{net:N0}", new Vector3(-0.23f, 0.075f, -0.03f), 0.019f, VRUi.Ink);
-            VRGlass.Label(c, goal ? $"of {data.CalorieGoal.Value:N0} kcal" : "kcal today", new Vector3(-0.23f, -0.015f, -0.03f), 0.0075f, VRUi.Muted);
+            VRGlass.Label(c, goal ? $"of {data.CalorieGoal.Value:N0} kcal" : "kcal today", new Vector3(-0.23f, -0.02f, -0.03f), 0.0060f, VRUi.Muted);
 
             // Macros on the right: grams, with bars showing each macro's share of the total grams.
             double totalMacro = Math.Max(1.0, data.Protein + data.Carbs + data.Fat);
@@ -1075,6 +1083,8 @@ namespace ABetterU.Coach
             // What you are working towards.
             var goals = Card(p, new Vector3(1.21f, 0.27f, 0f), new Vector2(1.0f, 0.78f));
             VRGlass.Label(goals, "Goals", new Vector3(0, 0.32f, -0.02f), 0.0105f, VRUi.Muted);
+            VRGlass.Button(goals, Imperial ? "Show kg" : "Show lb", new Vector3(0.36f, 0.32f, -0.02f), new Vector2(0.3f, 0.1f), GlassStyle.Secondary, 0.0066f,
+                () => { Imperial = !Imperial; BuildProfile(); }, 0.03f);
             float y = 0.20f;
             void Line(string label, string value)
             {
@@ -1084,8 +1094,8 @@ namespace ABetterU.Coach
                 y -= 0.105f;
             }
             Line("Daily calories", profile.CalorieGoal.HasValue ? $"{profile.CalorieGoal.Value:N0} kcal" : null);
-            Line("Weight", profile.WeightKg.HasValue ? $"{profile.WeightKg.Value:0.#} kg" : null);
-            Line("Goal weight", profile.GoalWeightKg.HasValue ? $"{profile.GoalWeightKg.Value:0.#} kg" : null);
+            Line("Weight", profile.WeightKg.HasValue ? Wt(profile.WeightKg.Value) : null);
+            Line("Goal weight", profile.GoalWeightKg.HasValue ? Wt(profile.GoalWeightKg.Value) : null);
             Line("Focus", Pretty(profile.GoalType));
             Line("Training days", profile.DaysPerWeek.HasValue ? $"{profile.DaysPerWeek.Value} a week" : null);
             Line("Experience", Pretty(profile.Experience));
