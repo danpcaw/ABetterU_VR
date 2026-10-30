@@ -4,7 +4,7 @@
 
 Entry in the **Meta Global AI Developer Hackathon** (Indie Developer track, theme "Build for Your World"). Build window: Oct 26 to Nov 4, 2026.
 
-A Meta Quest 3S app where you talk to **Atlas**, a voice assistant powered by Meta's Muse Spark, and it **does things for you on a real platform**. Say "log my usual breakfast" and the meal lands in your A Better U food diary. Look at a plate and Atlas names the foods, outlines them with SAM 3.1, measures them and logs what you confirm. Say "set me up a squat workout, two sets of ten" and the headset tracks your reps and saves each set. Say "share my session" and it drafts a post, with a picture made by Muse Image, for you to approve.
+A Meta Quest 3S app where you talk to **Atlas**, a voice assistant powered by Meta's Muse Spark, and it **does things for you on a real platform**. Say "log my usual breakfast" and the meal lands in your A Better U food diary. Look at a plate and Atlas names the foods, outlines them with SAM 3.1, measures them and logs what you confirm. Say "set me up a squat workout, two sets of ten" and the headset tracks your reps and saves each set. Say "share my session" and it drafts a post for your **A Better U social feed** (not Meta, Facebook or Instagram), with a picture made by Muse Image, for you to approve.
 
 **The proof point:** the plate scan chains Muse Spark and SAM 3.1 to measure food from one photo. In a weigh-in of two foods on one plate it landed within **about 1% and 4% of the scales**, against 56% and 37% low for a vision guess alone.
 

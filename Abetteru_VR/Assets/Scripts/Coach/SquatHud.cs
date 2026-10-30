@@ -237,7 +237,7 @@ namespace ABetterU.Coach
         public void ShowShareButton(System.Action onShare)
         {
             if (cardRoot == null) return;
-            VRGlass.Button(cardRoot, "Share to feed", new Vector3(0f, -0.665f, -0.02f), new Vector2(0.64f, 0.14f), GlassStyle.Primary, 0.0088f, onShare, 0.04f);
+            VRGlass.Button(cardRoot, "Share to A Better U", new Vector3(0f, -0.665f, -0.02f), new Vector2(0.84f, 0.14f), GlassStyle.Primary, 0.0088f, onShare, 0.04f);
         }
 
         public void HideCard()

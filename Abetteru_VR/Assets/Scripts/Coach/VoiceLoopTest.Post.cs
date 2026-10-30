@@ -101,7 +101,7 @@ namespace ABetterU.Coach
             while ((busy || (tts != null && tts.IsSpeaking)) && waited < 20f) { waited += Time.unscaledDeltaTime; yield return null; }
             if (forHud == null || draft != null || posting || tts == null || !tts.Ready) yield break;
             bool spoken = false;
-            tts.Speak($"Your session card is ready. Want me to share it to your feed? Just say, share my session, or tap Share.",
+            tts.Speak($"Your session card is ready. Want me to post it to your A Better U feed? Just say, share my session, or tap Share.",
                 () => spoken = true, (s, secs) => ShowCaption(AssistantState.Speaking, WakeName, s, secs));
             while (!spoken) yield return null;
             Report(AssistantState.Ready, ReadyHeadline, ReadyDetail);
@@ -165,14 +165,14 @@ namespace ABetterU.Coach
                 try { var rows = JArray.Parse(check); confirmed = rows.Count == 1 && (string)rows[0]["author_id"] == supabase.UserId; } catch (Exception) { }
             if (!confirmed)
             {
-                posting = false; postStatus = "Couldn't confirm the post. Check your feed."; ShowPostPanel();
+                posting = false; postStatus = "Couldn't confirm the post. Check your A Better U feed."; ShowPostPanel();
                 done(PostFail("The post could not be confirmed, so do not say it was posted."));
                 yield break;
             }
 
             string vis = draft.Visibility;
             posting = false;
-            postStatus = vis == "public" ? "Posted. Everyone on A Better U can see it." : "Posted. Only your friends can see it.";
+            postStatus = vis == "public" ? "Posted to your A Better U feed. Everyone on A Better U can see it." : "Posted to your A Better U feed. Only your A Better U friends can see it.";
             var shown = draft; draft = null;
             ShowPostPanel(shown);
             StartCoroutine(ClosePostPanelAfter(2.8f, shown));
@@ -241,7 +241,7 @@ namespace ABetterU.Coach
 
             var p = postPanel;
             VRGlass.Panel(p, "Panel", new Vector3(0, 0, 0.03f), new Vector2(2.0f, 1.3f), 0.06f, GlassStyle.Panel, 30);
-            VRGlass.Label(p, "Share to A Better U", new Vector3(-0.92f, 0.55f, -0.02f), 0.015f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left, 36);
+            VRGlass.Label(p, "Post to your A Better U feed", new Vector3(-0.92f, 0.55f, -0.02f), 0.015f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left, 36);
 
             if (d.Preview != null) VRGlass.Image(p, "Picture", d.Preview, new Vector3(-0.50f, -0.02f, -0.01f), new Vector2(0.78f, 0.78f), 34);
             else VRGlass.Label(p, "Text post\n(no picture)", new Vector3(-0.50f, -0.02f, -0.02f), 0.009f, VRUi.Muted, TextAnchor.MiddleCenter, TextAlignment.Center, 36);
@@ -256,7 +256,7 @@ namespace ABetterU.Coach
             VRGlass.Button(p, "Public", new Vector3(0.60f, -0.20f, -0.02f), new Vector2(0.40f, 0.13f),
                 locked ? GlassStyle.Disabled : d.Visibility == "public" ? GlassStyle.Primary : GlassStyle.Secondary, 0.0085f,
                 () => { if (!posting && draft != null) { draft.Visibility = "public"; ShowPostPanel(); } }, 0.035f, 34);
-            VRGlass.Label(p, d.Visibility == "public" ? "Everyone on A Better U can see it" : "Only your friends can see it",
+            VRGlass.Label(p, d.Visibility == "public" ? "A Better U social feed: everyone on A Better U can see it" : "A Better U social feed: only your A Better U friends can see it",
                 new Vector3(0.38f, -0.31f, -0.02f), 0.0075f, VRUi.Muted, TextAnchor.MiddleCenter, TextAlignment.Center, 36);
             VRGlass.Label(p, postStatus, new Vector3(0.0f, -0.43f, -0.02f), 0.0085f, VRUi.Ink, TextAnchor.MiddleCenter, TextAlignment.Center, 36);
 
