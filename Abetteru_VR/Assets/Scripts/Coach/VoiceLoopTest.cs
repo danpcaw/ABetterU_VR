@@ -154,6 +154,8 @@ namespace ABetterU.Coach
             agent.ControlSquatSession = ControlSquatWorkout;
             agent.DraftPost = DraftPostRoutine;
             agent.PublishPost = PublishRoutine;
+            agent.ShowExerciseVideo = ShowExerciseVideoRoutine;
+            agent.CloseExerciseVideo = CloseVideoTool;
             agent.HasTrackedSquatWorkout = () => workout != null;
             agent.ChoicesOffered += (list, servings, grams) => OnChoices?.Invoke(list, servings, grams);
 
@@ -178,6 +180,7 @@ namespace ABetterU.Coach
         {
             if (mic == null || flow == null) return;
             PostTick();
+            VideoTick();
             HandsFreeTick();
             var stage = flow.Current;
             if (stage == AppFlow.Stage.Login) return;           // nothing to talk to until someone is signed in
@@ -563,6 +566,7 @@ namespace ABetterU.Coach
                 case "log_set": return "Saving your set...";
                 case "draft_post": return "Making your post...";
                 case "publish_post": return "Posting...";
+                case "show_exercise_video": return "Loading the video...";
                 case "go_to": return "Opening that...";
                 default: return "Working on it...";
             }

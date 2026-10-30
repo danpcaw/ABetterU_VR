@@ -1549,7 +1549,8 @@ namespace ABetterU.Coach
             VRGlass.Label(g, tip, new Vector3(-1.05f, -0.12f, -0.02f), 0.0082f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
             VRGlass.Label(g, "Left trigger starts and ends a set  ·  Atlas saves it for you", new Vector3(-1.05f, -0.26f, -0.02f), 0.0072f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
 
-            VRGlass.Button(g, "Start Virtual Gym", new Vector3(1.05f, -0.0f, -0.02f), new Vector2(0.85f, 0.2f), GlassStyle.Primary, 0.0095f, EnterGym, 0.05f);
+            VRGlass.Button(g, "Start Virtual Gym", new Vector3(1.05f, 0.05f, -0.02f), new Vector2(0.85f, 0.2f), GlassStyle.Primary, 0.0095f, EnterGym, 0.05f);
+            VRGlass.Button(g, "How to: Squat", new Vector3(1.05f, -0.17f, -0.02f), new Vector2(0.85f, 0.15f), GlassStyle.Secondary, 0.0088f, () => { if (voice != null) voice.ShowHowTo("Bodyweight Squat"); }, 0.04f);
         }
 
         // ── Moving on ───────────────────────────────────────────────────────────────────────────────────

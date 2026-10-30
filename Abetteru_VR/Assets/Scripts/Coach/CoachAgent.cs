@@ -33,6 +33,8 @@ namespace ABetterU.Coach
         public Func<string, int, int, string> ControlSquatSession;
         public Func<JObject, Action<string>, IEnumerator> DraftPost;
         public Func<string, Action<string>, IEnumerator> PublishPost;
+        public Func<string, Action<string>, IEnumerator> ShowExerciseVideo;
+        public Func<string> CloseExerciseVideo;
 
         public CoachAgent(ModelApiConfig config, SupabaseClient supabase)
         {
@@ -109,6 +111,13 @@ namespace ABetterU.Coach
              ""caption"":{""type"":""string""},
              ""hashtags"":{""type"":""array"",""items"":{""type"":""string""},""description"":""Up to 3, letters and numbers only""},
              ""image_prompt"":{""type"":""string""}},""required"":[""caption""]}},
+          {""type"":""function"",""name"":""show_exercise_video"",
+           ""description"":""Show the how-to video for an exercise from the A Better U exercise library when the user asks to see how to do an exercise, a demo or a video. Use the exercise name they say, for example Bodyweight Squat. Say only that the video is from the library; never explain technique yourself."",
+           ""parameters"":{""type"":""object"",""properties"":{
+             ""exercise_name"":{""type"":""string""}},""required"":[""exercise_name""]}},
+          {""type"":""function"",""name"":""close_exercise_video"",
+           ""description"":""Close the how-to video that is showing, when the user asks to close, hide or stop it."",
+           ""parameters"":{""type"":""object"",""properties"":{}}},
           {""type"":""function"",""name"":""publish_post"",
            ""description"":""Publish the draft post the user has just approved, for example when they say post it. Only call after a draft_post and the user's go-ahead. Posts are friends-only unless the user says public."",
            ""parameters"":{""type"":""object"",""properties"":{
@@ -156,6 +165,7 @@ namespace ABetterU.Coach
             "When the user asks to do or start squats, call start_squat_session with their requested sets and reps, default one set of ten and 60 seconds rest. " +
             "For an ongoing headset workout use control_squat_session to stop, skip rest, extend rest or change the number of sets. " +
             "When the user asks to share or post their session or something they did, call draft_post, then tell them the preview is on screen and they can tap Post or say post it. " +
+            "When the user asks to see how to do an exercise, or asks for a demo or video, call show_exercise_video, and say the video is from the A Better U library; do not explain technique or give form advice. Close it with close_exercise_video when asked. " +
             "Never say anything is posted until publish_post returns ok. Posts go to the user's A Better U social feed (not to Meta, Facebook or Instagram), and are friends-only unless the user chooses public. Say \"your A Better U feed\" when you mention it. " +
             "Headset-measured sets are saved automatically; never log_set those reps again. Do not claim a session was started or changed without a successful tool result. " +
             "When the user says they finished an exercise outside the tracked headset workout, call log_set with the exercise and the reps they stated, then say what was recorded. " +
@@ -275,6 +285,12 @@ namespace ABetterU.Coach
                 case "build_workout": yield return BuildWorkout(args, done); break;
                 case "draft_post":
                     if (DraftPost != null) yield return DraftPost(args, done); else done(Fail("posting is unavailable"));
+                    break;
+                case "show_exercise_video":
+                    if (ShowExerciseVideo != null) yield return ShowExerciseVideo((string)args["exercise_name"], done); else done(Fail("videos are unavailable"));
+                    break;
+                case "close_exercise_video":
+                    done(CloseExerciseVideo != null ? CloseExerciseVideo() : Fail("videos are unavailable"));
                     break;
                 case "publish_post":
                     if (PublishPost != null) yield return PublishPost((string)args["visibility"], done); else done(Fail("posting is unavailable"));
