@@ -483,10 +483,10 @@ namespace ABetterU.Coach
                     assistant.SetHints(new[] { "Log my usual breakfast", "Show me McDonald's foods", "Log a Big Mac for lunch", "What can you do?" });
                     break;
                 case Stage.Experiences:
-                    assistant.SetHints(new[] { "My knee is sore, build me a workout", "What can you do?" });
+                    assistant.SetHints(new[] { "Set me up two sets of ten squats", "What can you do?" });
                     break;
                 default:
-                    assistant.SetHints(new[] { "What can you do?", "Log a Big Mac for dinner", "My knee is sore, build me a workout", "Log my usual breakfast" });
+                    assistant.SetHints(new[] { "What can you do?", "Log a Big Mac for dinner", "Set me up two sets of ten squats", "Log my usual breakfast" });
                     break;
             }
         }
@@ -557,11 +557,6 @@ namespace ABetterU.Coach
                 data.MealsToday > 0 ? $"{data.Kcal:N0} kcal today" : "No meals logged today",
                 data.WorkoutsThisWeek > 0 ? $"{data.WorkoutsThisWeek} workout{(data.WorkoutsThisWeek == 1 ? "" : "s")} this week" : "No workouts this week",
             };
-            if (data.Injuries.Count > 0)
-            {
-                var n = data.Injuries[0];
-                parts.Add($"{Describe(n)} noted");
-            }
             string line = string.Join("   ·   ", parts);
             return data.HadError ? line + "\n(some details could not be loaded)" : line;
         }
@@ -788,29 +783,14 @@ namespace ABetterU.Coach
                 VRGlass.Label(c, data.LatestWorkoutWhen, new Vector3(-0.38f, -0.33f, -0.02f), 0.0075f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
         }
 
+        // The third My World card: a way into the plate scan.
         void BuildWellbeingCard(Transform c)
         {
-            CardTitle(c, VRArt.IconKind.Heart, new Color(1.0f, 0.50f, 0.60f), "Recorded Injuries", 0.37f);
+            CardTitle(c, VRArt.IconKind.Apple, new Color(0.40f, 0.95f, 0.70f), "Scan a Plate", 0.37f);
             VRGlass.Button(c, "Scan a Plate", new Vector3(0, CardButtonY, -0.02f), new Vector2(0.8f, 0.12f), GlassStyle.Secondary, 0.0078f, ShowScan, 0.035f);
-
-            if (!data.Loaded) { VRGlass.Label(c, "Loading...", new Vector3(0, 0.1f, -0.02f), 0.009f, VRUi.Muted); return; }
-            if (data.Injuries.Count == 0)
-            {
-                VRGlass.Label(c, "No recorded injuries", new Vector3(0, 0.12f, -0.02f), 0.0095f, VRUi.Ink);
-                VRGlass.Label(c, "Tell Atlas if something\nhurts and it will be kept here.", new Vector3(0, -0.02f, -0.02f), 0.0072f, VRUi.Muted);
-                return;
-            }
-
-            float y = 0.20f;
-            for (int i = 0; i < Mathf.Min(3, data.Injuries.Count); i++)
-            {
-                var n = data.Injuries[i];
-                VRGlass.Label(c, Describe(n), new Vector3(-0.36f, y, -0.02f), 0.0105f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
-                string sub = string.IsNullOrEmpty(n.Reported) ? "Reported" : "Reported " + n.Reported.ToLower();
-                VRGlass.Label(c, sub, new Vector3(-0.36f, y - 0.075f, -0.02f), 0.0075f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
-                y -= 0.20f;
-            }
-            VRGlass.Label(c, "Used to shape your workouts", new Vector3(0, -0.39f, -0.02f), 0.0062f, VRUi.Muted);
+            VRGlass.Label(c, "Look at your plate.\nAtlas names each food,\noutlines it and measures it.", new Vector3(0, 0.10f, -0.02f), 0.0092f, VRUi.Ink);
+            VRGlass.Label(c, "Muse Spark and SAM 3.1", new Vector3(0, -0.12f, -0.02f), 0.0075f, VRUi.Muted);
+            VRGlass.Label(c, "You confirm before anything is logged.", new Vector3(0, -0.39f, -0.02f), 0.0062f, VRUi.Muted);
         }
 
         // ── Food Diary: one day at a time, with previous/next day buttons ───────────────────────────────
@@ -1565,9 +1545,7 @@ namespace ABetterU.Coach
             VRGlass.Label(g, "A guided squat session. Calibrate, then the headset counts your reps\nand the set is saved to your A Better U profile.",
                 new Vector3(-1.05f, 0.10f, -0.02f), 0.0082f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
 
-            string tip = data.Injuries.Count > 0
-                ? $"You noted: {Describe(data.Injuries[0])}. Ask Atlas to suggest some exercises around it."
-                : "Ask Atlas to set up a squat workout, or just start a set.";
+            string tip = "Ask Atlas to set up a squat workout, or just start a set.";
             VRGlass.Label(g, tip, new Vector3(-1.05f, -0.12f, -0.02f), 0.0082f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
             VRGlass.Label(g, "Left trigger starts and ends a set  ·  Atlas saves it for you", new Vector3(-1.05f, -0.26f, -0.02f), 0.0072f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left);
 
