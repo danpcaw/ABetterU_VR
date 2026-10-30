@@ -724,7 +724,12 @@ namespace ABetterU.Coach
             get => PlayerPrefs.GetInt("weight_imperial", 0) == 1;
             set => PlayerPrefs.SetInt("weight_imperial", value ? 1 : 0);
         }
-        static string Wt(double kg) => Imperial ? $"{kg * 2.20462:0.#} lb" : $"{kg:0.#} kg";
+        static string Wt(double kg)
+        {
+            if (!Imperial) return $"{kg:0.#} kg";
+            int lb = Mathf.RoundToInt((float)(kg * 2.20462));          // whole pounds, then split into stones; a small change stays in pounds
+            return lb >= 14 ? $"{lb / 14} st {lb % 14} lb" : $"{lb} lb";
+        }
 
         // The buttons under the two big cards sit just below them, on one line, so they never collide with the card text.
         const float CardButtonY = -0.56f;
@@ -1083,7 +1088,7 @@ namespace ABetterU.Coach
             // What you are working towards.
             var goals = Card(p, new Vector3(1.21f, 0.27f, 0f), new Vector2(1.0f, 0.78f));
             VRGlass.Label(goals, "Goals", new Vector3(0, 0.32f, -0.02f), 0.0105f, VRUi.Muted);
-            VRGlass.Button(goals, Imperial ? "Show kg" : "Show lb", new Vector3(0.36f, 0.32f, -0.02f), new Vector2(0.3f, 0.1f), GlassStyle.Secondary, 0.0066f,
+            VRGlass.Button(goals, Imperial ? "Show kg" : "Show st lb", new Vector3(0.36f, 0.32f, -0.02f), new Vector2(0.3f, 0.1f), GlassStyle.Secondary, 0.0066f,
                 () => { Imperial = !Imperial; BuildProfile(); }, 0.03f);
             float y = 0.20f;
             void Line(string label, string value)
