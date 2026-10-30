@@ -301,9 +301,9 @@ namespace ABetterU.Coach
             VRGlass.Label(p, "Sign in to continue your journey.", new Vector3(cx, 0.52f, -0.02f), 0.0072f, VRUi.Muted);
 
             emailField = VRGlass.Button(p, "", new Vector3(cx, 0.34f, -0.02f), new Vector2(1.3f, 0.15f), GlassStyle.Secondary, 0.0085f,
-                () => { editingPassword = false; RefreshFields(); ShowKeyboard(); });
+                () => { editingPassword = false; emailCaret = email.Length; RefreshFields(); ShowKeyboard(); });
             passwordField = VRGlass.Button(p, "", new Vector3(cx - 0.13f, 0.15f, -0.02f), new Vector2(1.04f, 0.15f), GlassStyle.Secondary, 0.0085f,
-                () => { editingPassword = true; RefreshFields(); ShowKeyboard(); });
+                () => { editingPassword = true; passwordCaret = password.Length; RefreshFields(); ShowKeyboard(); });
             showButton = VRGlass.Button(p, "Show", new Vector3(cx + 0.54f, 0.15f, -0.02f), new Vector2(0.24f, 0.15f), GlassStyle.Secondary, 0.0075f,
                 () => { showPassword = !showPassword; RefreshFields(); });
 
@@ -332,7 +332,7 @@ namespace ABetterU.Coach
             keyboardRoot = go.transform;
             var k = keyboardRoot;
 
-            VRGlass.Panel(k, "Keyboard panel", new Vector3(0, 0, 0.02f), new Vector2(1.8f, 0.92f), 0.05f, GlassStyle.Panel, 0);
+            VRGlass.Panel(k, "Keyboard panel", new Vector3(0, 0, 0.02f), new Vector2(2.0f, 0.92f), 0.05f, GlassStyle.Panel, 0);
 
             string[] rows = { "1234567890", "qwertyuiop", "asdfghjkl@", "zxcvbnm._-" };
             const float step = 0.16f, size = 0.14f, top = 0.30f;
@@ -350,11 +350,14 @@ namespace ABetterU.Coach
             }
 
             float bottom = top - rows.Length * step;
-            shiftButton = VRGlass.Button(k, "Shift", new Vector3(-0.68f, bottom, -0.02f), new Vector2(0.38f, size), GlassStyle.Secondary, 0.0085f,
+            // Shift, Clear, the two cursor arrows (to fix one wrong letter without deleting the rest), Done, Back.
+            shiftButton = VRGlass.Button(k, "Shift", new Vector3(-0.80f, bottom, -0.02f), new Vector2(0.30f, size), GlassStyle.Secondary, 0.0080f,
                 () => { shift = !shift; RefreshKeys(); }, 0.03f, 1);
-            VRGlass.Button(k, "Clear", new Vector3(-0.27f, bottom, -0.02f), new Vector2(0.38f, size), GlassStyle.Secondary, 0.0085f, ClearField, 0.03f, 1);
-            VRGlass.Button(k, "Done", new Vector3(0.17f, bottom, -0.02f), new Vector2(0.46f, size), GlassStyle.Primary, 0.0095f, CloseKeyboard, 0.03f, 1);
-            VRGlass.Button(k, "Back", new Vector3(0.62f, bottom, -0.02f), new Vector2(0.42f, size), GlassStyle.Secondary, 0.0085f, Backspace, 0.03f, 1);
+            VRGlass.Button(k, "Clear", new Vector3(-0.47f, bottom, -0.02f), new Vector2(0.30f, size), GlassStyle.Secondary, 0.0080f, ClearField, 0.03f, 1);
+            VRGlass.Button(k, "<", new Vector3(-0.19f, bottom, -0.02f), new Vector2(0.20f, size), GlassStyle.Secondary, 0.0110f, () => MoveCaret(-1), 0.03f, 1);
+            VRGlass.Button(k, ">", new Vector3(0.04f, bottom, -0.02f), new Vector2(0.20f, size), GlassStyle.Secondary, 0.0110f, () => MoveCaret(1), 0.03f, 1);
+            VRGlass.Button(k, "Done", new Vector3(0.34f, bottom, -0.02f), new Vector2(0.34f, size), GlassStyle.Primary, 0.0090f, CloseKeyboard, 0.03f, 1);
+            VRGlass.Button(k, "Back", new Vector3(0.69f, bottom, -0.02f), new Vector2(0.30f, size), GlassStyle.Secondary, 0.0080f, Backspace, 0.03f, 1);
             RefreshKeys();
         }
 
@@ -369,21 +372,40 @@ namespace ABetterU.Coach
         void TypeChar(char c)
         {
             char ch = shift && char.IsLetter(c) ? char.ToUpper(c) : c;
-            if (editingPassword) password += ch; else email += ch;
+            if (editingPassword) { int at = Mathf.Clamp(passwordCaret, 0, password.Length); password = password.Insert(at, ch.ToString()); passwordCaret = at + 1; }
+            else { int at = Mathf.Clamp(emailCaret, 0, email.Length); email = email.Insert(at, ch.ToString()); emailCaret = at + 1; }
             if (shift) { shift = false; RefreshKeys(); }          // shift applies to one letter, like a phone keyboard
             RefreshFields();
         }
 
+        // The cursor sits between letters: typing inserts there, Back deletes the letter before it, and the arrows move it.
+        int emailCaret, passwordCaret;
+
         void Backspace()
         {
-            if (editingPassword) { if (password.Length > 0) password = password.Substring(0, password.Length - 1); }
-            else if (email.Length > 0) email = email.Substring(0, email.Length - 1);
+            if (editingPassword)
+            {
+                int c = Mathf.Clamp(passwordCaret, 0, password.Length);
+                if (c > 0) { password = password.Remove(c - 1, 1); passwordCaret = c - 1; }
+            }
+            else
+            {
+                int c = Mathf.Clamp(emailCaret, 0, email.Length);
+                if (c > 0) { email = email.Remove(c - 1, 1); emailCaret = c - 1; }
+            }
+            RefreshFields();
+        }
+
+        void MoveCaret(int delta)
+        {
+            if (editingPassword) passwordCaret = Mathf.Clamp(passwordCaret + delta, 0, password.Length);
+            else emailCaret = Mathf.Clamp(emailCaret + delta, 0, email.Length);
             RefreshFields();
         }
 
         void ClearField()
         {
-            if (editingPassword) password = ""; else email = "";
+            if (editingPassword) { password = ""; passwordCaret = 0; } else { email = ""; emailCaret = 0; }
             RefreshFields();
         }
 
@@ -393,13 +415,21 @@ namespace ABetterU.Coach
             if (shiftButton != null) shiftButton.SetLabel(shift ? "SHIFT" : "Shift");
         }
 
+        // The text with a "|" at the cursor; an empty field being edited shows just the cursor.
+        static string WithCaret(string text, int caret, string placeholder)
+        {
+            caret = Mathf.Clamp(caret, 0, text.Length);
+            return text.Insert(caret, "|");
+        }
+
         void RefreshFields()
         {
             if (emailField != null)
-                emailField.SetLabel((editingPassword ? "  " : "> ") + (email.Length > 0 ? email : "Email"));
+                emailField.SetLabel((editingPassword ? "  " : "> ") + (editingPassword ? (email.Length > 0 ? email : "Email") : WithCaret(email, emailCaret, "Email")));
             if (passwordField != null)
             {
-                string shown = password.Length == 0 ? "Password" : showPassword ? password : new string('*', password.Length);
+                string masked = showPassword ? password : new string('*', password.Length);
+                string shown = editingPassword ? WithCaret(masked, passwordCaret, "Password") : (password.Length == 0 ? "Password" : masked);
                 passwordField.SetLabel((editingPassword ? "> " : "  ") + shown);
             }
             if (showButton != null) showButton.SetLabel(showPassword ? "Hide" : "Show");
