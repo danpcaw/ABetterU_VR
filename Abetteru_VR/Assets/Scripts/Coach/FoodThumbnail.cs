@@ -12,7 +12,7 @@ namespace ABetterU.Coach
     public class FoodThumbnail : MonoBehaviour
     {
         const int Pixels = 192;                          // the picture is stored at this size
-        const float CornerFraction = 0.18f;              // corner radius as a fraction of the side, close to the frame's own
+        const float CornerFraction = 0.16f;              // corner radius as a fraction of the side, close to the frame's own
         static readonly Dictionary<string, Texture2D> cache = new Dictionary<string, Texture2D>();
 
         GameObject fallback;
@@ -27,9 +27,9 @@ namespace ABetterU.Coach
             go.transform.localPosition = position;
             var loader = go.AddComponent<FoodThumbnail>();
             VRGlass.Panel(go.transform, "Image frame", Vector3.zero, new Vector2(size, size), 0.035f, GlassStyle.Secondary, 3 + orderOffset);
-            loader.fallback = VRGlass.Icon(go.transform, icon, VRUi.Muted, new Vector3(0, 0, -0.006f), size * 0.6f, 4 + orderOffset).gameObject;
+            loader.fallback = VRGlass.Icon(go.transform, icon, VRUi.Muted, Vector3.zero, size * 0.6f, 4 + orderOffset).gameObject;
             loader.order = orderOffset;
-            loader.box = size * 0.94f;                   // just inside the frame's border
+            loader.box = size * 0.92f;                   // just inside the frame's border
             if (string.IsNullOrEmpty(url)) return;
             if (cache.TryGetValue(url, out var cached) && cached != null) { loader.Show(cached); return; }
             if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
@@ -53,7 +53,7 @@ namespace ABetterU.Coach
 
         void Show(Texture2D tex)
         {
-            VRGlass.Image(transform, "Picture", tex, new Vector3(0, 0, -0.008f), new Vector2(box, box), 5 + order);
+            VRGlass.Image(transform, "Picture", tex, Vector3.zero, new Vector2(box, box), 5 + order);      // same plane as the frame: draw order, not depth, puts it on top
             if (fallback != null) fallback.SetActive(false);
         }
 
