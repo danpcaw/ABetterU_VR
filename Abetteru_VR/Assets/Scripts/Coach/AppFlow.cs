@@ -1256,7 +1256,7 @@ namespace ABetterU.Coach
             VRGlass.Label(p, "Scan a Plate", new Vector3(-1.62f, 0.81f, -0.02f), 0.019f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
             VRGlass.Button(p, "My World", new Vector3(1.445f, 0.81f, -0.02f), new Vector2(0.5f, 0.16f), GlassStyle.Secondary, 0.0085f, ShowMyWorld, 0.04f);
 
-            VRGlass.Label(p, "Powered by Meta Muse Spark and Meta SAM 3.1", new Vector3(1.06f, -0.93f, -0.02f), 0.0072f, VRUi.Muted, TextAnchor.MiddleCenter, TextAlignment.Center);
+            VRGlass.Label(p, "Powered by Meta Muse Spark and Meta SAM 3.1", new Vector3(1.06f, -0.87f, -0.02f), 0.0072f, VRUi.Muted, TextAnchor.MiddleCenter, TextAlignment.Center);
 
             // The camera picture, or the frozen frame once captured.
             VRGlass.Panel(p, "Frame", new Vector3(ScanFrameCentre.x, ScanFrameCentre.y, 0.02f), new Vector2(2.0f, 1.5f), 0.05f, GlassStyle.Card, 1);
