@@ -1281,7 +1281,7 @@ namespace ABetterU.Coach
             {
                 bool ready = plateCam != null && plateCam.Streaming;
                 string hint = scanCalibrating
-                    ? "Lay a bank or credit card flat on an empty plate, then press the left trigger"
+                    ? "Lay a card flat on an empty plate, then press the left trigger"
                     : "Hold the headset above the plate at a slight angle, with the whole plate inside the frame, then press the left trigger";
                 VRGlass.Label(p, VRUi.Wrap(ready ? hint : plateCam != null ? plateCam.Status : "", 22, 3), new Vector3(rx, 0.45f, -0.02f), 0.0105f, VRUi.Ink);
                 VRGlass.Button(p, "Capture", new Vector3(rx, 0.12f, -0.02f), new Vector2(0.9f, 0.18f), ready ? GlassStyle.Primary : GlassStyle.Disabled, 0.0095f,
@@ -1290,7 +1290,7 @@ namespace ABetterU.Coach
                     VRGlass.Button(p, "Try again", new Vector3(rx, -0.12f, -0.02f), new Vector2(0.9f, 0.16f), GlassStyle.Secondary, 0.0088f, () => { plateCam.Begin(); BuildScan(); }, 0.04f);
 
                 // Optional: measure your plate once with a bank card, so food weights use its real width.
-                VRGlass.Label(p, scanCalibrating ? "Calibrating your plate" : VRUi.Wrap("Would you like to calibrate your plate? You will need a bank or credit card.", 30, 3),
+                VRGlass.Label(p, VRUi.Wrap(scanCalibrating ? "Use a dark or white card. A card close to your plate's colour can't be seen." : "Would you like to calibrate your plate? You will need a bank or credit card.", 30, 3),
                     new Vector3(rx, -0.40f, -0.02f), 0.0078f, VRUi.Muted);
                 VRGlass.Button(p, scanCalibrating ? "Back to scanning food" : "Calibrate plate", new Vector3(rx, -0.62f, -0.02f), new Vector2(1.0f, 0.15f), GlassStyle.Secondary, 0.0085f,
                     () => OpenScan(!scanCalibrating), 0.04f);

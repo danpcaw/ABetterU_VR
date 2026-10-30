@@ -111,7 +111,6 @@ namespace ABetterU.Coach
             var result = new PlateCalibration();
             string dataUrl = "data:image/jpeg;base64," + Convert.ToBase64String(jpg);
             progress("Finding the plate and the card...");
-            try { System.IO.File.WriteAllBytes(System.IO.Path.Combine(Application.persistentDataPath, "calib-full.jpg"), jpg); } catch (Exception) { }
 
             var plateBoxes = new List<Rect>();
             int pending = 1;
@@ -139,7 +138,6 @@ namespace ABetterU.Coach
                 crop.SetPixels(full.GetPixels(px, pyBottom, pw, ph));
                 crop.Apply();
                 var cropJpg = crop.EncodeToJPG(92);
-                try { System.IO.File.WriteAllBytes(System.IO.Path.Combine(Application.persistentDataPath, "calib-crop.jpg"), cropJpg); } catch (Exception) { }
                 cropUrl = "data:image/jpeg;base64," + Convert.ToBase64String(cropJpg);
                 Destroy(crop);
             }
@@ -167,7 +165,7 @@ namespace ABetterU.Coach
                 double shape = Math.Abs(Math.Log(Math.Max(pixelAspect, 1 / pixelAspect) / (CardLongCm / CardShortCm)));
                 if (shape < bestShape) { bestShape = shape; card = r; }
             }
-            if (!card.HasValue) { result.Error = "I couldn't see the card. Lay it flat on the plate, edges straight, and try again."; done(result); yield break; }
+            if (!card.HasValue) { result.Error = "I couldn't see the card. Lay it flat on the plate, edges straight. A dark or white card works best; one close to the plate's colour can't be seen."; done(result); yield break; }
             result.Card = card;
 
             var c = card.Value;

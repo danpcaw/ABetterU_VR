@@ -96,6 +96,7 @@ More detail in [docs/HACKATHON_COMPLIANCE.md](docs/HACKATHON_COMPLIANCE.md).
 - A voice turn takes about 5 to 6 seconds on the upload path (speech to text, then Muse Spark, then speech out). The realtime path cuts the speech-to-text wait from about 2 seconds to under half a second; measured numbers are in docs/MODEL_API.md.
 - Squat counting and the form check use head tracking only. Thresholds were tuned from logged on-device data (lean limit 15 cm) and may need adjusting for different body types.
 - The plate scan measures from a single photo, so its weights depend on the camera angle, the framing and the plate-width setting (set it once to your plate). It is an estimate for the user to check, not a scale.
+- The optional plate calibration needs a bank or credit card that stands out from the plate: it finds a dark or white card easily, but a card close to the plate's colour (a blue card on a teal plate was not found) cannot be seen. The screen says so. You can always set the plate width by hand.
 - The scan needs the headset camera permission, which Quest asks for the first time you open Scan a Plate.
 - The gym is built from simple shapes, and the voice is a US voice.
 - The Meta Model API key is bundled in the APK for the demo build. **Do not distribute built APKs publicly**, so no APK is in this repository.
