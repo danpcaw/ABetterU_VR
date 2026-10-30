@@ -82,7 +82,22 @@ namespace ABetterU.Coach
             var size = new Vector2(Mathf.Max(1.4f, vw + 0.30f), vh + 0.55f);
             VRGlass.Panel(root, "Panel", new Vector3(0, 0, 0.03f), size, 0.06f, GlassStyle.Panel, 30);
             VRGlass.Label(root, title, new Vector3(-size.x / 2f + 0.14f, size.y / 2f - 0.13f, -0.02f), 0.0125f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left, 36);
-            VRGlass.Image(root, "Video", rt, new Vector3(0f, 0f, -0.01f), new Vector2(vw, vh), 34);
+            if (KeyShaderAvailable)
+            {
+                // The green screen is removed here too, so he stands on the glass instead of inside a green rectangle.
+                var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                quad.name = "Video";
+                Destroy(quad.GetComponent<Collider>());
+                quad.transform.SetParent(root, false);
+                quad.transform.localPosition = new Vector3(0f, 0f, -0.01f);
+                quad.transform.localScale = new Vector3(vw, vh, 1f);
+                keyMaterial = new Material(Shader.Find(KeyShader));
+                keyMaterial.mainTexture = rt;
+                var renderer = quad.GetComponent<Renderer>();
+                renderer.sharedMaterial = keyMaterial;
+                renderer.sortingOrder = 34;
+            }
+            else VRGlass.Image(root, "Video", rt, new Vector3(0f, 0f, -0.01f), new Vector2(vw, vh), 34);
             VRGlass.Label(root, "From the A Better U exercise library", new Vector3(0f, -size.y / 2f + 0.10f, -0.02f), 0.0075f, VRUi.Muted, TextAnchor.MiddleCenter, TextAlignment.Center, 36);
             VRGlass.Button(root, "Close", new Vector3(size.x / 2f - 0.22f, size.y / 2f - 0.13f, -0.02f), new Vector2(0.32f, 0.12f), GlassStyle.Secondary, 0.009f, Close, 0.035f, 34);
         }
