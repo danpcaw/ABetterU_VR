@@ -36,14 +36,14 @@ Tools Muse Spark can call, each acting on the signed-in user's real A Better U a
 | Tool | Effect |
 |---|---|
 | `search_foods`, `offer_choices` | Searches the food database (UK supermarket, restaurant and CoFID items) and shows a picker when several products fit. |
-
-> **Food data is UK-based.** Foods, restaurant items (a McDonald's Big Mac, for example) and calories come from the A Better U UK food database (UK supermarket, restaurant and CoFID items), so portion sizes and calories can differ from the US versions of the same product. The Food Diary screen says so in the headset.
 | `log_food`, `find_my_meals`, `log_meal` | Logs a food by servings or grams, or one of the user's saved meals. |
 | `go_to` | Opens Home, My World, the Food Diary, the Exercise Log, My Profile, My Experiences or the Virtual Gym. |
 | `start_squat_session`, `control_squat_session` | Sets up a headset-tracked squat workout (sets, reps, rest), then finishes it, skips or extends rest, or changes the number of sets. |
 | `log_set` | Saves a set the user did outside the tracked workout. |
 | `draft_post`, `publish_post` | Drafts a feed post with a preview, then publishes it only after the user approves. |
 | `report_injury`, `build_workout` | Notes a sore area so exercise suggestions avoid it (filtered in code, not just by the model). No medical advice is given. |
+
+> **Food data is UK-based.** Foods, restaurant items (a McDonald's Big Mac, for example) and calories come from the A Better U UK food database (UK supermarket, restaurant and CoFID items), so portion sizes and calories can differ from the US versions of the same product. The Food Diary screen says so in the headset.
 
 **Honesty by design:** tool results are the only source of truth. A code-level check replaces any "logged" or "saved" claim in a reply when no write actually succeeded, and the "Saved" confirmation card appears only after the backend returned ok.
 
