@@ -957,6 +957,7 @@ namespace ABetterU.Coach
             }
             else VRGlass.Label(t, diary.HadError ? "Unavailable" : "Loading...", new Vector3(0, 0.2f, -0.02f), 0.011f, VRUi.Muted);
 
+            VRGlass.Label(p, "Food data: UK restaurant and food database.\nUS portions and calories can differ.", new Vector3(1.17f, -0.86f, -0.02f), 0.0066f, VRUi.Muted);
             VRGlass.Label(p, diaryDeleting ? "Deleting entry..." : diaryMessage, new Vector3(-0.55f, -0.91f, -0.02f), 0.008f, VRUi.Muted);
             if (pendingDiaryDelete.HasValue || diaryDeleting)
                 foreach (var button in p.GetComponentsInChildren<VRButton>()) button.Interactable = false;

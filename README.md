@@ -36,6 +36,8 @@ Tools Muse Spark can call, each acting on the signed-in user's real A Better U a
 | Tool | Effect |
 |---|---|
 | `search_foods`, `offer_choices` | Searches the food database (UK supermarket, restaurant and CoFID items) and shows a picker when several products fit. |
+
+> **Food data is UK-based.** Foods, restaurant items (a McDonald's Big Mac, for example) and calories come from the A Better U UK food database (UK supermarket, restaurant and CoFID items), so portion sizes and calories can differ from the US versions of the same product. The Food Diary screen says so in the headset.
 | `log_food`, `find_my_meals`, `log_meal` | Logs a food by servings or grams, or one of the user's saved meals. |
 | `go_to` | Opens Home, My World, the Food Diary, the Exercise Log, My Profile, My Experiences or the Virtual Gym. |
 | `start_squat_session`, `control_squat_session` | Sets up a headset-tracked squat workout (sets, reps, rest), then finishes it, skips or extends rest, or changes the number of sets. |
