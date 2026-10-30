@@ -24,7 +24,7 @@ namespace ABetterU.Coach
         VideoPlayer player;
         RenderTexture rt;
         Material keyMaterial;
-        Transform head, figure;
+        Transform head, figure, controls;
         bool closing;
 
         public IEnumerator Open(string url, string title, bool inWorld, Transform headTransform)
@@ -106,7 +106,8 @@ namespace ABetterU.Coach
         {
             const float height = 1.75f;                                                    // about a person's height
             Vector3 forward = FlatForward();
-            Vector3 pos = new Vector3(head.position.x, 0f, head.position.z) + forward * 2.0f;
+            Vector3 left = -Vector3.Cross(Vector3.up, forward);                              // the user's left
+            Vector3 pos = new Vector3(head.position.x, 0f, head.position.z) + forward * 2.0f + left * 0.45f;     // a little to the left
             pos.y = height / 2f;
 
             var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -121,6 +122,16 @@ namespace ABetterU.Coach
             keyMaterial.mainTexture = rt;
             quad.GetComponent<Renderer>().sharedMaterial = keyMaterial;
             FaceUser();
+
+            // A Close button beside him (the pointer is switched on while he is showing).
+            controls = new GameObject("Video controls").transform;
+            controls.SetParent(transform, false);
+            controls.position = new Vector3(pos.x, 1.25f, pos.z) - left * (height * aspect / 2f + 0.3f);       // to his right, so away from the middle
+            controls.rotation = figure.rotation;
+            VRGlass.Button(controls, "Close video", Vector3.zero, new Vector2(0.5f, 0.15f), GlassStyle.Secondary, 0.0088f, Close, 0.04f, 34);
+
+            // The mirror cannot show his back (there is only a front-facing video), so he and his button stay out of its reflection.
+            foreach (var t in GetComponentsInChildren<Transform>(true)) if (t != transform) t.gameObject.layer = GymRoom.MirrorDisplayLayer;
         }
 
         // The quad shows its picture to anything on its -Z side, so point +Z away from the user.
@@ -132,7 +143,12 @@ namespace ABetterU.Coach
             if (away.sqrMagnitude > 0.01f) figure.rotation = Quaternion.LookRotation(away.normalized, Vector3.up);
         }
 
-        void LateUpdate() { if (InWorld) FaceUser(); }
+        void LateUpdate()
+        {
+            if (!InWorld) return;
+            FaceUser();
+            if (controls != null && figure != null) controls.rotation = figure.rotation;
+        }
 
         public void Close()
         {

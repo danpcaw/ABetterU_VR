@@ -82,7 +82,7 @@ namespace ABetterU.Coach
                 if (instructor == video) instructor = null;
                 if (flow != null && flow.Current == AppFlow.Stage.Gym) flow.SetWorkoutPointer(WorkoutControlsVisible);
             };
-            if (gym && !inRoom) flow.SetWorkoutPointer(true);            // the panel's Close button needs the pointer in the gym
+            if (gym) flow.SetWorkoutPointer(true);                         // the Close button needs the pointer in the gym
 
             yield return video.Open(url, "How to: " + (string)best["name"], inRoom, head);
             if (!video.Ready)
