@@ -154,6 +154,8 @@ namespace ABetterU.Coach
             agent.ControlSquatSession = ControlSquatWorkout;
             agent.DraftPost = DraftPostRoutine;
             agent.PublishPost = PublishRoutine;
+            agent.ShowExerciseVideo = ShowExerciseVideoRoutine;
+            agent.CloseExerciseVideo = CloseVideoTool;
             agent.HasTrackedSquatWorkout = () => workout != null;
             agent.ChoicesOffered += (list, servings, grams) => OnChoices?.Invoke(list, servings, grams);
 
@@ -171,13 +173,14 @@ namespace ABetterU.Coach
             reps = gameObject.AddComponent<RepCounter>();
             reps.head = Camera.main != null ? Camera.main.transform : transform;
 
-            board.Show($"Welcome, {supabase.DisplayName ?? "there"}.\nStand on the mat. Press the left trigger when ready.");
+            board.Show($"Welcome, {supabase.DisplayName ?? "there"}.\nStand on the mat. Press the left trigger when ready.\nWant a demo? Say \"show me a squat demo\" or use the Menu.");
         }
 
         void Update()
         {
             if (mic == null || flow == null) return;
             PostTick();
+            VideoTick();
             HandsFreeTick();
             var stage = flow.Current;
             if (stage == AppFlow.Stage.Login) return;           // nothing to talk to until someone is signed in
@@ -563,6 +566,7 @@ namespace ABetterU.Coach
                 case "log_set": return "Saving your set...";
                 case "draft_post": return "Making your post...";
                 case "publish_post": return "Posting...";
+                case "show_exercise_video": return "Loading the video...";
                 case "go_to": return "Opening that...";
                 default: return "Working on it...";
             }

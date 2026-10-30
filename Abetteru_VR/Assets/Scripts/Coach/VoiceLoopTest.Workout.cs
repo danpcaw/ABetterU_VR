@@ -142,6 +142,7 @@ namespace ABetterU.Coach
 
         IEnumerator BeginSet()
         {
+            CloseInstructor();                    // a how-to video must not stand in the way of a set
             if (workout == null || workout.Phase == WorkoutPhase.Complete)
             {
                 var result = JObject.Parse(ConfigureSquatWorkout(workout?.PlannedSets ?? 1, workout?.TargetReps ?? 10, workout?.RestSeconds ?? 60));
