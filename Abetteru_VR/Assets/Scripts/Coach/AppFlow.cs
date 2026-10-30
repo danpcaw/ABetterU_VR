@@ -147,6 +147,7 @@ namespace ABetterU.Coach
 
             VRGlass.Panel(picker, "Panel", new Vector3(0, 0, 0.03f), new Vector2(w, h), 0.06f, GlassStyle.Panel, 20);
             VRGlass.Label(picker, "Which one did you mean?", new Vector3(0, h / 2 - 0.17f, -0.02f), 0.0125f, VRUi.Ink, order: 24);
+            VRGlass.Label(picker, "UK food database: US portions and calories can differ", new Vector3(0, h / 2 - 0.29f, -0.02f), 0.0062f, VRUi.Muted, order: 24);
 
             for (int i = 0; i < page.Count; i++)
             {
