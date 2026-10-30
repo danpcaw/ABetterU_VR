@@ -173,7 +173,7 @@ namespace ABetterU.Coach
             reps = gameObject.AddComponent<RepCounter>();
             reps.head = Camera.main != null ? Camera.main.transform : transform;
 
-            board.Show($"Welcome, {supabase.DisplayName ?? "there"}.\nStand on the mat. Press the left trigger when ready.");
+            board.Show($"Welcome, {supabase.DisplayName ?? "there"}.\nStand on the mat. Press the left trigger when ready.\nWant a demo? Say \"show me a squat demo\" or use the Menu.");
         }
 
         void Update()
