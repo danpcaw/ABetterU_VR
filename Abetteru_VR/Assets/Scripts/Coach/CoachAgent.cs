@@ -295,7 +295,7 @@ namespace ABetterU.Coach
         }
 
         // Only the columns we use: the full row is about 2.4 KB, so a long result list was slow to download on the headset.
-        const string SearchRpc = "search_foods?select=id,name,brand,restaurant,source,serving_size_g,serving_name,energy_kcal_100g,energy_kcal_serving";
+        const string SearchRpc = "search_foods?select=id,name,brand,restaurant,source,image_url,serving_size_g,serving_name,energy_kcal_100g,energy_kcal_serving";
 
         // Everything the last search found (best first), so the picker can show it all without asking the model again.
         readonly List<JObject> lastSearchAll = new List<JObject>();
@@ -372,6 +372,7 @@ namespace ABetterU.Coach
                     ["name"] = f["name"],
                     ["brand"] = f["brand"],
                     ["source"] = f["source"],
+                    ["image_url"] = f["image_url"],
                     ["serving"] = per100Only ? "100 g" : f["serving_name"],
                     ["serving_g"] = per100Only ? 100 : f["serving_size_g"],
                     ["kcal_per_serving"] = per100Only ? kcal100 : (kcalServing ?? (kcal100.HasValue && grams.HasValue ? Math.Round(kcal100.Value * grams.Value / 100.0) : (double?)null)),
@@ -488,7 +489,7 @@ namespace ABetterU.Coach
 
         // ── Food picker: the agent shows options on screen; the user's tap logs one directly (no model round) ──
 
-        public struct Choice { public string FoodId, Name, Brand, Serving, Source; public double? Kcal; }
+        public struct Choice { public string FoodId, Name, Brand, Serving, Source, ImageUrl; public double? Kcal; }
 
         public event Action<List<Choice>, double, double> ChoicesOffered;
         public bool CanShowChoices;                     // false where there is no screen to show them (the gym)
@@ -522,6 +523,7 @@ namespace ABetterU.Coach
                     Brand = f["brand"] != null && f["brand"].Type != JTokenType.Null ? (string)f["brand"] : null,
                     Serving = f["serving"] != null && f["serving"].Type != JTokenType.Null ? (string)f["serving"] : null,
                     Source = (string)f["source"],
+                    ImageUrl = f["image_url"] != null && f["image_url"].Type != JTokenType.Null ? (string)f["image_url"] : null,
                     Kcal = DashboardData.Num(f["kcal_per_serving"]),
                 });
                 if (list.Count == 60) break;

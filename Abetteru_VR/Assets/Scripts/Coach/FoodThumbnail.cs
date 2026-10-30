@@ -17,15 +17,18 @@ namespace ABetterU.Coach
 
         GameObject fallback;
         float box = 0.19f;
+        int order;
 
-        public static void Create(Transform parent, Vector3 position, string url, float size = 0.20f, VRArt.IconKind icon = VRArt.IconKind.Apple)
+        /// orderOffset lifts the thumbnail above panels that use higher draw orders (the food picker draws at 20 and above).
+        public static void Create(Transform parent, Vector3 position, string url, float size = 0.20f, VRArt.IconKind icon = VRArt.IconKind.Apple, int orderOffset = 0)
         {
             var go = new GameObject("Food thumbnail");
             go.transform.SetParent(parent, false);
             go.transform.localPosition = position;
             var loader = go.AddComponent<FoodThumbnail>();
-            VRGlass.Panel(go.transform, "Image frame", Vector3.zero, new Vector2(size, size), 0.035f, GlassStyle.Secondary, 3);
-            loader.fallback = VRGlass.Icon(go.transform, icon, VRUi.Muted, new Vector3(0, 0, -0.006f), size * 0.6f, 4).gameObject;
+            VRGlass.Panel(go.transform, "Image frame", Vector3.zero, new Vector2(size, size), 0.035f, GlassStyle.Secondary, 3 + orderOffset);
+            loader.fallback = VRGlass.Icon(go.transform, icon, VRUi.Muted, new Vector3(0, 0, -0.006f), size * 0.6f, 4 + orderOffset).gameObject;
+            loader.order = orderOffset;
             loader.box = size * 0.94f;                   // just inside the frame's border
             if (string.IsNullOrEmpty(url)) return;
             if (cache.TryGetValue(url, out var cached) && cached != null) { loader.Show(cached); return; }
@@ -50,7 +53,7 @@ namespace ABetterU.Coach
 
         void Show(Texture2D tex)
         {
-            VRGlass.Image(transform, "Picture", tex, new Vector3(0, 0, -0.008f), new Vector2(box, box), 5);
+            VRGlass.Image(transform, "Picture", tex, new Vector3(0, 0, -0.008f), new Vector2(box, box), 5 + order);
             if (fallback != null) fallback.SetActive(false);
         }
 

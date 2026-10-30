@@ -151,14 +151,20 @@ namespace ABetterU.Coach
                 var c = page[i];
                 string name = c.Name ?? "Food";
                 string line1 = !string.IsNullOrEmpty(c.Brand) ? $"{name} - {c.Brand}" : c.Source == "cofid" ? $"{name} - generic" : name;
-                if (line1.Length > maxChars) line1 = line1.Substring(0, maxChars - 3) + "...";
+                if (line1.Length > maxChars - 6) line1 = line1.Substring(0, maxChars - 9) + "...";      // room is taken by the picture on the left
                 string line2 = (c.Kcal.HasValue ? $"{c.Kcal.Value:0} kcal" : "calories not listed") + (string.IsNullOrEmpty(c.Serving) ? "" : $" per {c.Serving}");
                 string foodId = c.FoodId;
 
                 int col = two ? i % 2 : 0, row = two ? i / 2 : i;
                 float x = two ? (col == 0 ? -0.84f : 0.84f) : 0f;
-                VRGlass.Button(picker, line1 + "\n" + line2, new Vector3(x, h / 2 - 0.46f - row * rowH, -0.02f), new Vector2(btnW, 0.2f),
+                float y = h / 2 - 0.46f - row * rowH;
+                VRGlass.Button(picker, "", new Vector3(x, y, -0.02f), new Vector2(btnW, 0.2f),
                     GlassStyle.Secondary, two ? 0.0075f : 0.0085f, () => { double amount = pickerServings, weight = pickerGrams; ClosePicker(); voice.ChooseFood(foodId, amount, weight); }, 0.04f, 22);
+                // A picture in the same rounded square as the diary, then the name and calories beside it.
+                float left = x - btnW / 2f;
+                FoodThumbnail.Create(picker, new Vector3(left + 0.12f, y, -0.045f), c.ImageUrl, 0.17f, VRArt.IconKind.Apple, 20);
+                VRGlass.Label(picker, line1, new Vector3(left + 0.25f, y + 0.04f, -0.04f), two ? 0.0078f : 0.0088f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left, 27);
+                VRGlass.Label(picker, line2, new Vector3(left + 0.25f, y - 0.045f, -0.04f), two ? 0.0066f : 0.0074f, VRUi.Muted, TextAnchor.MiddleLeft, TextAlignment.Left, 27);
             }
 
             // Bottom row: how many (left), pages (middle), cancel (right).
