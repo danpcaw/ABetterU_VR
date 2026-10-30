@@ -111,6 +111,7 @@ namespace ABetterU.Coach
             var result = new PlateCalibration();
             string dataUrl = "data:image/jpeg;base64," + Convert.ToBase64String(jpg);
             progress("Finding the plate and the card...");
+            try { System.IO.File.WriteAllBytes(System.IO.Path.Combine(Application.persistentDataPath, "calib-full.jpg"), jpg); } catch (Exception) { }
 
             var plateBoxes = new List<Rect>();
             int pending = 1;
@@ -137,7 +138,9 @@ namespace ABetterU.Coach
                 var crop = new Texture2D(pw, ph, TextureFormat.RGB24, false);
                 crop.SetPixels(full.GetPixels(px, pyBottom, pw, ph));
                 crop.Apply();
-                cropUrl = "data:image/jpeg;base64," + Convert.ToBase64String(crop.EncodeToJPG(92));
+                var cropJpg = crop.EncodeToJPG(92);
+                try { System.IO.File.WriteAllBytes(System.IO.Path.Combine(Application.persistentDataPath, "calib-crop.jpg"), cropJpg); } catch (Exception) { }
+                cropUrl = "data:image/jpeg;base64," + Convert.ToBase64String(cropJpg);
                 Destroy(crop);
             }
             Destroy(full);
@@ -426,7 +429,7 @@ namespace ABetterU.Coach
             }
             string raw = req.downloadHandler.text ?? "";
             string reply = OutputText(raw);
-            if (sam && !reply.Contains("<|box")) Debug.Log("[Scan] SAM reply had no outlines. It started: " + raw.Substring(0, Math.Min(260, raw.Length)).Replace("\n", " | "));
+            if (sam && !reply.Contains("<|box")) Debug.Log("[Scan] SAM reply had no outlines. It ended: " + raw.Substring(Math.Max(0, raw.Length - 420)).Replace("\n", " | "));
             ok(reply);
         }
 
