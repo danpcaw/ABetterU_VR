@@ -10,13 +10,14 @@ namespace ABetterU.Coach
         const float Distance = 0.7f, HalfW = 0.37f, HalfH = 0.27f, Arm = 0.11f, Thick = 0.009f;
         static readonly Color Colour = new Color(0.45f, 0.95f, 0.88f);
         Transform head;
+        TextMesh caption;
 
         // The headset's camera sits higher than your eyes, so what it captures is centred a little above where you look. The frame is
         // tilted up by this many degrees to match, and the right thumbstick nudges it (up or down) until the brackets line up. Saved.
         public static float UpDegrees
         {
-            get => PlayerPrefs.GetFloat("viewfinder_up_deg", 6f);
-            set => PlayerPrefs.SetFloat("viewfinder_up_deg", Mathf.Clamp(value, -10f, 25f));
+            get => PlayerPrefs.GetFloat("viewfinder_up_deg_v2", -14f);
+            set => PlayerPrefs.SetFloat("viewfinder_up_deg_v2", Mathf.Clamp(value, -30f, 25f));
         }
 
         public static ViewFinder Create(Transform head)
@@ -38,7 +39,7 @@ namespace ABetterU.Coach
                     Bar(corner, corner - new Vector3(sx * Arm, 0f, 0f));       // one arm along the top or bottom edge
                     Bar(corner, corner - new Vector3(0f, sy * Arm, 0f));       // one arm down the side
                 }
-            VRUi.Label(transform, "Left trigger to capture  -  right stick moves the frame", new Vector3(0f, -HalfH - 0.05f, 0f), 0.0036f, Colour);
+            caption = VRUi.Label(transform, "", new Vector3(0f, -HalfH - 0.05f, 0f), 0.0036f, Colour);
         }
 
         // A bar with rounded ends: a thin box between two points, with a small sphere on each end (which also rounds the corner joint).
@@ -65,6 +66,7 @@ namespace ABetterU.Coach
             float stick = OVRInput.Get(OVRInput.Axis2D.SecondaryThumbstick).y;
             if (Mathf.Abs(stick) > 0.3f) UpDegrees += stick * 8f * Time.unscaledDeltaTime;
 
+            if (caption != null) caption.text = $"Left trigger to capture  -  right stick moves the frame ({UpDegrees:+0;-0;0} deg)";
             var aim = head.rotation * Quaternion.Euler(-UpDegrees, 0f, 0f);       // pitched up from straight ahead
             transform.SetPositionAndRotation(head.position + aim * Vector3.forward * Distance, aim);
         }

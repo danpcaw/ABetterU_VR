@@ -113,17 +113,46 @@ namespace ABetterU.Coach
             progress("Finding the plate and the card...");
 
             var plateBoxes = new List<Rect>();
-            var cardBoxes = new List<Rect>();
-            int pending = 2;
+            int pending = 1;
             StartCoroutine(SegmentInto(plateBoxes, new List<string> { "plate", "dish" }, dataUrl, () => pending--));
-            StartCoroutine(SegmentInto(cardBoxes, new List<string> { "credit card", "bank card", "card" }, dataUrl, () => pending--, 0.0006f));
             for (float t = 0f; pending > 0 && t < 60f; t += Time.unscaledDeltaTime) yield return null;
-            busy = false;
 
             Rect? plate = null;
             foreach (var r in plateBoxes) if (r.width * r.height >= 0.06f && (!plate.HasValue || r.width * r.height > plate.Value.width * plate.Value.height)) plate = r;
-            if (!plate.HasValue) { result.Error = "I couldn't see the plate. Put the empty plate in the frame and try again."; done(result); yield break; }
+            if (!plate.HasValue) { busy = false; result.Error = "I couldn't see the plate. Put the empty plate in the frame and try again."; done(result); yield break; }
             result.Plate = plate;
+
+            // A bank card is small in the whole photo, so look for it in a close crop of the plate instead: the same pixels, much bigger.
+            progress("Looking for the card...");
+            var pl = plate.Value;
+            const float pad = 0.03f;
+            float cx0 = Mathf.Clamp01(pl.x - pad), cx1 = Mathf.Clamp01(pl.xMax + pad), cy0 = Mathf.Clamp01(pl.y - pad), cy1 = Mathf.Clamp01(pl.yMax + pad);
+            string cropUrl = dataUrl;
+            var full = new Texture2D(2, 2, TextureFormat.RGB24, false);
+            if (full.LoadImage(jpg))
+            {
+                int W = full.width, H = full.height;
+                int px = (int)(cx0 * W), pw = Mathf.Max(32, (int)((cx1 - cx0) * W)), pyBottom = (int)((1f - cy1) * H), ph = Mathf.Max(32, (int)((cy1 - cy0) * H));
+                pw = Mathf.Min(pw, W - px); ph = Mathf.Min(ph, H - pyBottom);
+                var crop = new Texture2D(pw, ph, TextureFormat.RGB24, false);
+                crop.SetPixels(full.GetPixels(px, pyBottom, pw, ph));
+                crop.Apply();
+                cropUrl = "data:image/jpeg;base64," + Convert.ToBase64String(crop.EncodeToJPG(92));
+                Destroy(crop);
+            }
+            Destroy(full);
+
+            var cropBoxes = new List<Rect>();
+            pending = 1;
+            StartCoroutine(SegmentInto(cropBoxes, new List<string> { "credit card", "bank card", "card" }, cropUrl, () => pending--, 0.0008f));
+            for (float t = 0f; pending > 0 && t < 60f; t += Time.unscaledDeltaTime) yield return null;
+            busy = false;
+
+            // Back to whole-photo fractions.
+            var cardBoxes = new List<Rect>();
+            foreach (var r in cropBoxes)
+                cardBoxes.Add(new Rect(cx0 + r.x * (cx1 - cx0), cy0 + r.y * (cy1 - cy0), r.width * (cx1 - cx0), r.height * (cy1 - cy0)));
+            Debug.Log($"[Scan] calibration: plate found, {cardBoxes.Count} card outline(s) in the close-up");
 
             // The card: inside the plate, a lot smaller than it, and the shape closest to a bank card (1.59 : 1).
             Rect? card = null; double bestShape = double.MaxValue;
@@ -395,7 +424,10 @@ namespace ABetterU.Coach
                 fail($"{req.responseCode} {req.error} {(snippet.Length > 200 ? snippet.Substring(0, 200) : snippet)}");
                 yield break;
             }
-            ok(OutputText(req.downloadHandler.text));
+            string raw = req.downloadHandler.text ?? "";
+            string reply = OutputText(raw);
+            if (sam && !reply.Contains("<|box")) Debug.Log("[Scan] SAM reply had no outlines. It started: " + raw.Substring(0, Math.Min(260, raw.Length)).Replace("\n", " | "));
+            ok(reply);
         }
 
         // Plain JSON reply (message text) or a streamed reply (the deltas joined), whichever the API sent.
@@ -416,7 +448,9 @@ namespace ABetterU.Coach
                 {
                     var l = line.Trim();
                     if (!l.StartsWith("data:")) continue;
-                    var j = JObject.Parse(l.Substring(5).Trim());
+                    string payload = l.Substring(5).Trim();
+                    if (!payload.StartsWith("{")) continue;                  // not an event object (for example a bare list): nothing to read
+                    var j = JObject.Parse(payload);
                     if ((string)j["type"] == "response.output_text.delta") sb.Append((string)j["delta"]);
                 }
             }
