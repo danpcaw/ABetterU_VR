@@ -43,8 +43,11 @@ namespace ABetterU.Coach
             try { female = string.Equals((string)JArray.Parse(sexRaw)[0]["sex"], "female", StringComparison.OrdinalIgnoreCase); } catch (Exception) { }
 
             string raw = null; err = null;
-            yield return supabase.Get("exercise_library?select=name,video_url,video_url_male,video_url_female,animation_url_male,animation_url_female&is_active=eq.true" +
-                $"&name=ilike.*{Uri.EscapeDataString(wanted)}*&limit=8", r => raw = r, e => err = e);
+            // The library is read through get_exercise_library (the same function the workout builder uses): ordinary accounts are not
+            // allowed to read the exercise_library table directly, only that function.
+            yield return supabase.Rpc("get_exercise_library?select=name,video_url,video_url_male,video_url_female,animation_url_male,animation_url_female" +
+                $"&name=ilike.*{Uri.EscapeDataString(wanted)}*&limit=8", "{}", r => raw = r, e => err = e);
+            if (err != null) Debug.LogWarning("[Video] Library lookup failed: " + err);
             JToken best = null;
             try
             {
