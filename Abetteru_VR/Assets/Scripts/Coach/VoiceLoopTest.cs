@@ -82,6 +82,7 @@ namespace ABetterU.Coach
         public Action<List<CoachAgent.Choice>, double, double> OnChoices;
         /// Raised with a short confirmation after the backend confirmed a write (food, injury note, set).
         public Action<string> OnSaved;
+        public Action<string, string, string, string> OnFoodLogged;      // (food name, "Lunch · 1 serving · 563 kcal", image url or null, diary entry id or null) for the on-screen confirmation card
 
         string lastSaved;                 // confirmation text for the turn in progress
         readonly List<string> savedNames = new List<string>();   // short names of everything the backend confirmed this turn
@@ -234,16 +235,17 @@ namespace ABetterU.Coach
         }
 
         /// The user tapped a food in the picker: log it directly, then confirm only what the backend confirmed.
-        public void ChooseFood(string foodId, double servings, double grams) => StartCoroutine(ChooseRoutine(foodId, servings, grams));
+        public string PickerMeal => agent.PendingMeal;
+        public void ChooseFood(string foodId, double servings, double grams, string meal) => StartCoroutine(ChooseRoutine(foodId, servings, grams, meal));
 
-        IEnumerator ChooseRoutine(string foodId, double servings, double grams)
+        IEnumerator ChooseRoutine(string foodId, double servings, double grams, string meal)
         {
             while (busy) yield return null;                            // let a reply that is still being spoken finish first
             busy = true;
             lastSaved = null; savedNames.Clear();
             Report(AssistantState.Processing, "Saving...", "");
             string result = null;
-            yield return agent.LogChosen(foodId, servings, grams, r => result = r);
+            yield return agent.LogChosen(foodId, servings, grams, meal, r => result = r);
             if (savedNames.Count > 0)
             {
                 Report(AssistantState.Done, "Saved", lastSaved);
@@ -587,6 +589,7 @@ namespace ABetterU.Coach
                 case "log_meal":
                     shortName = (string)result["logged_name"];
                     text = $"{shortName} logged to {(string)result["meal"]}";
+                    OnFoodLogged?.Invoke(shortName, FoodLoggedDetail(result), result["image_url"] != null && result["image_url"].Type != Newtonsoft.Json.Linq.JTokenType.Null ? (string)result["image_url"] : null, (string)result["entry_id"]);
                     break;
                 case "report_injury":
                 {
@@ -609,6 +612,22 @@ namespace ABetterU.Coach
             lastSaved = text;
             savedNames.Add(shortName);
             OnSaved?.Invoke(text);
+        }
+
+        // "Lunch · 2 servings · 1126 kcal", built only from what the backend echoed back.
+        static string FoodLoggedDetail(JObject r)
+        {
+            string meal = (string)r["meal"] ?? "";
+            if (meal.Length > 0) meal = char.ToUpperInvariant(meal[0]) + meal.Substring(1);
+            var parts = new List<string>();
+            if (meal.Length > 0) parts.Add(meal);
+            double? grams = r["grams"] != null && r["grams"].Type != Newtonsoft.Json.Linq.JTokenType.Null ? (double?)r["grams"] : null;
+            double? servings = r["servings"] != null && r["servings"].Type != Newtonsoft.Json.Linq.JTokenType.Null ? (double?)r["servings"] : null;
+            if (servings.HasValue) parts.Add($"{servings.Value:0.#} serving{(Math.Abs(servings.Value - 1.0) < 0.01 ? "" : "s")}");
+            if (grams.HasValue) parts.Add($"{grams.Value:0} g");
+            double? kcal = r["kcal_per_serving"] != null && r["kcal_per_serving"].Type != Newtonsoft.Json.Linq.JTokenType.Null ? (double?)r["kcal_per_serving"] : null;
+            if (kcal.HasValue && servings.HasValue) parts.Add($"{Math.Round(kcal.Value * servings.Value):0} kcal");
+            return string.Join("  ·  ", parts);
         }
 
         // True if the reply says something was logged or saved, and is not a refusal or a "could not" message.

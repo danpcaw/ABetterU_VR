@@ -510,6 +510,7 @@ namespace ABetterU.Coach
         public event Action<List<Choice>, double, double> ChoicesOffered;
         public bool CanShowChoices;                     // false where there is no screen to show them (the gym)
         string pendingMeal = "snack";
+        public string PendingMeal => pendingMeal;       // the meal slot the picker starts on
         double pendingServings = 1.0, pendingGrams = 0.0;
 
         string OfferChoices(JObject args)
@@ -559,8 +560,9 @@ namespace ABetterU.Coach
         }
 
         /// The user tapped an option. Logs it exactly as log_food would, and remembers it so the next spoken turn knows.
-        public IEnumerator LogChosen(string foodId, double servings, double grams, Action<string> done)
+        public IEnumerator LogChosen(string foodId, double servings, double grams, string meal, Action<string> done)
         {
+            if (meal == "breakfast" || meal == "lunch" || meal == "dinner" || meal == "snack") pendingMeal = meal;       // the slot chosen on the picker wins
             if (servings > 0 && servings <= 20) pendingServings = servings;
             var args = new JObject { ["food_id"] = foodId, ["meal"] = pendingMeal, ["servings"] = pendingServings };
             if (grams > 0) args["grams"] = grams;                 // the weight the user chose wins; servings is derived from it
@@ -648,6 +650,8 @@ namespace ABetterU.Coach
                 ["ok"] = true,
                 ["logged_name"] = chosen["name"],
                 ["logged_brand"] = chosen["brand"],
+                ["image_url"] = chosen["image_url"],
+                ["entry_id"] = InsertedId(raw),
                 ["kcal_per_serving"] = chosen["kcal_per_serving"],
                 ["meal"] = meal,
                 ["servings"] = servings,
@@ -657,6 +661,12 @@ namespace ABetterU.Coach
 
         // Every saved meal find_my_meals has returned, so log_meal can only log a meal the database actually showed us.
         readonly Dictionary<string, JObject> mealsSeen = new Dictionary<string, JObject>();
+
+        // The id of the row just inserted (PostgREST echoes it back), so the confirmation card can offer Undo.
+        static string InsertedId(string raw)
+        {
+            try { var rows = JArray.Parse(raw); return rows.Count == 1 ? (string)rows[0]["id"] : null; } catch (Exception) { return null; }
+        }
 
         IEnumerator FindMyMeals(string query, Action<string> done)
         {
@@ -747,6 +757,7 @@ namespace ABetterU.Coach
                 ["kcal_per_serving"] = chosen["kcal_per_serving"],
                 ["meal"] = slot,
                 ["servings"] = servings,
+                ["entry_id"] = InsertedId(raw),
             }.ToString(Newtonsoft.Json.Formatting.None));
         }
 

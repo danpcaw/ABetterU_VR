@@ -68,6 +68,7 @@ namespace ABetterU.Coach
             };
             v.OnSaved += _ => StartCoroutine(RefreshData());
             v.OnChoices += ShowPicker;
+            v.OnFoodLogged += ShowLoggedCard;
         }
 
         public void Init(SupabaseClient supabase, StatusBoard board)
@@ -103,8 +104,10 @@ namespace ABetterU.Coach
         // Pages of 10 (two columns), so a whole restaurant menu can be browsed. Closed by any stage change.
         const int PickerPageSize = 10;
         Transform picker;
+        static readonly Vector3 PickerBasePos = new Vector3(0f, 1.4f, 1.95f);
         List<CoachAgent.Choice> pickerAll;
         int pickerPage;
+        string pickerMeal = "snack";                        // breakfast / lunch / dinner / snack: starts on the agent's guess, changeable on the card
         double pickerServings = 1.0, pickerGrams = 0.0;     // grams > 0 when the user said a weight
 
         void ClosePicker()
@@ -120,9 +123,77 @@ namespace ABetterU.Coach
             if (choices == null || choices.Count == 0 || Current == Stage.Gym || Current == Stage.Login) return;
             pickerAll = choices;
             pickerPage = 0;
+            pickerMeal = voice != null ? voice.PickerMeal : "snack";
             pickerServings = servings > 0 ? servings : 1.0;
             pickerGrams = grams > 0 ? grams : 0.0;
             RenderPicker();
+        }
+
+        // ── "Logged" confirmation: shown when the backend confirms a food was saved, whether it was spoken or tapped. ──
+        Transform loggedCard;
+        Coroutine loggedHide;
+        Stage loggedStage;               // the card belongs to this screen: a data refresh redraws the screen, but only leaving it closes the card
+        const float LoggedCardSeconds = 9f;
+
+        void ShowLoggedCard(string name, string detail, string imageUrl, string entryId)
+        {
+            if (Current == Stage.Gym || Current == Stage.Login) return;
+            CloseLoggedCard();
+            loggedCard = new GameObject("LoggedCard").transform;
+            loggedStage = Current;
+            loggedCard.position = PickerBasePos;
+            var t = loggedCard;
+            VRGlass.Panel(t, "Panel", new Vector3(0, 0, 0.03f), new Vector2(2.4f, 0.78f), 0.06f, GlassStyle.Panel, 30);
+            FoodThumbnail.Create(t, new Vector3(-0.88f, 0.02f, -0.045f), imageUrl, 0.46f, VRArt.IconKind.Apple, 32);
+            VRGlass.Label(t, "Logged to your food diary", new Vector3(0.28f, 0.27f, -0.02f), 0.0072f, VRUi.Muted, order: 34);
+            VRGlass.Label(t, name.Length > 30 ? name.Substring(0, 29) + "…" : name, new Vector3(0.28f, 0.08f, -0.02f), 0.0115f, VRUi.Ink, order: 34);
+            VRGlass.Label(t, detail, new Vector3(0.28f, -0.10f, -0.02f), 0.0078f, VRUi.Ink, order: 34);
+            if (!string.IsNullOrEmpty(entryId))
+            {
+                VRGlass.Button(t, "OK", new Vector3(0.03f, -0.28f, -0.02f), new Vector2(0.5f, 0.15f), GlassStyle.Primary, 0.0085f, CloseLoggedCard, 0.04f, 32);
+                VRGlass.Button(t, "Undo", new Vector3(0.58f, -0.28f, -0.02f), new Vector2(0.5f, 0.15f), GlassStyle.Secondary, 0.0085f, () => StartCoroutine(UndoLogged(entryId)), 0.04f, 32);
+            }
+            else VRGlass.Button(t, "OK", new Vector3(0.28f, -0.28f, -0.02f), new Vector2(0.5f, 0.15f), GlassStyle.Primary, 0.0085f, CloseLoggedCard, 0.04f, 32);
+            ApplyScreenZoom();
+            loggedHide = StartCoroutine(HideLoggedLater());
+        }
+
+        // Undo removes exactly the row that was just saved, then refreshes the dashboards; it says so only if the backend confirmed the delete.
+        System.Collections.IEnumerator UndoLogged(string entryId)
+        {
+            string error = null;
+            bool deleted = false;
+            yield return supabase.DeleteFoodEntry(entryId, () => deleted = true, e => error = e);
+            CloseLoggedCard();
+            if (deleted) { yield return RefreshData(); ShowNotice("Removed from your food diary"); }
+            else { Debug.LogWarning("[Undo] delete failed: " + error); ShowNotice("Couldn't undo that. You can delete it in the Food Diary."); }
+        }
+
+        // A short one-line message in the same spot, used for the Undo result.
+        void ShowNotice(string text)
+        {
+            if (Current == Stage.Gym || Current == Stage.Login) return;
+            CloseLoggedCard();
+            loggedCard = new GameObject("NoticeCard").transform;
+            loggedStage = Current;
+            loggedCard.position = PickerBasePos;
+            VRGlass.Panel(loggedCard, "Panel", new Vector3(0, 0, 0.03f), new Vector2(2.4f, 0.4f), 0.06f, GlassStyle.Panel, 30);
+            VRGlass.Label(loggedCard, text, new Vector3(0, 0, -0.02f), 0.0095f, VRUi.Ink, order: 34);
+            ApplyScreenZoom();
+            loggedHide = StartCoroutine(HideLoggedLater());
+        }
+
+        System.Collections.IEnumerator HideLoggedLater()
+        {
+            yield return new WaitForSecondsRealtime(LoggedCardSeconds);
+            CloseLoggedCard();
+        }
+
+        void CloseLoggedCard()
+        {
+            if (loggedHide != null) { StopCoroutine(loggedHide); loggedHide = null; }
+            if (loggedCard != null) Destroy(loggedCard.gameObject);
+            loggedCard = null;
         }
 
         void RenderPicker()
@@ -139,15 +210,25 @@ namespace ABetterU.Coach
             int rows = two ? (page.Count + 1) / 2 : page.Count;
             const float rowH = 0.23f;
             float w = two ? 3.5f : 2.3f, btnW = two ? 1.62f : 2.05f;
-            float h = 0.50f + rows * rowH + 0.32f;
+            float h = 0.70f + rows * rowH + 0.32f;
             int maxChars = two ? 30 : 44;
 
             picker = new GameObject("FoodPicker").transform;
-            picker.position = new Vector3(0f, 1.4f, 1.95f);
+            picker.position = PickerBasePos;
+            ApplyScreenZoom();      // the picker follows the same zoom as the screen behind it
 
             VRGlass.Panel(picker, "Panel", new Vector3(0, 0, 0.03f), new Vector2(w, h), 0.06f, GlassStyle.Panel, 20);
             VRGlass.Label(picker, "Which one did you mean?", new Vector3(0, h / 2 - 0.17f, -0.02f), 0.0125f, VRUi.Ink, order: 24);
             VRGlass.Label(picker, "UK food database: US portions and calories can differ", new Vector3(0, h / 2 - 0.29f, -0.02f), 0.0062f, VRUi.Muted, order: 24);
+
+            // Which meal it goes in: the agent's guess from the time of day is pre-selected.
+            string[] meals = { "breakfast", "lunch", "dinner", "snack" };
+            for (int m = 0; m < meals.Length; m++)
+            {
+                string slot = meals[m];
+                VRGlass.Button(picker, char.ToUpperInvariant(slot[0]) + slot.Substring(1), new Vector3(-0.78f + m * 0.52f, h / 2 - 0.47f, -0.02f), new Vector2(0.48f, 0.15f),
+                    pickerMeal == slot ? GlassStyle.Primary : GlassStyle.Secondary, 0.0078f, () => { pickerMeal = slot; RenderPicker(); }, 0.04f, 22);
+            }
 
             for (int i = 0; i < page.Count; i++)
             {
@@ -160,9 +241,9 @@ namespace ABetterU.Coach
 
                 int col = two ? i % 2 : 0, row = two ? i / 2 : i;
                 float x = two ? (col == 0 ? -0.84f : 0.84f) : 0f;
-                float y = h / 2 - 0.46f - row * rowH;
+                float y = h / 2 - 0.66f - row * rowH;
                 VRGlass.Button(picker, "", new Vector3(x, y, -0.02f), new Vector2(btnW, 0.2f),
-                    GlassStyle.Secondary, two ? 0.0075f : 0.0085f, () => { double amount = pickerServings, weight = pickerGrams; ClosePicker(); voice.ChooseFood(foodId, amount, weight); }, 0.04f, 22);
+                    GlassStyle.Secondary, two ? 0.0075f : 0.0085f, () => { double amount = pickerServings, weight = pickerGrams; string meal = pickerMeal; ClosePicker(); voice.ChooseFood(foodId, amount, weight, meal); }, 0.04f, 22);
                 // A picture in the same rounded square as the diary, then the name and calories beside it.
                 float left = x - btnW / 2f;
                 FoodThumbnail.Create(picker, new Vector3(left + 0.12f, y, -0.045f), c.ImageUrl, 0.17f, VRArt.IconKind.Apple, 20);
@@ -1666,18 +1747,26 @@ namespace ABetterU.Coach
 
         void ApplyScreenZoom()
         {
-            if (screen == null) return;
             var cam = Camera.main;
             Vector3 head = cam != null ? cam.transform.position : Vector3.zero;
-            Vector3 toScreen = new Vector3(screenBasePos.x - head.x, 0f, screenBasePos.z - head.z);
-            if (toScreen.sqrMagnitude < 0.01f) return;
-            screen.position = screenBasePos - toScreen.normalized * screenZoom;
+            if (screen != null) screen.position = ZoomedFrom(screenBasePos, head);
+            if (picker != null) picker.position = ZoomedFrom(PickerBasePos, head);
+            if (loggedCard != null) loggedCard.position = ZoomedFrom(PickerBasePos, head);
+        }
+
+        // Moves a panel along the flat line from the head to it, by the current zoom (positive = towards you).
+        Vector3 ZoomedFrom(Vector3 basePos, Vector3 head)
+        {
+            Vector3 toPanel = new Vector3(basePos.x - head.x, 0f, basePos.z - head.z);
+            return toPanel.sqrMagnitude < 0.01f ? basePos : basePos - toPanel.normalized * screenZoom;
         }
 
         void Update()
         {
+            if (loggedCard != null && Current != loggedStage) CloseLoggedCard();
+
             // Right thumbstick up/down pulls the screen closer or pushes it back (not in the gym or on the plate camera, which use the stick).
-            if (screen != null && Current != Stage.Gym && Current != Stage.Scan && !MenuOpen)
+            if ((screen != null || picker != null || loggedCard != null) && Current != Stage.Gym && Current != Stage.Scan && !MenuOpen)
             {
                 float stick = OVRInput.Get(OVRInput.Axis2D.SecondaryThumbstick).y;
                 if (Mathf.Abs(stick) > 0.2f)
