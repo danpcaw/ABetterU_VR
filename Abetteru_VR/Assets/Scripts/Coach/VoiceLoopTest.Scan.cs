@@ -292,6 +292,9 @@ namespace ABetterU.Coach
                 var words = item.Name.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
                 var queries = new List<string> { item.Name };
                 if (words.Length > 1) queries.Add(words[words.Length - 1]);
+                // "raw egg": the database says "Eggs, chicken, whole, raw", so search the food itself first; the ranking below still prefers raw.
+                if (words.Length > 1 && Regex.IsMatch(words[0], "^(raw|fresh|whole|uncooked)$", RegexOptions.IgnoreCase))
+                    queries.Insert(0, string.Join(" ", words.Skip(1)));
 
                 foreach (var query in queries)
                 {
@@ -305,7 +308,7 @@ namespace ABetterU.Coach
                         string exact = (string)j["exact_match_food_id"];
 
                         var scored = new List<KeyValuePair<int, JToken>>();
-                        for (int k = 0; k < Math.Min(10, list.Count); k++)
+                        for (int k = 0; k < Math.Min(30, list.Count); k++)
                         {
                             string id = (string)list[k]["food_id"];
                             int score = MatchScore((string)list[k]["name"], query, k) - (id == exact ? 5 : 0) - (used.TryGetValue(id, out var times) ? Math.Min(14, 8 + times) : 0);
@@ -344,9 +347,12 @@ namespace ABetterU.Coach
         {
             string n = (foodName ?? "").ToLowerInvariant(), q = query.ToLowerInvariant();
             int score = rank;
-            foreach (var word in new[] { "powder", "dried", "dehydrated", "instant", "flour", "crisps", "mix", "sauce", "soup", "extract", "paste", "puree", "canned", "tinned", "juice", "oil", "starch", "flakes", "granules", "chips", "cakes", "fried", "roast", "rings", "waffle", "wedges", "hash", "dauphinoise" })
+            foreach (var word in new[] { "powder", "dried", "dehydrated", "instant", "flour", "crisps", "mix", "sauce", "soup", "extract", "paste", "puree", "canned", "tinned", "juice", "oil", "starch", "flakes", "granules", "chips", "cakes", "fried", "roast", "rings", "waffle", "wedges", "hash", "dauphinoise",
+                                               "pizza", "casserole", "quiche", "flan", "sandwich", "chutney", "relish", "pickled", "marmalade", "curry", "stew", "homemade", "burger", "wrap", "noodles", "pasta", "battered", "bhaji", "fu-fu", "layer", "bread", "focaccia" })
                 if (n.Contains(word) && !q.Contains(word)) score += 20;
             if (n.StartsWith(q)) score -= 3;
+            if (n.Contains("loose")) score -= 2;
+            if (q == "egg" && (n.Contains("white") || n.Contains("yolk") || n.Contains("duck") || n.Contains("quail") || n.Contains("turkey"))) score += 20;   // an egg on a plate is a whole hen's egg
             if (n.Contains("raw") || n.Contains("boiled") || n.Contains("cooked") || n.Contains("grilled") || n.Contains("baked")) score -= 2;
             return score;
         }

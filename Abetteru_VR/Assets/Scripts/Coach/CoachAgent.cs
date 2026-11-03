@@ -74,9 +74,9 @@ namespace ABetterU.Coach
              ""grams"":{""type"":""number"",""description"":""Weight in grams if the user gave one (for example 100). Use this instead of servings.""}},
             ""required"":[""meal""]}},
           {""type"":""function"",""name"":""go_to"",
-           ""description"":""Open a screen in the app. Destinations: home; my_world (the profile, nutrition, today's activity and wellbeing notes cards, so 'wellness card' means my_world); food_diary; exercise_log (every exercise recorded for the day); my_profile (their profile page); my_experiences; virtual_gym. Only say you opened something after this returns ok."",
+           ""description"":""Open a screen in the app. Destinations: home; my_world (the profile, nutrition, today's activity and wellbeing notes cards, so 'wellness card' means my_world); food_diary; exercise_log (every exercise recorded for the day); my_profile (their profile page); my_experiences; virtual_gym; scan_plate (the plate scanner: its screen tells them to press the left trigger to take the picture). Only say you opened something after this returns ok; for scan_plate say it is open and to press the left trigger when the plate is in view."",
            ""parameters"":{""type"":""object"",""properties"":{
-             ""destination"":{""type"":""string"",""enum"":[""home"",""my_world"",""food_diary"",""exercise_log"",""my_profile"",""my_experiences"",""virtual_gym""]}},
+             ""destination"":{""type"":""string"",""enum"":[""home"",""my_world"",""food_diary"",""exercise_log"",""my_profile"",""my_experiences"",""virtual_gym"",""scan_plate""]}},
             ""required"":[""destination""]}},
           {""type"":""function"",""name"":""report_injury"",
            ""description"":""Save an injury or sore area the user says they have. Record only what they say; never diagnose."",
@@ -316,7 +316,7 @@ namespace ABetterU.Coach
         // Everything the last search found (best first), so the picker can show it all without asking the model again.
         readonly List<JObject> lastSearchAll = new List<JObject>();
 
-        IEnumerator SearchFoods(string query, Action<string> done)
+        IEnumerator SearchFoods(string query, Action<string> done, bool forScan = false)
         {
             if (string.IsNullOrWhiteSpace(query)) { done(Fail("query is required")); yield break; }
 
@@ -328,7 +328,21 @@ namespace ABetterU.Coach
             // matches a whole phrase inside one column, so "mccain chips" finds nothing. For several words, fetch by one word
             // (longest first) and keep only rows whose name, brand and restaurant together contain every word.
             bool matchedByWords = false;
-            if (words.Count >= 2)
+            // A scan names a plain food, so try the exact phrase first: fetching by one word stops at 100 rows, in alphabetical order,
+            // which never reached "Sweet potato, raw" for "potato". Voice keeps the wider search, because people say brand and product together.
+            if (forScan && words.Count >= 2)
+            {
+                string phraseRaw = null, phraseErr = null;
+                var phraseBody = new JObject { ["q"] = string.Join(" ", words), ["lim"] = 100, ["uid"] = supabase.UserId }.ToString(Newtonsoft.Json.Formatting.None);
+                yield return supabase.Rpc(SearchRpc, phraseBody, r => phraseRaw = r, e => phraseErr = e);
+                if (phraseErr == null && JArray.Parse(phraseRaw).Count > 0)
+                {
+                    raw = phraseRaw;
+                    usedQuery = string.Join(" ", words);
+                    matchedByWords = true;
+                }
+            }
+            if (!matchedByWords && words.Count >= 2)
             {
                 foreach (var anchor in words.Where(w => w.Length >= 3).Distinct().OrderByDescending(w => w.Length).Take(3).ToList())
                 {
@@ -395,7 +409,7 @@ namespace ABetterU.Coach
                 };
                 foodsSeen[(string)f["id"]] = summary;
                 lastSearchAll.Add(summary);
-                if (rows.Count < 10) rows.Add(summary);
+                if (rows.Count < (forScan ? 30 : 10)) rows.Add(summary);       // a scan ranks more of them itself
             }
             // If exactly one food is named exactly what the user said (apart from its brand), say so, so the agent logs it without asking.
             string exactId = null; int exactCount = 0;
@@ -432,8 +446,17 @@ namespace ABetterU.Coach
         {
             string text = (((string)f["name"] ?? "") + " " + ((string)f["brand"] ?? "") + " " + ((string)f["restaurant"] ?? ""))
                 .ToLowerInvariant().Replace("'", "").Replace("\u2019", "");
-            foreach (var w in words) if (!text.Contains(w)) return false;
+            foreach (var w in words) if (!HasWord(text, w)) return false;
             return true;
+        }
+
+        // A short word must start a word: "raw egg" must not match "stRAWberry" from "grEGGs". Longer ones stay substrings, so "burger" still finds "cheeseburger".
+        static bool HasWord(string text, string word)
+        {
+            if (word.Length > 4) return text.Contains(word);
+            for (int i = text.IndexOf(word, StringComparison.Ordinal); i >= 0; i = text.IndexOf(word, i + 1, StringComparison.Ordinal))
+                if (i == 0 || !char.IsLetterOrDigit(text[i - 1])) return true;
+            return false;
         }
 
         // Whole foods first for generic queries. Restaurant and meal-kit rows come last.
@@ -586,7 +609,7 @@ namespace ABetterU.Coach
         }
 
         // For the plate scan: the same food search and log the voice agent uses, so a scanned item is matched and stored exactly like a spoken one.
-        public IEnumerator SearchForScan(string query, Action<string> done) => SearchFoods(query, done);
+        public IEnumerator SearchForScan(string query, Action<string> done) => SearchFoods(query, done, true);
         public IEnumerator LogForScan(string foodId, string meal, double grams, Action<string> done) =>
             LogFood(new JObject { ["food_id"] = foodId, ["meal"] = meal, ["grams"] = grams }, done);
         public static string MealNow() => DefaultMealSlot(DateTime.Now);

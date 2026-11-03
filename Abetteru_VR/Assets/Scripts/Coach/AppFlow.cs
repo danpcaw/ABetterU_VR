@@ -298,6 +298,7 @@ namespace ABetterU.Coach
                 case "my_profile": ShowProfile(); return true;
                 case "my_experiences": ShowExperiences(); return true;
                 case "virtual_gym": EnterGym(); return true;
+                case "scan_plate": ShowScan(); return true;
                 default: return false;
             }
         }
@@ -1253,6 +1254,7 @@ namespace ABetterU.Coach
         PlateCamera plateCam;
         Texture2D scanShot;
         bool scanWasStreaming, scanWorking, scanLogging, scanDone;
+        string scanShownStatus;          // the camera status on screen: the labels are drawn once, so a change has to redraw the screen
         VoiceLoopTest.PlateResult scanResult;
         string scanNote = "";
 
@@ -1400,6 +1402,7 @@ namespace ABetterU.Coach
         void BuildScan()
         {
             scanWasStreaming = plateCam != null && plateCam.Streaming;
+            scanShownStatus = plateCam != null ? plateCam.Status : null;
             var p = NewRoot(new Vector3(0f, 1.65f, 2.55f));
             VRGlass.Panel(p, "Scan a plate", new Vector3(0, 0, 0.04f), new Vector2(3.6f, 1.95f), 0.08f, GlassStyle.Panel);
             VRGlass.Label(p, "Scan a Plate", new Vector3(-1.62f, 0.81f, -0.02f), 0.019f, VRUi.Ink, TextAnchor.MiddleLeft, TextAlignment.Left);
@@ -1780,7 +1783,7 @@ namespace ABetterU.Coach
                 CaptureScan();
             // The camera only runs on the scan screen, and rebuilds that screen once when its picture starts.
             if (Current != Stage.Scan && plateCam != null && (plateCam.Live != null || scanShot != null || scanResult != null || calResult != null)) StopScan();
-            else if (Current == Stage.Scan && plateCam != null && plateCam.Streaming != scanWasStreaming) BuildScan();
+            else if (Current == Stage.Scan && plateCam != null && (plateCam.Streaming != scanWasStreaming || plateCam.Status != scanShownStatus)) BuildScan();
             if (Current == Stage.Gym && OVRInput.GetDown(OVRInput.Button.Start, OVRInput.Controller.LTouch))
             {
                 if (MenuOpen) CloseMenu(); else OpenMenu();

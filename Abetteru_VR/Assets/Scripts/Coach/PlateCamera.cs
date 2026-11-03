@@ -10,6 +10,7 @@ namespace ABetterU.Coach
     public class PlateCamera : MonoBehaviour
     {
         public const string Permission = "horizonos.permission.HEADSET_CAMERA";
+        const string AndroidCamera = "android.permission.CAMERA";
 
         public WebCamTexture Live { get; private set; }
         public string Status { get; private set; } = "";
@@ -17,7 +18,9 @@ namespace ABetterU.Coach
         public bool Streaming => Live != null && Live.isPlaying && Live.width > 16 && !Failed;
         Coroutine routine;
 
-        bool waitingForPermission, enabledPassthrough;
+        bool enabledPassthrough;
+        WebCamTexture trying;                  // the camera being tested right now; released by Stop() if the test is cut short (calibrate, back, leaving the screen)
+        static string lastGoodCamera;          // the camera that gave a picture last time: tried first, because some of the headset's cameras stream black
 
         public void Begin()
         {
@@ -29,58 +32,67 @@ namespace ABetterU.Coach
             routine = StartCoroutine(Run());
         }
 
-        // Back from the system permission dialog while still waiting: start over, so nothing is left stuck on "waiting".
-        void OnApplicationFocus(bool focused) { if (focused && waitingForPermission) Begin(); }
-
-        static bool HasPermission()
-        {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            return UnityEngine.Android.Permission.HasUserAuthorizedPermission(Permission);
-#else
-            return true;
-#endif
-        }
-
         IEnumerator Run()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
-            if (!HasPermission())
+            // The camera list stays empty until both of these are granted, and every look at that list while Android's CAMERA is missing
+            // queues another system dialog. So ask first and do not touch the cameras until they are answered. CAMERA goes first: its
+            // dialog offers the headset cameras too, so one dialog normally covers both and the second request is skipped.
+            foreach (var perm in new[] { AndroidCamera, Permission })
             {
+                if (UnityEngine.Android.Permission.HasUserAuthorizedPermission(perm)) continue;
                 Status = "Waiting for camera permission...";
-                waitingForPermission = true;
-                UnityEngine.Android.Permission.RequestUserPermission(Permission);
-                for (float t = 0f; t < 60f && !HasPermission(); t += 0.25f) yield return new WaitForSecondsRealtime(0.25f);
-                waitingForPermission = false;
-                if (!HasPermission())
-                { Status = "Camera permission was not granted."; Failed = true; Debug.LogWarning("[Camera] Permission not granted."); yield break; }
+                bool denied = false;
+                var callbacks = new UnityEngine.Android.PermissionCallbacks();
+                callbacks.PermissionDenied += _ => denied = true;
+                UnityEngine.Android.Permission.RequestUserPermission(perm, callbacks);
+                for (float t = 0f; t < 120f && !denied && !UnityEngine.Android.Permission.HasUserAuthorizedPermission(perm); t += 0.25f)
+                    yield return new WaitForSecondsRealtime(0.25f);
+                if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(perm))
+                {
+                    Failed = true;
+                    Status = "Camera permission was not granted.";
+                    Debug.LogWarning($"[Camera] {perm} not granted.");
+                    yield break;
+                }
+                Debug.Log($"[Camera] {perm} granted");
             }
 #endif
-            yield return new WaitForSecondsRealtime(0.4f);        // let passthrough come up before asking for frames
-            var devices = WebCamTexture.devices;
-            Debug.Log($"[Camera] {devices.Length} camera(s): {string.Join(", ", devices.Select(d => d.name))}");
-            if (devices.Length == 0) { Status = "No camera was found."; Failed = true; yield break; }
-
-            // The headset lists several cameras and not all of them are the colour passthrough cameras; a wrong one streams black.
-            // Try each in turn and keep the first that shows a real picture.
+            // Right after a grant the camera list can still be empty, so give it a few tries.
             Status = "Starting the camera...";
-            WebCamTexture firstStreaming = null;
+            for (int attempt = 1; attempt <= 4; attempt++)
+            {
+                yield return StartCameras();
+                if (Live != null) yield break;
+                yield return new WaitForSecondsRealtime(1.5f);
+            }
+            Failed = true;
+            Status = "The camera did not start. Tap Try again.";
+            Debug.LogWarning("[Camera] Gave up: " + Status);
+        }
+
+        // One pass over the headset's cameras. Sets Live to the first that shows a real picture; black or dead ones are released at once.
+        IEnumerator StartCameras()
+        {
+            yield return new WaitForSecondsRealtime(0.4f);        // let passthrough come up before asking for frames
+            var devices = WebCamTexture.devices.OrderBy(d => d.name == lastGoodCamera ? 0 : 1).ToArray();
+            Debug.Log($"[Camera] {devices.Length} camera(s): {string.Join(", ", devices.Select(d => d.name))}");
+            if (devices.Length == 0) yield break;
+
             foreach (var device in devices)
             {
                 var tex = new WebCamTexture(device.name, 1280, 960, 30);
+                trying = tex;
                 tex.Play();
                 for (float t = 0f; t < 4f && (tex.width <= 16 || !tex.didUpdateThisFrame); t += Time.unscaledDeltaTime) yield return null;
-                if (tex.width <= 16) { Debug.Log($"[Camera] {device.name}: did not start"); tex.Stop(); Destroy(tex); continue; }
+                if (tex.width <= 16) { Debug.Log($"[Camera] {device.name}: did not start"); tex.Stop(); Destroy(tex); trying = null; continue; }
                 yield return new WaitForSecondsRealtime(0.5f);
                 float mean = Brightness(tex);
                 Debug.Log($"[Camera] {device.name}: {tex.width}x{tex.height}, brightness {mean:0.0} of 255");
-                if (mean > 6f) { Live = tex; Status = "Camera ready"; Debug.Log($"[Camera] using {device.name}"); yield break; }
-                if (firstStreaming == null) firstStreaming = tex; else { tex.Stop(); Destroy(tex); }
+                if (mean > 6f) { trying = null; Live = tex; lastGoodCamera = device.name; Status = "Camera ready"; Debug.Log($"[Camera] using {device.name}"); yield break; }
+                tex.Stop(); Destroy(tex); trying = null;
             }
-
-            if (firstStreaming != null) Live = firstStreaming;
-            Status = "The camera only returned black frames.";
-            Failed = true;
-            Debug.LogWarning("[Camera] Every camera returned black frames.");
+            Debug.LogWarning("[Camera] No camera gave a picture on this pass.");
         }
 
         // Average brightness of a sparse grid of the frame (0 to 255). A black frame is about 0.
@@ -109,7 +121,7 @@ namespace ABetterU.Coach
         {
             if (routine != null) { StopCoroutine(routine); routine = null; }
             if (Live != null) { Live.Stop(); Destroy(Live); Live = null; }
-            waitingForPermission = false;
+            if (trying != null) { trying.Stop(); Destroy(trying); trying = null; }
             if (enabledPassthrough && OVRManager.instance != null) OVRManager.instance.isInsightPassthroughEnabled = false;
             enabledPassthrough = false;
         }
