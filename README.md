@@ -12,6 +12,8 @@ A Meta Quest 3S app where you talk to **Atlas**, a voice assistant powered by Me
 
 ## Try it in about three minutes
 
+You need a Meta Quest 3 or 3S in developer mode. Download `A-Better-U-VR.apk` from the [Releases page](https://github.com/danpcaw/ABetterU_VR/releases/latest), sideload it, and open it from Unknown Sources in your Library.
+
 1. Tap **Judge Instant Login**. Atlas introduces herself.
 2. Say **"Hey Atlas, log a Big Mac for lunch."** Watch the Food Diary update.
 3. Open **My World**, then **Scan a Plate**: look at a plate from slightly above, press the left trigger, check the outlines and the weights, tap **Log**.
@@ -105,7 +107,7 @@ More detail in [docs/HACKATHON_COMPLIANCE.md](docs/HACKATHON_COMPLIANCE.md).
 - The optional plate calibration needs a bank or credit card that stands out from the plate: it finds a dark or white card easily, but a card close to the plate's colour (a blue card on a teal plate was not found) cannot be seen. The screen says so. You can always set the plate width by hand.
 - The scan needs the headset camera permission, which Quest asks for the first time you open Scan a Plate.
 - The gym is built from simple shapes, and the voice is a US voice.
-- The Meta Model API key is bundled in the APK for the demo build. **Do not distribute built APKs publicly**, so no APK is in this repository.
+- The judge build on the [Releases page](https://github.com/danpcaw/ABetterU_VR/releases/latest) bundles API keys and a demo login for the hackathon. They will be revoked after judging, and that build will stop working then. Do not reuse them.
 
 ## Run it
 
