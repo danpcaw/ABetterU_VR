@@ -1,0 +1,4 @@
+{
+  "metaApiKey": "your Meta Model API key",
+  "witToken": "your Wit.ai server access token (optional)"
+}

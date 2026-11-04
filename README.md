@@ -12,7 +12,22 @@ A Meta Quest 3S app where you talk to **Atlas**, a voice assistant powered by Me
 
 ## Try it in about three minutes
 
-You need a Meta Quest 3 or 3S in developer mode. Download `A-Better-U-VR.apk` from the [Releases page](https://github.com/danpcaw/ABetterU_VR/releases/latest), sideload it, and open it from Unknown Sources in your Library.
+You need a Meta Quest 3 or 3S in developer mode, `adb`, and your own Meta Model API key. The APK contains no Meta or Wit.ai keys, so you add your own:
+
+1. **Meta Model API key:** create one in your Meta Model API account.
+2. **Wit.ai token (optional, and Wit.ai is free):** at [wit.ai](https://wit.ai), create an app, then copy its **Server Access Token** from Settings. Without it, Atlas's replies appear on screen and are not spoken.
+3. Copy [`atlas-keys.example.json`](atlas-keys.example.json) to `atlas-keys.json` and fill in your values. Never commit this file.
+4. Download `A-Better-U-VR.apk` from the [Releases page](https://github.com/danpcaw/ABetterU_VR/releases/latest), then run:
+
+   ```bash
+   adb install -r A-Better-U-VR.apk
+   adb shell mkdir -p /sdcard/Android/data/uk.co.abetteru.vr/files
+   adb push atlas-keys.json /sdcard/Android/data/uk.co.abetteru.vr/files/atlas-keys.json
+   ```
+
+5. On the Quest, open **Library**, filter to **Unknown Sources** and start "A Better U VR".
+
+Then:
 
 1. Tap **Judge Instant Login**. Atlas introduces herself.
 2. Say **"Hey Atlas, log a Big Mac for lunch."** Watch the Food Diary update.
@@ -107,16 +122,17 @@ More detail in [docs/HACKATHON_COMPLIANCE.md](docs/HACKATHON_COMPLIANCE.md).
 - The optional plate calibration needs a bank or credit card that stands out from the plate: it finds a dark or white card easily, but a card close to the plate's colour (a blue card on a teal plate was not found) cannot be seen. The screen says so. You can always set the plate width by hand.
 - The scan needs the headset camera permission, which Quest asks for the first time you open Scan a Plate.
 - The gym is built from simple shapes, and the voice is a US voice.
-- The judge build on the [Releases page](https://github.com/danpcaw/ABetterU_VR/releases/latest) bundles API keys and a demo login for the hackathon. They will be revoked after judging, and that build will stop working then. Do not reuse them.
+- The APK contains no Meta or Wit.ai keys. It does contain a shared test login, which can only reach its own test account, and the Supabase publishable key. Both are in the APK so that Judge Instant Login works, and the test account will be deleted after judging.
 
 ## Run it
 
-You need a Quest 3S in developer mode, Unity 6000.6.7f1 with Android Build Support, and your own Meta Model API key (this repo contains no secrets).
+You need a Quest 3 or 3S in developer mode, Unity 6000.6.7f1 with Android Build Support, and your own Meta Model API key (this repo contains no secrets).
 
 1. Open `Abetteru_VR/` in Unity Hub.
-2. Create `Assets/Resources/ModelApiSecrets` (Assets > Create > ABetterU > Model API Secrets). It is git-ignored. Fill in your Meta Model API key, Wit.ai token, Supabase URL and anon key, and the demo account's credentials for Judge Instant Login.
-3. Build for Android and sideload: `./scripts/deploy-quest.sh path/to/build.apk`.
-4. On the Quest, open your **Library**, use the filter at the top left (the small round button) and choose **Unknown Sources**. The app appears there as "A Better U VR". The first time you use it, allow the **microphone** and, for Scan a Plate, the **headset camera**.
+2. Create `Assets/Resources/ModelApiSecrets` (Assets > Create > ABetterU > Model API Secrets). It is git-ignored. Add your Supabase details there. Add your Meta and Wit.ai keys there too, or use `atlas-keys.json` as above.
+3. The food diary, accounts and social feed run on the private A Better U backend, so live sign-in needs its Supabase details and an account. Without them the app builds, and the Meta integrations can be read in the code, but you cannot sign in.
+4. Build for Android and sideload: `./scripts/deploy-quest.sh path/to/build.apk`.
+5. On the Quest, open your **Library**, use the filter at the top left (the small round button) and choose **Unknown Sources**. The app appears there as "A Better U VR". The first time you use it, allow the **microphone** and, for Scan a Plate, the **headset camera**.
 
 Controls: **hands-free** is the default. Say "Hey Atlas" and then your request, for example "Hey Atlas, log my usual breakfast". After a reply you can keep talking for about 8 seconds without saying the name again. As a fallback, **hold the right trigger** to talk. **Left trigger** starts and ends a squat set; **left Menu** opens the in-gym menu.
 

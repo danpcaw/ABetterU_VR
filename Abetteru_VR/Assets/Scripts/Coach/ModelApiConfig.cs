@@ -1,3 +1,5 @@
+using System.IO;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 
 namespace ABetterU.Coach
@@ -5,7 +7,7 @@ namespace ABetterU.Coach
     /// Create via Assets > Create > ABetterU > Model API Secrets, save as
     /// Assets/Resources/ModelApiSecrets.asset (git-ignored, never commit).
     /// NOTE: anything in Resources ships inside the APK, so the key is extractable.
-    /// Fine for a hackathon demo build; never distribute that APK publicly.
+    /// So a build to share has no apiKey or witToken here: each person adds their own in atlas-keys.json on the headset (see Load).
     [CreateAssetMenu(menuName = "ABetterU/Model API Secrets", fileName = "ModelApiSecrets")]
     public class ModelApiConfig : ScriptableObject
     {
@@ -78,6 +80,29 @@ namespace ABetterU.Coach
             "Only mention rep counts, pace, weights or form if they are given to you in the message context; never invent numbers or claim to see the user move. " +
             "If someone mentions pain or injury, note it for them and keep any exercise suggestions gentle; you give no medical advice.";
 
-        public static ModelApiConfig Load() => Resources.Load<ModelApiConfig>("ModelApiSecrets");
+        const string KeysFile = "atlas-keys.json";
+
+        public static ModelApiConfig Load()
+        {
+            var config = Resources.Load<ModelApiConfig>("ModelApiSecrets");
+            if (config != null) ApplyLocalKeys(config);
+            return config;
+        }
+
+        // The app's files folder on the headset can hold { "metaApiKey": "...", "witToken": "..." }, which wins over the asset. Held in memory only, never logged.
+        static void ApplyLocalKeys(ModelApiConfig config)
+        {
+            string path = Path.Combine(Application.persistentDataPath, KeysFile);
+            if (!File.Exists(path)) return;
+            try
+            {
+                var keys = JObject.Parse(File.ReadAllText(path));
+                string meta = ((string)keys["metaApiKey"])?.Trim(), wit = ((string)keys["witToken"])?.Trim();
+                if (!string.IsNullOrEmpty(meta)) config.apiKey = meta;
+                if (!string.IsNullOrEmpty(wit)) config.witToken = wit;
+                Debug.Log($"[Keys] {KeysFile} read: Meta key {(string.IsNullOrEmpty(meta) ? "missing" : "set")}, Wit token {(string.IsNullOrEmpty(wit) ? "missing" : "set")}");
+            }
+            catch (System.Exception e) { Debug.LogWarning($"[Keys] Could not read {KeysFile}: {e.GetType().Name}"); }
+        }
     }
 }

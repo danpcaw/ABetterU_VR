@@ -100,7 +100,7 @@ namespace ABetterU.Coach
             var config = ModelApiConfig.Load();
             if (config == null || string.IsNullOrEmpty(config.apiKey))
             {
-                board.Show("No API key.\nCreate Assets/Resources/\nModelApiSecrets and paste key.");
+                board.Show("No Meta API key yet.\nAdd atlas-keys.json to the headset\n(see the project README), then restart.");
                 enabled = false;
                 yield break;
             }
